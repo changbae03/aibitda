@@ -410,6 +410,23 @@ export interface LiveGainersResponse {
   stale?:     boolean;
 }
 
+export interface CreditStatus {
+  dailyUsed:   number;
+  dailyLimit:  number;
+  bonusCredits: number;
+  remaining:   number;
+  referralCode: string | null;
+}
+
+export function useCredits() {
+  return useQuery<CreditStatus>({
+    queryKey: ["credits"],
+    queryFn:  () => apiFetch<CreditStatus>("/api/credits"),
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
 export function useLiveGainers() {
   return useQuery({
     queryKey: ["live-gainers"],

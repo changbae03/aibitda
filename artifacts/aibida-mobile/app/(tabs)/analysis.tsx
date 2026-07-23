@@ -3,18 +3,19 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator, FlatList, Platform, Pressable,
-  RefreshControl, ScrollView, StyleSheet, Text,
+  RefreshControl, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import {
-  useStockSearch, useRecentAnalyses, usePopular,
+  useStockSearch, useRecentAnalyses, usePopular, useCredits,
   type StockSearchResult, type AnalysisListItem, type PopularItem,
 } from "@/hooks/useApi";
 
+const CORAL = "#FF8A7A";
+
 function VerdictBadge({ verdict }: { verdict?: string | null }) {
-  const colors = useColors();
   if (!verdict) return null;
   const v = verdict.toLowerCase();
   if (v.includes("strong buy")) return (
@@ -113,7 +114,7 @@ function PopularRow({ item }: { item: PopularItem }) {
     : "진행중";
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? colors.muted : colors.card, borderColor: colors.border }]}
+      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? colors.muted : colors.background, borderColor: colors.border }]}
       onPress={() => router.push(`/analysis/${item.id}`)}
     >
       <View style={{ flex: 1, gap: 2 }}>
@@ -156,9 +157,10 @@ export default function AnalysisTab() {
   const [showDrop, setShowDrop] = useState(false);
   const [selected, setSelected] = useState<StockSearchResult | null>(null);
 
-  const search = useStockSearch(query);
-  const recent = useRecentAnalyses();
+  const search  = useStockSearch(query);
+  const recent  = useRecentAnalyses();
   const popular = usePopular();
+  const credits = useCredits();
 
   function pickStock(item: StockSearchResult) {
     setShowDrop(false);
@@ -179,35 +181,51 @@ export default function AnalysisTab() {
   }
 
   const canStart = !!(selected ?? (query.trim() && search.data && search.data.length > 0));
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const topPad   = Platform.OS === "web" ? 67 : insets.top;
+  const remaining = credits.data?.remaining;
+  const creditLabel = remaining != null ? `${remaining.toLocaleString()}개` : null;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Hero section */}
-      <View style={[styles.hero, { paddingTop: topPad + 20 }]}>
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <View style={[styles.hero, { paddingTop: topPad + 32, backgroundColor: colors.background }]}>
+        {/* 타이틀 */}
         <Text style={[styles.heroTitle, { color: colors.foreground }]}>
           어떤 종목을{"\n"}분석할까요?
         </Text>
         <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          코스피·코스닥·NYSE·NASDAQ 종목코드 또는{"\n"}회사명으로 검색하면 AI가 심층 분석합니다
+          코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{"\n"}AI 에이전트가 즉시 심층 분석을 시작합니다
         </Text>
 
-        {/* Search row */}
+        {/* 크레딧 배지 */}
+        {creditLabel && (
+          <View style={styles.creditBadge}>
+            <Feather name="zap" size={12} color={CORAL} />
+            <Text style={[styles.creditText, { color: CORAL }]}>크레딧 {creditLabel} 남음</Text>
+          </View>
+        )}
+
+        {/* 검색 바 */}
         <View style={[styles.searchRow, {
           backgroundColor: colors.card,
-          borderColor: selected ? colors.primary : showDrop ? colors.primary + "88" : colors.border,
+          borderColor: selected ? CORAL : showDrop ? CORAL + "88" : colors.border,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 2,
         }]}>
           <Feather
             name={selected ? "check-circle" : "search"}
             size={15}
-            color={selected ? colors.primary : colors.mutedForeground}
+            color={selected ? CORAL : colors.mutedForeground}
             style={{ marginLeft: 14 }}
           />
           <TextInput
             ref={inputRef}
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="삼성전자, NVDA, 005930, AAPL..."
-            placeholderTextColor={colors.mutedForeground}
+            placeholderTextColor={colors.mutedForeground + "99"}
             value={query}
             onChangeText={(v) => {
               setQuery(v);
@@ -218,37 +236,37 @@ export default function AnalysisTab() {
             returnKeyType="search"
             onSubmitEditing={goAnalyze}
           />
-          {query.length > 0 ? (
+          {query.length > 0 && (
             <Pressable onPress={clearSelection} style={styles.searchClear}>
               <Feather name="x" size={14} color={colors.mutedForeground} />
             </Pressable>
-          ) : null}
+          )}
           <Pressable
-            style={[styles.searchBtn, { backgroundColor: canStart ? colors.primary : colors.primary + "44" }]}
+            style={[styles.searchBtn, { backgroundColor: canStart ? CORAL : CORAL + "55" }]}
             onPress={goAnalyze}
             disabled={!canStart}
           >
-            <Text style={[styles.searchBtnText, { color: "#fff" }]}>분석 시작  →</Text>
+            <Text style={styles.searchBtnText}>분석 시작  →</Text>
           </Pressable>
         </View>
 
-        {/* Selected stock name hint */}
+        {/* 힌트 */}
         {selected ? (
-          <Text style={[styles.heroHint, { color: colors.primary }]}>
+          <Text style={[styles.heroHint, { color: CORAL }]}>
             ✓ {selected.name}{selected.sector ? ` · ${selected.sector}` : ""}
           </Text>
         ) : (
-          <Text style={[styles.heroHint, { color: colors.mutedForeground }]}>
-            ⏱ 평균 3분 만에 리포트 완성
+          <Text style={[styles.heroHint, { color: colors.mutedForeground + "88" }]}>
+            © 평균 3분 안에 리포트 완성
           </Text>
         )}
       </View>
 
-      {/* Dropdown */}
+      {/* ── 검색 드롭다운 ─────────────────────────────────────── */}
       {showDrop && query.trim().length >= 1 ? (
         <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {search.isLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ padding: 20 }} />
+            <ActivityIndicator color={CORAL} style={{ padding: 20 }} />
           ) : (search.data ?? []).length === 0 ? (
             <Text style={[styles.emptySearch, { color: colors.mutedForeground }]}>검색 결과 없음</Text>
           ) : (
@@ -299,34 +317,38 @@ export default function AnalysisTab() {
         </View>
       ) : (
         <>
-          {/* Segment */}
-          <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+          {/* 탭 */}
+          <View style={[styles.segRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
             {(["최근 분석", "인기 종목"] as const).map((t) => (
               <Pressable
                 key={t}
                 style={({ pressed }) => [{
-                  paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
-                  backgroundColor: seg === t ? colors.primary + "12" : "transparent",
+                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+                  backgroundColor: seg === t ? CORAL + "12" : "transparent",
                   opacity: pressed ? 0.7 : 1,
                 }]}
                 onPress={() => setSeg(t)}
               >
-                <Text style={{ fontSize: 13, fontFamily: seg === t ? "Pretendard-SemiBold" : "Pretendard-Regular", color: seg === t ? colors.primary : colors.mutedForeground }}>{t}</Text>
+                <Text style={{
+                  fontSize: 13,
+                  fontFamily: seg === t ? "Pretendard-SemiBold" : "Pretendard-Regular",
+                  color: seg === t ? CORAL : colors.mutedForeground,
+                }}>{t}</Text>
               </Pressable>
             ))}
           </View>
 
-          {/* List */}
+          {/* 리스트 */}
           {seg === "최근 분석" ? (
             recent.isLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+              <ActivityIndicator color={CORAL} style={{ marginTop: 40 }} />
             ) : (
               <FlatList
                 data={recent.data ?? []}
                 keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={[styles.list, { paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }]}
                 renderItem={({ item }) => <AnalysisRow item={item} />}
-                refreshControl={<RefreshControl refreshing={recent.isFetching} onRefresh={() => recent.refetch()} tintColor={colors.primary} />}
+                refreshControl={<RefreshControl refreshing={recent.isFetching} onRefresh={() => recent.refetch()} tintColor={CORAL} />}
                 ListEmptyComponent={
                   <View style={styles.emptyState}>
                     <Feather name="cpu" size={36} color={colors.border} />
@@ -338,14 +360,14 @@ export default function AnalysisTab() {
             )
           ) : (
             popular.isLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+              <ActivityIndicator color={CORAL} style={{ marginTop: 40 }} />
             ) : (
               <FlatList
                 data={popular.data ?? []}
                 keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={[styles.list, { paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }]}
                 renderItem={({ item }) => <PopularRow item={item} />}
-                refreshControl={<RefreshControl refreshing={popular.isFetching} onRefresh={() => popular.refetch()} tintColor={colors.primary} />}
+                refreshControl={<RefreshControl refreshing={popular.isFetching} onRefresh={() => popular.refetch()} tintColor={CORAL} />}
                 ListEmptyComponent={<Text style={[styles.emptySub, { color: colors.mutedForeground, textAlign: "center", marginTop: 60 }]}>인기 분석이 없습니다</Text>}
               />
             )
@@ -357,49 +379,63 @@ export default function AnalysisTab() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  hero: { paddingHorizontal: 20, paddingBottom: 20, gap: 10 },
-  heroTitle: { fontSize: 30, fontFamily: "Pretendard-Bold", lineHeight: 38 },
-  heroSub: { fontSize: 13, lineHeight: 19, fontFamily: "Pretendard-Regular" },
+  root:        { flex: 1 },
+  hero:        { paddingHorizontal: 24, paddingBottom: 24, gap: 12 },
+  heroTitle:   { fontSize: 32, fontFamily: "Pretendard-Bold", lineHeight: 42 },
+  heroSub:     { fontSize: 13, lineHeight: 20, fontFamily: "Pretendard-Regular" },
+
+  creditBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF0EE",
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1, borderColor: "#FFCFC9",
+  },
+  creditText:  { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
+
   searchRow: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 12, borderWidth: 1, overflow: "hidden",
-    marginTop: 6,
+    borderRadius: 14, borderWidth: 1, overflow: "hidden",
+    marginTop: 4,
   },
   searchInput: {
     flex: 1, fontSize: 14, fontFamily: "Pretendard-Regular",
-    paddingVertical: 13, paddingHorizontal: 10, padding: 0,
+    paddingVertical: 14, paddingHorizontal: 10, padding: 0,
   },
   searchClear: { padding: 10 },
   searchBtn: {
-    paddingHorizontal: 14, paddingVertical: 13,
+    paddingHorizontal: 16, paddingVertical: 14,
     alignItems: "center", justifyContent: "center",
   },
-  searchBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
-  heroHint: { fontSize: 11, fontFamily: "Pretendard-Regular", textAlign: "center" },
+  searchBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#fff" },
+  heroHint:    { fontSize: 11, fontFamily: "Pretendard-Regular", textAlign: "center" },
+
   dropdown: {
-    marginHorizontal: 16, borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 8,
+    marginHorizontal: 16, borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 8,
   },
   searchResultRow: {
+    flexDirection: "row", alignItems: "center",
     padding: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  srTicker: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
-  srName: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  srTicker:    { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  srName:      { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
   emptySearch: { padding: 16, textAlign: "center", fontFamily: "Pretendard-Regular" },
+
   segRow: {
-    flexDirection: "row", paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 0,
+    flexDirection: "row", paddingHorizontal: 12, paddingVertical: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  list: { paddingTop: 4 },
+  list:        { paddingTop: 4 },
   row: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowTicker: { fontSize: 14, fontFamily: "Pretendard-Bold" },
-  rowName: { fontSize: 12, fontFamily: "Pretendard-Regular", flex: 1 },
-  rowMeta: { fontSize: 11, fontFamily: "Pretendard-Regular" },
-  emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  rowTicker:   { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  rowName:     { fontSize: 12, fontFamily: "Pretendard-Regular", flex: 1 },
+  rowMeta:     { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  emptyState:  { alignItems: "center", paddingVertical: 60, gap: 10 },
+  emptyTitle:  { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
+  emptySub:    { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
 });
