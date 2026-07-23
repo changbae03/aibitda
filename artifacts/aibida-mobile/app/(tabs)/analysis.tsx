@@ -254,13 +254,17 @@ function DisclaimerModal({
     if (!visible) { setCountdown(5); return; }
     setCountdown(5);
     timerRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) { clearInterval(timerRef.current!); onClose(); return 0; }
-        return c - 1;
-      });
+      setCountdown((c) => (c <= 1 ? 0 : c - 1));
     }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [visible]);
+
+  useEffect(() => {
+    if (visible && countdown === 0) {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      onClose();
+    }
+  }, [countdown, visible]);
 
   if (!stock) return null;
   const code = tickerCode(stock.ticker);
