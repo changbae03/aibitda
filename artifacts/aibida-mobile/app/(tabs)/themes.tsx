@@ -476,9 +476,12 @@ function LiveGainerCard({ item, idx, colors, onAnalyze }: {
 
 // 카테고리 메타
 const PRESURGE_CATEGORY = {
-  upper_limit: { label: "상한가 연속", color: "#DC2626", bg: "#FEF2F2", icon: "🔴" },
-  momentum:    { label: "급등 모멘텀", color: "#EA580C", bg: "#FFF7ED", icon: "🟠" },
-  presurge:    { label: "전조 패턴",   color: "#7C3AED", bg: "#F5F3FF", icon: "🔷" },
+  accumulation:   { label: "거래량 매집", color: "#059669", bg: "#D1FAE5", icon: "💚" },
+  sector_laggard: { label: "테마 후발주", color: "#7C3AED", bg: "#EDE9FE", icon: "🎯" },
+  presurge:       { label: "전조 패턴",   color: "#D97706", bg: "#FEF3C7", icon: "⚡" },
+  // 구버전 호환 (상한가·모멘텀은 이제 "지금 급등 중" 섹션에서 표시)
+  upper_limit:    { label: "상한가 연속", color: "#DC2626", bg: "#FEF2F2", icon: "🔴" },
+  momentum:       { label: "급등 모멘텀", color: "#EA580C", bg: "#FFF7ED", icon: "🟠" },
 } as const;
 
 function PresurgeCard({ item, idx, colors, onAnalyze }: {
@@ -496,12 +499,23 @@ function PresurgeCard({ item, idx, colors, onAnalyze }: {
 
   // 카테고리별 핵심 지표 태그
   const tags: string[] = [];
-  if (catKey === "upper_limit") {
+  if (catKey === "accumulation") {
+    if ((item.volExpansion ?? 0) >= 2)  tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if ((item as any).candleStrength >= 0.8) tags.push("위꼬리 없는 강한 종가");
+    else if ((item as any).candleStrength >= 0.6) tags.push("강한 캔들");
+    if (item.maAligned)                 tags.push("이평선 정배열");
+    if (Math.abs(change) <= 3)          tags.push("당일 소폭 변동");
+  } else if (catKey === "sector_laggard") {
+    if ((item as any).sector)           tags.push(`${(item as any).sector} 섹터`);
+    if ((item.volExpansion ?? 0) >= 1.5) tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if (item.maAligned)                 tags.push("이평선 정배열");
+    tags.push("섹터 미상승 후발주");
+  } else if (catKey === "upper_limit") {
     tags.push("상한가 달성");
-    if ((item.volExpansion ?? 0) >= 2) tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if ((item.volExpansion ?? 0) >= 2)  tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
   } else if (catKey === "momentum") {
-    if ((item.volExpansion ?? 0) >= 2) tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
-    if ((item.momentum3d ?? 0) > 0)    tags.push(`당일 +${change.toFixed(1)}%`);
+    if ((item.volExpansion ?? 0) >= 2)  tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if ((item.momentum3d ?? 0) > 0)     tags.push(`당일 +${change.toFixed(1)}%`);
   } else {
     if ((item.volExpansion ?? 0) >= 2)   tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
     if ((item.volDryupDays ?? 0) >= 3)   tags.push(`${item.volDryupDays}일 거래량 수축`);
@@ -930,9 +944,9 @@ export default function ThemesTab() {
               emoji="⚡"
               title="급등 예비군"
               badge="기술적 패턴 스캔"
-              badgeColor="#EF4444"
-              badgeBg="#FEE2E2"
-              sub="상한가 연속후보 · 급등 모멘텀 · 박스권 전조 패턴"
+              badgeColor="#059669"
+              badgeBg="#D1FAE5"
+              sub="오늘 안 오른 종목 중 내일 급등 전조 · 거래량 매집 · 테마 후발주 · 박스권 전조"
             />
             <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
               {presurge.isLoading

@@ -460,8 +460,10 @@ def main():
                         c  = _safe_int(row.get("종가",  0))
                         v  = _safe_int(row.get("거래량", 0))
                         ch = _safe_float(row.get("등락률", 0.0)) if has_change else 0.0
+                        h  = _safe_int(row.get("고가",   c))
+                        lo = _safe_int(row.get("저가",   c))
                         if v > 0 and c >= 500:
-                            rows.append((str(ticker), mkt, c, v, ch))
+                            rows.append((str(ticker), mkt, c, v, ch, h, lo))
                 return date, mkt, rows
 
             _real_stdout = sys.stdout
@@ -473,11 +475,12 @@ def main():
                 for fut in concurrent.futures.as_completed(futs, timeout=240):
                     try:
                         date_, mkt_, rows_ = fut.result()
-                        for ticker, market, close, volume, change in rows_:
+                        for ticker, market, close, volume, change, high, low in rows_:
                             if ticker not in per_ticker:
                                 per_ticker[ticker] = {"market": market, "days": {}}
                             per_ticker[ticker]["days"][date_] = {
-                                "close": close, "volume": volume, "change": change
+                                "close": close, "volume": volume, "change": change,
+                                "high": high, "low": low
                             }
                     except Exception:
                         pass
@@ -525,57 +528,57 @@ def main():
                     continue
 
                 # 거래량·유동성 지표 (카테고리 판단에도 공통 사용)
+                today_high     = series[-1].get("high",  today_close)
+                today_low      = series[-1].get("low",   today_close)
                 today_turnover = today_close * today_volume
                 vol5           = volumes[-6:-1]
                 vol_mean5      = _stat.mean(vol5) if vol5 else 1
                 vol_ratio      = today_volume / vol_mean5 if vol_mean5 > 0 else 1
 
-                # ── 상한가 연속 후보 ─────────────────────────────────────────────
-                # 당일 상한가(29%~) → 다음날 연속 상한가 확률 15~25% (실증 통계)
-                if today_change >= 28.5:
-                    if today_turnover >= 5_000_000_000:   # 50억 이상 (유동성 보장)
-                        mom3_ = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else today_change
-                        candidates.append({
-                            "ticker":        ticker,
-                            "market":        info["market"],
-                            "close":         today_close,
-                            "change":        round(today_change, 1),
-                            "score":         99.0,
-                            "volExpansion":  round(vol_ratio, 1),
-                            "volDryupDays":  0,
-                            "priceRangePct": 0.0,
-                            "nearHighPct":   100.0,
-                            "maAligned":     False,
-                            "momentum3d":    round(mom3_, 1),
-                            "bbWidthPct":    0.0,
-                            "name":          "",
-                            "category":      "upper_limit",
-                        })
-                    continue   # 기존 presurge 점수 로직에서는 제외
-
-                # ── 급등 모멘텀 후보 ─────────────────────────────────────────────
-                # 15~28% 급등 + 거래량 2.5배+ → 모멘텀 연장 가능성 (테마 연쇄 급등 포함)
+                # 오늘 15%+ 급등 종목은 presurge 스캔 대상에서 제외
+                # (이미 급등한 종목 = 들어가기 부담, "지금 급등 중" 섹션에서 별도 표시)
                 if today_change >= 15.0:
-                    if vol_ratio >= 2.5 and today_turnover >= 2_000_000_000:   # 20억+, 거래량 2.5배+
-                        mom3_ = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else today_change
-                        m_score = round(40 + min(25, today_change * 0.9) + min(20, (vol_ratio - 1) * 4), 1)
-                        candidates.append({
-                            "ticker":        ticker,
-                            "market":        info["market"],
-                            "close":         today_close,
-                            "change":        round(today_change, 1),
-                            "score":         min(95.0, m_score),
-                            "volExpansion":  round(vol_ratio, 1),
-                            "volDryupDays":  0,
-                            "priceRangePct": 0.0,
-                            "nearHighPct":   0.0,
-                            "maAligned":     False,
-                            "momentum3d":    round(mom3_, 1),
-                            "bbWidthPct":    0.0,
-                            "name":          "",
-                            "category":      "momentum",
-                        })
-                    continue   # 기존 presurge 점수 로직에서는 제외
+                    continue
+
+                # ── 거래량 매집 후보 (오늘 안 오른 종목 중 내일 급등 전조) ───────
+                # 핵심 로직: 오늘 변동률 -2%~+8%, 거래량 3배+, 강한 종가(위꼬리 없음)
+                # → 세력이 조용히 매집 후 다음날 급등시키는 전형적 패턴
+                if -2.0 <= today_change <= 8.0 and vol_ratio >= 3.0:
+                    if today_turnover >= 3_000_000_000:   # 30억+ 거래대금
+                        candle_range    = today_high - today_low
+                        candle_strength = (today_close - today_low) / candle_range if candle_range > 5 else 0.5
+                        ma5_a  = _stat.mean(closes[-5:])  if len(closes) >= 5  else today_close
+                        ma20_a = _stat.mean(closes[-20:]) if len(closes) >= 20 else today_close
+                        # 심한 하락 추세는 제외 (매집이 아닌 패닉 매수일 수 있음)
+                        if candle_strength >= 0.55 and ma5_a >= ma20_a * 0.90:
+                            mom3_a  = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else 0
+                            high20a = max(closes[-20:]) if len(closes) >= 20 else today_close
+                            a_score = round(
+                                50
+                                + min(20, (vol_ratio - 3) * 4)          # 거래량 초과분 보너스
+                                + min(20, candle_strength * 22)          # 캔들 강도 보너스
+                                + min(10, max(0, today_change * 1.5))    # 소폭 상승 보너스
+                                + (5 if ma5_a > ma20_a else 0),          # 정배열 보너스
+                                1
+                            )
+                            candidates.append({
+                                "ticker":        ticker,
+                                "market":        info["market"],
+                                "close":         today_close,
+                                "change":        round(today_change, 1),
+                                "score":         min(99.0, a_score),
+                                "volExpansion":  round(vol_ratio, 1),
+                                "volDryupDays":  0,
+                                "priceRangePct": 0.0,
+                                "nearHighPct":   round(today_close / high20a * 100, 1) if high20a > 0 else 0,
+                                "maAligned":     ma5_a > ma20_a,
+                                "momentum3d":    round(mom3_a, 1),
+                                "bbWidthPct":    0.0,
+                                "name":          "",
+                                "category":      "accumulation",
+                                "candleStrength": round(candle_strength, 2),
+                            })
+                            continue  # 매집 신호 확인 → 박스권 중복 체크 스킵
 
                 # ── 기존 급등 전조 (박스권 수축→팽창) 로직 ─────────────────────
                 # 유동성 필터: 오늘 거래대금 10억원 미만은 제외 (5억→10억: 얇은 종목 추가 제거)
@@ -704,13 +707,98 @@ def main():
                     "category":      "presurge",
                 })
 
+            # ── 섹터 후발주 탐색 ────────────────────────────────────────────────────
+            # 같은 섹터에서 최근 3일 내 급등 종목이 2개+ 나왔지만 이 종목은 아직 미상승
+            # → 테마 연쇄 순환매의 전형적 패턴
+            try:
+                sector_map = {}
+                _rs = sys.stdout; sys.stdout = sys.stderr
+                for _mkt in ["KOSPI", "KOSDAQ"]:
+                    try:
+                        sc_df = krx.get_market_sector_classification(today_date, market=_mkt)
+                        if sc_df is not None and not sc_df.empty:
+                            sector_col = next((c for c in ["업종명", "섹터", "SECTOR", "Sector"] if c in sc_df.columns), None)
+                            if sector_col:
+                                for sc_t in sc_df.index:
+                                    sector_map[str(sc_t)] = str(sc_df.loc[sc_t, sector_col])
+                    except Exception:
+                        pass
+                sys.stdout = _rs
+
+                if sector_map:
+                    recent3 = trading_dates[-3:]
+                    hot_sectors: dict = {}
+                    for t_s, info_s in per_ticker.items():
+                        days_s = info_s["days"]
+                        recent_ch = [days_s[d]["change"] for d in recent3 if d in days_s]
+                        if recent_ch and max(recent_ch) >= 10 and t_s in sector_map:
+                            s = sector_map[t_s]
+                            hot_sectors[s] = hot_sectors.get(s, 0) + 1
+
+                    hot_set = {s for s, cnt in hot_sectors.items() if cnt >= 2}
+                    existing_tickers = {c["ticker"] for c in candidates}
+
+                    for t2, info2 in per_ticker.items():
+                        if t2 in existing_tickers: continue
+                        if t2 not in sector_map: continue
+                        if sector_map[t2] not in hot_set: continue
+                        if len(t2) == 6 and t2[-1] != "0": continue
+                        days2 = info2["days"]
+                        if today_date not in days2: continue
+                        ord2    = sorted(days2.keys())
+                        ser2    = [days2[d] for d in ord2]
+                        cls2    = [s["close"]  for s in ser2]
+                        vls2    = [s["volume"] for s in ser2]
+                        if len(ser2) < 5: continue
+                        tc2 = ser2[-1]["change"]
+                        tv2 = ser2[-1]["volume"]
+                        tp2 = ser2[-1]["close"]
+                        if tc2 > 8 or tc2 < -5: continue
+                        if tp2 * tv2 < 1_000_000_000: continue
+                        vm2   = _stat.mean(vls2[-6:-1]) if len(vls2) >= 6 else 1
+                        vr2   = tv2 / vm2 if vm2 > 0 else 1
+                        if vr2 < 1.3: continue
+                        ma5_2  = _stat.mean(cls2[-5:])  if len(cls2) >= 5  else tp2
+                        ma20_2 = _stat.mean(cls2[-20:]) if len(cls2) >= 20 else tp2
+                        if ma5_2 < ma20_2 * 0.90: continue
+                        mom3_2  = (cls2[-1] / cls2[-4] - 1) * 100 if len(cls2) >= 4 and cls2[-4] > 0 else 0
+                        high20_2 = max(cls2[-20:]) if len(cls2) >= 20 else tp2
+                        l_score = round(
+                            40
+                            + min(20, vr2 * 5)
+                            + min(15, max(0, tc2 * 2))
+                            + (5 if ma5_2 >= ma20_2 else 0)
+                            + min(10, hot_sectors.get(sector_map[t2], 0) * 2),
+                            1
+                        )
+                        if l_score < 45: continue
+                        candidates.append({
+                            "ticker":        t2,
+                            "market":        info2["market"],
+                            "close":         tp2,
+                            "change":        round(tc2, 1),
+                            "score":         min(90.0, l_score),
+                            "volExpansion":  round(vr2, 1),
+                            "volDryupDays":  0,
+                            "priceRangePct": 0.0,
+                            "nearHighPct":   round(tp2 / high20_2 * 100, 1) if high20_2 > 0 else 0,
+                            "maAligned":     ma5_2 >= ma20_2,
+                            "momentum3d":    round(mom3_2, 1),
+                            "bbWidthPct":    0.0,
+                            "name":          "",
+                            "category":      "sector_laggard",
+                            "sector":        sector_map[t2],
+                        })
+            except Exception:
+                pass
+
             candidates.sort(key=lambda x: x["score"], reverse=True)
 
-            # 카테고리별 배분: 상한가 연속 ≤5, 급등 모멘텀 ≤8, 박스권 전조 나머지
-            _ul  = [c for c in candidates if c.get("category") == "upper_limit"][:5]
-            _mo  = [c for c in candidates if c.get("category") == "momentum"][:8]
+            # 카테고리별 배분: 거래량 매집 ≤10, 테마 후발주 ≤10, 박스권 전조 나머지
+            _acc = [c for c in candidates if c.get("category") == "accumulation"][:10]
+            _lag = [c for c in candidates if c.get("category") == "sector_laggard"][:10]
             _ps  = [c for c in candidates if c.get("category", "presurge") == "presurge"]
-            top60 = (_ul + _mo + _ps)[:60]
+            top60 = (_acc + _lag + _ps)[:60]
 
             # 종목명 조회 + 스팩(SPAC) 제외 (스팩은 NAV 근접 거래 특성상 기술적
             # 패턴이 무의미해 정밀도를 떨어뜨림)
