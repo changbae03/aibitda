@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/expo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const getBase = () =>
@@ -362,17 +363,25 @@ export function useNewsScraps() {
 export function usePopular() {
   return useQuery({
     queryKey: ["popular"],
-    queryFn: () => apiFetch<PopularItem[]>(`/api/analysis/popular`),
+    queryFn: async () => {
+      const res = await apiFetch<{ items: PopularItem[] } | PopularItem[]>(`/api/analysis/popular`);
+      return Array.isArray(res) ? res : (res.items ?? []);
+    },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 }
 
 export function useRecentAnalyses() {
+  const { getToken } = useAuth();
   return useQuery({
     queryKey: ["recent-analyses"],
-    queryFn: () =>
-      apiFetch<AnalysisListItem[]>(`/api/analysis?limit=20`),
+    queryFn: async () => {
+      const token = await getToken();
+      return apiFetch<AnalysisListItem[]>(`/api/analysis?limit=20`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    },
     staleTime: 2 * 60 * 1000,
     retry: 1,
   });
