@@ -226,22 +226,22 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   }
 
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: 26 }}>
       {/* 요약 */}
-      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 23 }}>{brief.summary}</Text>
+      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 28 }} lineBreakStrategyIOS="hangul-word">{brief.summary}</Text>
 
       {/* 리드 단락 */}
       {brief.leadParagraph && (
-        <View style={{ borderLeftWidth: 2.5, borderLeftColor: colors.primary + "50", paddingLeft: 13, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 15, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
+        <View style={{ borderLeftWidth: 2.5, borderLeftColor: colors.primary + "50", paddingLeft: 14, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 15, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 27 }} lineBreakStrategyIOS="hangul-word">{brief.leadParagraph}</Text>
         </View>
       )}
 
       {/* 스토리라인 */}
       {brief.storyLine && (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: 8 }}>
           <SL label="심층 분석" colors={colors} />
-          <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.storyLine}</Text>
+          <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 27 }} lineBreakStrategyIOS="hangul-word">{brief.storyLine}</Text>
         </View>
       )}
 
@@ -296,13 +296,13 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             const isPos = dir === "positive"; const isNeg = dir === "negative";
             return (
               <View key={`me-${i}`} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 1 }}>
+                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 3 }}>
                   {isPos ? "▲" : isNeg ? "▼" : "●"}
                 </Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 19 }}>{e.title}</Text>
+                  <Text style={{ fontSize: 15, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 24 }} lineBreakStrategyIOS="hangul-word">{e.title}</Text>
                   {((e as any).impact_desc || e.description) && (
-                    <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17, marginTop: 2 }}>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 22, marginTop: 3 }} lineBreakStrategyIOS="hangul-word">
                       {(e as any).impact_desc ?? e.description}
                     </Text>
                   )}
@@ -342,19 +342,19 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             if (typeof f === "string") {
               return (
                 <View key={`mf-${i}`} style={{ flexDirection: "row", gap: 8 }}>
-                  <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ color: colors.border, marginTop: 4 }}>•</Text>
+                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 24 }} lineBreakStrategyIOS="hangul-word">{f}</Text>
                 </View>
               );
             }
             const mf = f as MacroFactor;
             return (
-              <View key={`mf-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+              <View key={`mf-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
                   <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{mf.factor}</Text>
                   <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{mf.status}</Text>
                 </View>
-                {mf.implication && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{mf.implication}</Text>}
+                {mf.implication && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 22 }} lineBreakStrategyIOS="hangul-word">{mf.implication}</Text>}
               </View>
             );
           })}
@@ -369,17 +369,17 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             if (typeof f === "string") {
               return (
                 <View key={`fl-${i}`} style={{ flexDirection: "row", gap: 8 }}>
-                  <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ color: colors.border, marginTop: 4 }}>•</Text>
+                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 24 }} lineBreakStrategyIOS="hangul-word">{f}</Text>
                 </View>
               );
             }
             const fl = f as ForwardLookItem;
             return (
-              <View key={`fl-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
-                <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 3 }}>{fl.point}</Text>
-                {fl.detail && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{fl.detail}</Text>}
-                {fl.watchFor && <Text style={{ fontSize: 13, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 4 }}>📌 {fl.watchFor}</Text>}
+              <View key={`fl-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
+                <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 4 }}>{fl.point}</Text>
+                {fl.detail && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 22 }} lineBreakStrategyIOS="hangul-word">{fl.detail}</Text>}
+                {fl.watchFor && <Text style={{ fontSize: 13, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 5 }} lineBreakStrategyIOS="hangul-word">📌 {fl.watchFor}</Text>}
               </View>
             );
           })}
@@ -392,8 +392,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
           <SL label="투자 포인트" colors={colors} />
           {brief.actionPoints.map((a, i) => (
             <View key={`ap-${i}`} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-              <Text style={{ fontSize: 14, color: "#f59e0b", fontFamily: "Pretendard-Bold", marginTop: 1 }}>→</Text>
-              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>
+              <Text style={{ fontSize: 14, color: "#f59e0b", fontFamily: "Pretendard-Bold", marginTop: 4 }}>→</Text>
+              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 24 }} lineBreakStrategyIOS="hangul-word">
                 {typeof a === "string" ? a : JSON.stringify(a)}
               </Text>
             </View>
@@ -403,12 +403,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
 
       {/* 핵심 리스크 */}
       {brief.keyRisk && (
-        <View style={{ backgroundColor: colors.downBg, borderWidth: 1, borderColor: colors.down + "30", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 5 }}>
+        <View style={{ backgroundColor: colors.downBg, borderWidth: 1, borderColor: colors.down + "30", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 6 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.down }} />
             <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.down }}>핵심 리스크</Text>
           </View>
-          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 19 }}>{brief.keyRisk}</Text>
+          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 24 }} lineBreakStrategyIOS="hangul-word">{brief.keyRisk}</Text>
         </View>
       )}
 
@@ -609,7 +609,7 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border + "60", marginHorizontal: 16 }} />
 
           {/* 브리핑 본문 */}
-          <View style={{ padding: 16 }}>
+          <View style={{ padding: 20 }}>
             <BriefDetail session={selectedSession} colors={colors} />
           </View>
         </View>

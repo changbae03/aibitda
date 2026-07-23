@@ -742,9 +742,9 @@ function InlineText({ text, style }: { text: string; style?: TextStyle }) {
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ content: text.slice(last), bold: false, italic: false });
-  if (parts.length === 0) return <Text style={style}>{text}</Text>;
+  if (parts.length === 0) return <Text style={style} lineBreakStrategyIOS="hangul-word">{text}</Text>;
   return (
-    <Text style={style}>
+    <Text style={style} lineBreakStrategyIOS="hangul-word">
       {parts.map((p, i) => (
         <Text
           key={i}

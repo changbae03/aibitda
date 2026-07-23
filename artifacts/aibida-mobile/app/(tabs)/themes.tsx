@@ -1154,7 +1154,7 @@ const rs = StyleSheet.create({
   themeBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 },
   themeSummary: {
     fontSize: 15, fontFamily: "Pretendard-Regular",
-    lineHeight: 20, paddingHorizontal: 14, paddingVertical: 10,
+    lineHeight: 26, paddingHorizontal: 14, paddingVertical: 12,
   },
 
   // Stock row
@@ -1168,7 +1168,7 @@ const rs = StyleSheet.create({
   stockName: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
   stockChange: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
   stockMomentum: { fontSize: 13, fontFamily: "Pretendard-Regular" },
-  stockRationale: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  stockRationale: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 23 },
   analyzeBtn: {
     backgroundColor: "#eef2ff", paddingHorizontal: 12, paddingVertical: 8,
     borderRadius: 9, alignSelf: "flex-start", marginTop: 18,
@@ -1184,10 +1184,10 @@ const rs = StyleSheet.create({
   pickReasonPreview: { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 3 },
   pickBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
   pickRationale: {
-    fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18,
+    fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 24,
     paddingHorizontal: 14, paddingBottom: 10, color: "#64748b",
   },
-  pickReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  pickReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 26 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
   tagText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
@@ -1225,9 +1225,9 @@ const rs = StyleSheet.create({
   signalHeader: { flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 10 },
   signalDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   signalTheme: { fontSize: 16, fontFamily: "Pretendard-Bold" },
-  signalText: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  signalText: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 24 },
   signalBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
-  signalReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  signalReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 26 },
 
   // Section header (내일 종목 섹션 구분)
   listSectionHeader: {
@@ -1240,7 +1240,7 @@ const rs = StyleSheet.create({
   // Concept card
   conceptCard: { margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
   conceptTitle: { fontSize: 16, fontFamily: "Pretendard-Bold", marginBottom: 5 },
-  conceptDesc: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  conceptDesc: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 24 },
   conceptRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 11 },
   conceptNum: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   conceptNumText: { fontSize: 13, fontFamily: "Pretendard-Bold" },
