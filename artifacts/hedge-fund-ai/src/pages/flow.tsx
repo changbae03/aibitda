@@ -473,7 +473,7 @@ function SignalBadge({ label, active, icon }: { label: string; active: boolean; 
   );
 }
 
-export function PreSurgeWidget() {
+export function PreSurgeWidget({ onAnalyze }: { onAnalyze?: (ticker: string, name: string) => void } = {}) {
   const [data,          setData]          = useState<PreSurgeCandidate[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
@@ -605,8 +605,9 @@ export function PreSurgeWidget() {
                       ? "border-emerald-200/70 dark:border-emerald-500/25"
                       : "border-border/50",
                   )}>
-                    <button
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors"
+                    {/* 카드 행: div로 감싸서 내부 버튼 중첩 허용 */}
+                    <div
+                      className="w-full flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors"
                       onClick={() => setExpanded(isExpanded ? null : s.ticker)}
                     >
                       {/* 순위 */}
@@ -639,8 +640,18 @@ export function PreSurgeWidget() {
                         <ScoreBar value={s.score} />
                       </div>
 
+                      {/* 분석 버튼 */}
+                      {onAnalyze && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onAnalyze(s.ticker, s.name); }}
+                          className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-muted/70 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 text-foreground/55 hover:text-foreground/80 transition-all whitespace-nowrap shrink-0"
+                        >
+                          분석
+                        </button>
+                      )}
+
                       <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 shrink-0 transition-transform", isExpanded && "rotate-180")} />
-                    </button>
+                    </div>
 
                     {/* 펼침 상세 */}
                     <AnimatePresence>

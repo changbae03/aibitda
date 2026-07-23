@@ -465,7 +465,7 @@ export default function ThemesPage() {
           <CrossSignalBanner />
 
           <SurgeWidget />
-          <PreSurgeWidget />
+          <PreSurgeWidget onAnalyze={goAnalyze} />
           <TomorrowPicksContent onAnalyze={goAnalyze} />
         </div>
       )}
