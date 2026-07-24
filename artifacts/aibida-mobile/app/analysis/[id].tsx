@@ -1118,11 +1118,11 @@ function InProgressStepCard({ stepKey, index }: { stepKey: string; index: number
   );
 }
 
-function UpcomingStepCard({ stepKey, index }: { stepKey: string; index: number }) {
+function UpcomingStepCard({ stepKey, index, dim }: { stepKey: string; index: number; dim?: boolean }) {
   const colors = useColors();
   const agent  = AGENTS[stepKey];
   return (
-    <Card style={{ opacity: 0.3 }}>
+    <Card style={{ opacity: dim ? 0.3 : 0.55, borderStyle: "dashed", borderColor: colors.border, borderWidth: 1 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.mutedForeground }}>{index + 1}</Text>
@@ -1135,10 +1135,18 @@ function UpcomingStepCard({ stepKey, index }: { stepKey: string; index: number }
             {agent?.role ?? ""}
           </Text>
         </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3,
+          borderRadius: 10, backgroundColor: colors.muted }}>
+          <Feather name="clock" size={11} color={colors.mutedForeground} />
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>대기 중</Text>
+        </View>
       </View>
       <View style={{ gap: 9 }}>
-        {[0.92, 0.76, 0.55].map((w, i) => (
-          <View key={i} style={{ height: 13, borderRadius: 6, backgroundColor: colors.muted, width: `${w * 100}%` as any }} />
+        <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 18 }}>
+          {STEP_TOPICS[stepKey] ?? "분석 준비 중"}
+        </Text>
+        {[0.88, 0.68].map((w, i) => (
+          <View key={i} style={{ height: 12, borderRadius: 6, backgroundColor: colors.muted, width: `${w * 100}%` as any }} />
         ))}
       </View>
     </Card>
@@ -1559,11 +1567,6 @@ export default function AnalysisDetailScreen() {
         {/* 진행 중에도 완료된 단계 + 스트리밍 카드 표시 */}
         {!isComplete && <AgentStepsSection analysis={analysis} streamingStep={streamingStep} />}
 
-        {/* Disclaimer */}
-        <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-          본 보고서는 공개된 데이터를 기반으로 AI가 자동 생성한 참고용 자료입니다.{"\n"}
-          투자 권유가 아니며, 최종 투자 결정과 그 결과는 투자자 본인에게 있습니다.
-        </Text>
       </ScrollView>
     </View>
   );
