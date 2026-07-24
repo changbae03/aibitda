@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import TickerLogo from "@/components/TickerLogo";
 import {
   useTomorrowPicks, usePresurge, useThemeSignals, useLiveGainers, useInstitutionPicks,
   apiFetch,
@@ -169,8 +170,11 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
 
   return (
     <View style={[rs.stockRow, { borderBottomColor: colors.border }]}>
+      {/* 로고 */}
+      <TickerLogo ticker={stock.ticker} name={stock.name} size={38} borderRadius={10} />
+
       {/* 왼쪽 컨텐츠 */}
-      <View style={{ flex: 1, gap: 4 }}>
+      <View style={{ flex: 1, gap: 4, marginLeft: 10 }}>
         {/* 1행: 배지들 */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
           {stock.isLeader && (
@@ -332,14 +336,14 @@ function TomorrowPickCard({ item, idx, colors, onAnalyze }: {
   return (
     <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7} style={rs.pickHeader}>
-        {/* 순위 */}
-        <Text style={[rs.pickRank, {
-          color: isTop3 ? colors.foreground : colors.mutedForeground,
-          fontFamily: isTop3 ? "Pretendard-Bold" : "Pretendard-Regular",
-        }]}>{idx + 1}</Text>
+        {/* 로고 + 순위 */}
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <TickerLogo ticker={item.ticker} name={item.name} size={36} borderRadius={10} />
+          <Text style={[rs.pickRank, { color: colors.mutedForeground, fontSize: 10, fontFamily: "Pretendard-Regular" }]}>{idx + 1}</Text>
+        </View>
 
         {/* 종목 정보 */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginLeft: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
             <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
@@ -500,12 +504,13 @@ function InstitutionPickCard({ item, idx, colors, onAnalyze }: {
   return (
     <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7} style={rs.pickHeader}>
-        <Text style={[rs.pickRank, {
-          color: isTop3 ? colors.foreground : colors.mutedForeground,
-          fontFamily: isTop3 ? "Pretendard-Bold" : "Pretendard-Regular",
-        }]}>{idx + 1}</Text>
+        {/* 로고 + 순위 */}
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <TickerLogo ticker={item.ticker} name={item.name} size={36} borderRadius={10} />
+          <Text style={[rs.pickRank, { color: colors.mutedForeground, fontSize: 10, fontFamily: "Pretendard-Regular" }]}>{idx + 1}</Text>
+        </View>
 
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginLeft: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
             <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
@@ -616,14 +621,14 @@ function PresurgeCard({ item, idx, colors, onAnalyze }: {
   return (
     <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7} style={rs.pickHeader}>
-        {/* 순위 */}
-        <Text style={[rs.pickRank, {
-          color: idx < 3 ? colors.foreground : colors.mutedForeground,
-          fontFamily: idx < 3 ? "Pretendard-Bold" : "Pretendard-Regular",
-        }]}>{idx + 1}</Text>
+        {/* 로고 + 순위 */}
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <TickerLogo ticker={item.ticker} name={item.name} size={36} borderRadius={10} />
+          <Text style={[rs.pickRank, { color: colors.mutedForeground, fontSize: 10, fontFamily: "Pretendard-Regular" }]}>{idx + 1}</Text>
+        </View>
 
         {/* 종목 정보 */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginLeft: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
             <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
