@@ -1338,9 +1338,13 @@ export default function AnalysisDetailScreen() {
   const streamContentRef  = useRef("");       // 토큰 누적 버퍼 (setState throttle용)
   const lastContentUpdate = useRef(0);
   const xhrRef            = useRef<XMLHttpRequest | null>(null);
+  const watchTimerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 언마운트 시 진행 중 XHR 중단
-  useEffect(() => () => { xhrRef.current?.abort(); }, []);
+  // 언마운트 시 진행 중 XHR + 인터벌 중단
+  useEffect(() => () => {
+    xhrRef.current?.abort();
+    if (watchTimerRef.current) clearInterval(watchTimerRef.current);
+  }, []);
 
   const loadAnalysis = React.useCallback((): Promise<any> => {
     if (!id) return Promise.resolve(null);
@@ -1417,13 +1421,15 @@ export default function AnalysisDetailScreen() {
         // 서버 백그라운드가 이미 이 스텝 실행 중.
         // 2초 간격으로 빠르게 폴링해 해당 스텝 완료 감지 → 다음 스텝 체이닝 재개.
         let attempts = 0;
-        const watchTimer = setInterval(() => {
+        if (watchTimerRef.current) clearInterval(watchTimerRef.current);
+        watchTimerRef.current = setInterval(() => {
           attempts++;
           loadAnalysis().then((data: any) => {
-            if (!data) { clearInterval(watchTimer); return; }
+            if (!data) { clearInterval(watchTimerRef.current!); watchTimerRef.current = null; return; }
             const completedKeys = new Set((data.steps ?? []).filter((s: any) => s.content).map((s: any) => s.stepKey));
             if (completedKeys.has(stepKey) || data.status === "completed") {
-              clearInterval(watchTimer);
+              clearInterval(watchTimerRef.current!);
+              watchTimerRef.current = null;
               if (data.status !== "completed") {
                 const nextIdx = STEP_ORDER.indexOf(stepKey as any) + 1;
                 if (nextIdx < STEP_ORDER.length) {
@@ -1436,7 +1442,7 @@ export default function AnalysisDetailScreen() {
               }
             }
           }).catch(() => {});
-          if (attempts >= 90) clearInterval(watchTimer); // 최대 3분
+          if (attempts >= 90) { clearInterval(watchTimerRef.current!); watchTimerRef.current = null; } // 최대 3분
         }, 2000);
         return;
       }
