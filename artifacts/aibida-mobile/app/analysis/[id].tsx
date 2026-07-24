@@ -850,32 +850,58 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
 
   const colCount = Math.max(headers.length, ...rows.map(r => r.length));
 
-  // 첫 번째 열(시점 등)은 좁게, 나머지는 균등 분배
-  function colFlex(ci: number) {
-    if (colCount <= 1) return 1;
-    return ci === 0 ? 0.9 : 1.3;
+  // 5열 이상이면 가로 스크롤 + 고정 픽셀 폭
+  const isWide = colCount >= 5;
+
+  // 숫자/단순 값 셀 판별 (줄바꿈 금지)
+  function isNumericCell(val: string) {
+    return /^[+-]?[\d,\.%—\-–]+[EKMBW]?$/.test(val.trim()) || val.trim() === "—";
   }
 
-  return (
+  // 열 고정 폭 (wide 모드)
+  function colPx(ci: number): number {
+    if (ci === 0) return 78;                                      // 라벨 열
+    const lastHeader = headers[colCount - 1] ?? "";
+    if (ci === colCount - 1 && /추세|trend/i.test(lastHeader)) return 38; // 추세 열
+    return 58;                                                    // 데이터 열
+  }
+
+  // flex 비율 (narrow 모드)
+  function colFlex(ci: number): number {
+    if (colCount === 1) return 1;
+    if (colCount === 2) return ci === 0 ? 1.2 : 2;
+    if (colCount === 3) return ci === 0 ? 1.1 : ci === 1 ? 1.5 : 2.2;
+    if (colCount === 4) return ci === 0 ? 1.1 : 1.2;
+    return ci === 0 ? 1 : 1.1;
+  }
+
+  const tableBody = (
     <View style={{ borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: "hidden", marginVertical: 4 }}>
-      {/* Header row */}
+      {/* 헤더 행 */}
       <View style={{ flexDirection: "row", backgroundColor: colors.muted }}>
         {Array.from({ length: colCount }).map((_, ci) => (
           <View
             key={ci}
             style={[
               mdStyles.cell,
-              { flex: colFlex(ci), backgroundColor: colors.muted, alignItems: "center" },
+              isWide
+                ? { width: colPx(ci), flexShrink: 0 }
+                : { flex: colFlex(ci) },
+              { backgroundColor: colors.muted, alignItems: "center" },
               ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
             ]}
           >
-            <Text style={[mdStyles.headerCell, { color: colors.foreground }]} lineBreakStrategyIOS="hangul-word">
+            <Text
+              style={[mdStyles.headerCell, { color: colors.foreground }]}
+              lineBreakStrategyIOS="hangul-word"
+            >
               {(headers[ci] ?? "").replace(/\*\*/g, "")}
             </Text>
           </View>
         ))}
       </View>
-      {/* Data rows */}
+
+      {/* 데이터 행 */}
       {rows.map((row, ri) => (
         <View
           key={ri}
@@ -892,24 +918,29 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
             const isBold = !!boldM;
             const isUp   = cell === "↑" || cell === "▲";
             const isDown = cell === "↓" || cell === "▼";
+            const isNum  = isNumericCell(cell);
+            const isLabel = ci === 0;
             return (
               <View
                 key={ci}
                 style={[
                   mdStyles.cell,
-                  { flex: colFlex(ci), alignItems: "flex-start" },
+                  isWide
+                    ? { width: colPx(ci), flexShrink: 0 }
+                    : { flex: colFlex(ci) },
+                  { alignItems: isLabel ? "center" : "center" },
                   ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
-                  ci === 0 && { alignItems: "center" },
                 ]}
               >
                 <Text
                   style={[
                     mdStyles.dataCell,
-                    { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground },
-                    ci === 0 && { textAlign: "center", fontFamily: "Pretendard-Medium" },
-                    isBold && { fontFamily: "Pretendard-SemiBold" },
+                    { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground, textAlign: isLabel ? "center" : isNum ? "center" : "left" },
+                    isLabel && { fontFamily: "Pretendard-Medium" },
+                    isBold  && { fontFamily: "Pretendard-SemiBold" },
                   ]}
                   lineBreakStrategyIOS="hangul-word"
+                  numberOfLines={isNum ? 1 : undefined}
                 >
                   {cell}
                 </Text>
@@ -920,6 +951,15 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
       ))}
     </View>
   );
+
+  if (isWide) {
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+        {tableBody}
+      </ScrollView>
+    );
+  }
+  return tableBody;
 }
 
 function MarkdownText({ content, baseColor }: { content: string; baseColor: string }) {
