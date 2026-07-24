@@ -291,51 +291,64 @@ function DisclaimerModal({
 
   if (!stock) return null;
   const code = tickerCode(stock.ticker);
+  const { isKR } = exchInfo(stock);
+  const progressRatio = countdown / 5;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.disclaimerCard, { backgroundColor: colors.card }]}>
-          {/* Header */}
+          {/* 드래그 핸들 */}
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+          {/* 헤더 */}
           <View style={styles.disclaimerHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.disclaimerTicker, { color: colors.mutedForeground }]}>
-                {code}  {stock.name || code}
-              </Text>
+            <View style={{ flex: 1, gap: 6 }}>
+              {/* 종목 칩 */}
+              <View style={styles.tickerChip}>
+                <Text style={styles.tickerChipCode}>{code}</Text>
+                <View style={[styles.tickerChipDivider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.tickerChipName, { color: colors.mutedForeground }]} numberOfLines={1}>
+                  {stock.name || code}
+                </Text>
+                <View style={[styles.mktDot, { backgroundColor: isKR ? "#3B82F6" : "#10B981" }]} />
+              </View>
               <Text style={[styles.disclaimerTitle, { color: colors.foreground }]}>
                 참고용 리포트입니다
               </Text>
             </View>
-            <Pressable onPress={onClose} style={styles.disclaimerClose}>
-              <Feather name="x" size={18} color={colors.mutedForeground} />
+            <Pressable onPress={onClose} style={[styles.disclaimerClose, { backgroundColor: colors.muted }]}>
+              <Feather name="x" size={16} color={colors.mutedForeground} />
             </Pressable>
           </View>
 
-          {/* Body */}
-          <Text style={[styles.disclaimerBody, { color: colors.foreground }]}>
+          {/* 본문 */}
+          <Text style={[styles.disclaimerBody, { color: colors.mutedForeground }]}>
             {DISCLAIMER_TEXT}
           </Text>
 
-          {/* Warning */}
-          <View style={[styles.disclaimerWarning, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <Text style={[styles.disclaimerWarningText, { color: colors.mutedForeground }]}>
-              △ AI 특성상 수치나 판단에 오류가 포함될 수 있습니다. 핵심 수치는 반드시 직접 확인 후 참고하세요.
+          {/* 경고 박스 */}
+          <View style={styles.disclaimerWarning}>
+            <Feather name="alert-triangle" size={13} color="#B45309" style={{ marginTop: 1, flexShrink: 0 }} />
+            <Text style={styles.disclaimerWarningText}>
+              AI 특성상 수치나 판단에 오류가 포함될 수 있습니다. 핵심 수치는 반드시 직접 확인 후 참고하세요.
             </Text>
           </View>
 
-          {/* Confirm button */}
-          <TouchableOpacity
-            style={styles.disclaimerBtn}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
+          {/* 확인 버튼 */}
+          <TouchableOpacity style={styles.disclaimerBtn} onPress={onClose} activeOpacity={0.82}>
             <Text style={styles.disclaimerBtnText}>확인했습니다</Text>
           </TouchableOpacity>
 
-          {/* Auto-close hint */}
-          <Text style={[styles.disclaimerAuto, { color: colors.mutedForeground }]}>
-            {countdown > 0 ? `잠시 후 자동으로 닫힙니다 (${countdown})` : "닫는 중…"}
-          </Text>
+          {/* 자동 닫힘 진행 */}
+          <View style={styles.autoCloseRow}>
+            <View style={[styles.autoCloseTrack, { backgroundColor: colors.border }]}>
+              <View style={[styles.autoCloseBar, { width: `${progressRatio * 100}%` as any }]} />
+            </View>
+            <Text style={[styles.disclaimerAuto, { color: colors.mutedForeground }]}>
+              {countdown > 0 ? `${countdown}초 후 자동으로 닫힙니다` : "닫는 중…"}
+            </Text>
+          </View>
         </View>
       </View>
     </Modal>
@@ -727,24 +740,50 @@ const styles = StyleSheet.create({
   /* disclaimer modal */
   disclaimerCard: {
     position: "absolute", bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, paddingBottom: 36,
-    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12, shadowRadius: 16, elevation: 12,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.14, shadowRadius: 20, elevation: 16,
   },
-  disclaimerHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16 },
-  disclaimerClose:  { padding: 4 },
-  disclaimerTicker: { fontSize: 14, fontFamily: "Pretendard-Regular", marginBottom: 4 },
-  disclaimerTitle:  { fontSize: 22, fontFamily: "Pretendard-Bold" },
-  disclaimerBody:   { fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", marginBottom: 16 },
+  sheetHandle: {
+    width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20,
+  },
+  disclaimerHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 18, gap: 12 },
+  disclaimerClose: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center", marginTop: 2,
+  },
+  tickerChip: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    alignSelf: "flex-start",
+  },
+  tickerChipCode: {
+    fontSize: 13, fontFamily: "Pretendard-SemiBold",
+    color: "#6366F1", letterSpacing: 0.3,
+  },
+  tickerChipDivider: { width: 1, height: 12 },
+  tickerChipName: { fontSize: 13, fontFamily: "Pretendard-Regular", maxWidth: 160 },
+  mktDot: { width: 6, height: 6, borderRadius: 3 },
+  disclaimerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold", letterSpacing: -0.5 },
+  disclaimerBody: {
+    fontSize: 15, lineHeight: 26, fontFamily: "Pretendard-Regular", marginBottom: 16,
+  },
   disclaimerWarning: {
-    padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 20,
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FDE68A",
+    padding: 13, borderRadius: 12, marginBottom: 22,
   },
-  disclaimerWarningText: { fontSize: 14, lineHeight: 18, fontFamily: "Pretendard-Regular" },
+  disclaimerWarningText: {
+    flex: 1, fontSize: 13, lineHeight: 20,
+    fontFamily: "Pretendard-Regular", color: "#92400E",
+  },
   disclaimerBtn: {
-    backgroundColor: "#111", borderRadius: 14, paddingVertical: 16,
+    backgroundColor: "#111827", borderRadius: 16, paddingVertical: 17,
     alignItems: "center", justifyContent: "center",
   },
-  disclaimerBtnText: { fontSize: 18, fontFamily: "Pretendard-SemiBold", color: "#fff" },
-  disclaimerAuto:    { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center", marginTop: 12 },
+  disclaimerBtnText: { fontSize: 17, fontFamily: "Pretendard-SemiBold", color: "#fff" },
+  autoCloseRow: { alignItems: "center", gap: 8, marginTop: 14 },
+  autoCloseTrack: { width: 48, height: 3, borderRadius: 2, overflow: "hidden" },
+  autoCloseBar: { height: "100%", backgroundColor: CORAL, borderRadius: 2 },
+  disclaimerAuto: { fontSize: 13, fontFamily: "Pretendard-Regular" },
 });
