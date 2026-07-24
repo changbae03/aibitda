@@ -1233,16 +1233,30 @@ export default function AnalysisDetailScreen() {
       .catch(() => {});
   }, [analysis?.ticker]);
 
-  // 분석 진행 중일 때 폴링
+  // 분석 진행 중일 때 run-pipeline 킥 + 폴링
+  const pipelineKickedRef = useRef(false);
   useEffect(() => {
     const status = analysis?.status;
+    const steps = analysis?.steps ?? [];
+
+    // in_progress 또는 error(미완료 스텝 있음) 상태면 서버 파이프라인 보장
+    const isResumable =
+      status === "in_progress" ||
+      status === "queued" ||
+      (status === "error" && steps.length < 7);
+
+    if (isResumable && !pipelineKickedRef.current) {
+      pipelineKickedRef.current = true;
+      apiFetch(`/api/analysis/${id}/run-pipeline`, { method: "POST" }).catch(() => {});
+    }
+
     if (status === "in_progress" || status === "queued") {
       pollRef.current = setInterval(() => loadAnalysis(), 4000);
     } else {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [analysis?.status]);
+  }, [analysis?.status, analysis?.steps?.length]);
 
   const botPad = Platform.OS === "web" ? 34 : insets.bottom + 24;
   const analysisStatus = (analysis as any)?.status ?? "unknown";
