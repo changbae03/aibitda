@@ -576,6 +576,40 @@ export async function runMigrations() {
       );
     `);
 
+    // ── 외래키 제약 추가 (drizzle 스키마의 .references()와 일치) ──────────────
+    // NOT VALID: 기존 행에 고아 데이터가 있어도 실패하지 않고, 새로 쓰는 행부터 검증한다.
+    // 제약 이름은 drizzle-kit push가 생성하는 이름과 동일하게 맞춰 중복 생성을 방지.
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'hypotheses_analysis_id_analyses_id_fk'
+        ) THEN
+          ALTER TABLE hypotheses
+            ADD CONSTRAINT hypotheses_analysis_id_analyses_id_fk
+            FOREIGN KEY (analysis_id) REFERENCES analyses(id)
+            ON DELETE SET NULL NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'model_insights_analysis_id_analyses_id_fk'
+        ) THEN
+          ALTER TABLE model_insights
+            ADD CONSTRAINT model_insights_analysis_id_analyses_id_fk
+            FOREIGN KEY (analysis_id) REFERENCES analyses(id)
+            ON DELETE SET NULL NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'referral_uses_referral_code_user_credits_referral_code_fk'
+        ) THEN
+          ALTER TABLE referral_uses
+            ADD CONSTRAINT referral_uses_referral_code_user_credits_referral_code_fk
+            FOREIGN KEY (referral_code) REFERENCES user_credits(referral_code)
+            NOT VALID;
+        END IF;
+      END $$;
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
