@@ -675,11 +675,13 @@ const STEP_LABELS_KO: Record<string, string> = Object.fromEntries(
   Object.entries(AGENTS).map(([k, v]) => [k, v.name])
 );
 
-function RunningProgressCard({ analysis }: { analysis: any }) {
+function RunningProgressCard({ analysis, activeStepKey }: { analysis: any; activeStepKey: string | null }) {
   const colors  = useColors();
   const steps   = analysis.steps ?? [];
   const completedKeys = steps.filter((s: any) => s.status === "completed" || s.content).map((s: any) => s.stepKey);
-  const currentStep   = steps.find((s: any) => s.status === "in_progress")?.stepKey ?? null;
+  // 클라이언트 스트리밍 중인 스텝을 우선, 없으면 서버 리포트 스텝
+  const serverCurrent = steps.find((s: any) => s.status === "in_progress")?.stepKey ?? null;
+  const currentStep   = activeStepKey ?? serverCurrent;
   const doneCount = completedKeys.length;
   const total     = STEP_ORDER.length;
   const pct       = total > 0 ? (doneCount / total) * 100 : 0;
@@ -1042,6 +1044,21 @@ const mdStyles = StyleSheet.create({
   dataCell:   { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
 });
 
+// ── Streaming helpers ─────────────────────────────────────────────────────────
+
+const getApiBase = () =>
+  process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : "";
+
+type StreamState = {
+  key: string;
+  content: string;
+  debateStatus?: "challenging" | "synthesizing";
+  qcStatus?: "checking" | "approved" | "revising" | "revised";
+  qcScore?: number;
+};
+
 // ── AgentStepsSection ─────────────────────────────────────────────────────────
 
 const STEP_TOPICS: Record<string, string> = {
@@ -1128,27 +1145,119 @@ function UpcomingStepCard({ stepKey, index }: { stepKey: string; index: number }
   );
 }
 
-function AgentStepsSection({ analysis }: { analysis: any }) {
-  const colors  = useColors();
+// ── StreamingStepCard ─────────────────────────────────────────────────────────
+
+function StreamingStepCard({ state, index }: { state: StreamState; index: number }) {
+  const colors = useColors();
+  const agent = AGENTS[state.key];
+  const accentColor = agent?.color ?? "#2563eb";
+  const pulse = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,    duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.35, duration: 650, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  const statusBadge =
+    state.debateStatus === "challenging"  ? { label: "⚔️  Devil's Advocate 검토 중",   color: "#7C3AED", bg: "#EDE9FE" } :
+    state.debateStatus === "synthesizing" ? { label: "🔄  최종본 통합 중",              color: "#2563EB", bg: "#DBEAFE" } :
+    state.qcStatus === "checking"         ? { label: "🔍  팀장 검토 중",                color: "#D97706", bg: "#FEF3C7" } :
+    state.qcStatus === "revising"         ? { label: `✏️  재작성 중 (초기 점수 ${state.qcScore ?? "?"}점)`, color: "#DC2626", bg: "#FEE2E2" } :
+    (state.qcStatus === "approved" || state.qcStatus === "revised")
+      ? { label: `✓  검토 완료 (${state.qcScore}/10)`, color: "#16A34A", bg: "#DCFCE7" } :
+    null;
+
+  return (
+    <Card style={{ borderColor: accentColor + "55", borderWidth: 1.5 }}>
+      {/* 헤더 */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
+          {state.content
+            ? <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accentColor, opacity: pulse }} />
+            : <ActivityIndicator size="small" color={accentColor} />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: accentColor }}>
+            {agent?.name ?? state.key}
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+            {agent?.role ?? ""} · 리포트 작성 중
+          </Text>
+        </View>
+        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground }}>
+          {index + 1}/{STEP_ORDER.length}
+        </Text>
+      </View>
+
+      {/* 상태 배지 */}
+      {statusBadge && (
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6,
+          borderRadius: 8, backgroundColor: statusBadge.bg, alignSelf: "flex-start", marginBottom: 10 }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: statusBadge.color }}>
+            {statusBadge.label}
+          </Text>
+        </View>
+      )}
+
+      {/* 콘텐츠 or 스켈레톤 */}
+      {state.content ? (
+        <View>
+          <Text style={{ fontSize: 15, lineHeight: 25, fontFamily: "Pretendard-Regular", color: colors.foreground }}>
+            {state.content}
+          </Text>
+          <Animated.View style={{ width: 2, height: 18, backgroundColor: accentColor, borderRadius: 1,
+            marginTop: 6, opacity: pulse }} />
+        </View>
+      ) : (
+        <Animated.View style={{ gap: 9, opacity: pulse }}>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular",
+            lineHeight: 20, marginBottom: 6 }}>
+            {STEP_TOPICS[state.key] ?? "분석 진행 중"}
+          </Text>
+          {[1, 0.88, 0.72, 0.52].map((w, i) => (
+            <View key={i} style={{ height: 13, borderRadius: 6, backgroundColor: colors.muted,
+              width: `${w * 100}%` as any }} />
+          ))}
+        </Animated.View>
+      )}
+    </Card>
+  );
+}
+
+function AgentStepsSection({ analysis, streamingStep }: { analysis: any; streamingStep: StreamState | null }) {
+  const colors = useColors();
   const stepsMap: Record<string, any> = {};
   for (const s of (analysis.steps ?? [])) stepsMap[s.stepKey] = s;
 
-  const isRunning     = analysis.status === "in_progress" || analysis.status === "queued";
-  const currentStepKey: string | null = (analysis.steps ?? []).find((s: any) => s.status === "in_progress")?.stepKey ?? null;
-  const hasCompleted  = STEP_ORDER.some((k) => !!stepsMap[k]?.content);
+  const isRunning      = analysis.status === "in_progress" || analysis.status === "queued";
+  const streamingKey   = streamingStep?.key ?? null;
+  const streamingIdx   = streamingKey ? STEP_ORDER.indexOf(streamingKey as any) : -1;
 
-  if (!hasCompleted && !isRunning) return null;
+  // Server-reported current step (fallback when not streaming from client)
+  const serverCurrent: string | null = (analysis.steps ?? []).find((s: any) => s.status === "in_progress")?.stepKey ?? null;
+  const activeIdx      = streamingIdx >= 0 ? streamingIdx : serverCurrent ? STEP_ORDER.indexOf(serverCurrent as any) : -1;
+  const upcomingKeys   = activeIdx >= 0 ? STEP_ORDER.slice(activeIdx + 1, activeIdx + 3) : [];
 
-  // 진행 중 스텝 이후 아직 시작 안 한 스텝들 (최대 2개 고스트 카드용)
-  const currentIdx   = currentStepKey ? STEP_ORDER.indexOf(currentStepKey as any) : -1;
-  const upcomingKeys = currentIdx >= 0 ? STEP_ORDER.slice(currentIdx + 1, currentIdx + 3) : [];
+  const hasAnyContent  = STEP_ORDER.some(k => !!stepsMap[k]?.content) || !!streamingKey;
+  if (!hasAnyContent && !isRunning) return null;
 
   return (
     <View style={styles.section}>
       <SectionLabel text="AI 에이전트 분석 — 7단계" />
       <View style={{ gap: 12 }}>
         {STEP_ORDER.map((key, index) => {
-          const step  = stepsMap[key];
+          // 현재 스트리밍 중인 스텝
+          if (key === streamingKey) {
+            return <StreamingStepCard key={`stream-${key}`} state={streamingStep!} index={index} />;
+          }
+
+          const step = stepsMap[key];
           if (!step?.content) return null;
           const agent = AGENTS[key];
           const displayContent = stripJsonBlock(step.content);
@@ -1158,8 +1267,9 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
           return (
             <Card key={key}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: accentColor }}>{index + 1}</Text>
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18",
+                  alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="check-circle" size={14} color={accentColor} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: accentColor }}>
@@ -1175,17 +1285,17 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
           );
         })}
 
-        {/* 현재 진행 중인 단계 — 애니메이션 스켈레톤 */}
-        {isRunning && currentStepKey && !stepsMap[currentStepKey]?.content && (
+        {/* 클라이언트 스트리밍 없이 서버에서만 진행 중인 스텝 */}
+        {isRunning && !streamingKey && serverCurrent && !stepsMap[serverCurrent]?.content && (
           <InProgressStepCard
-            key={`inprog-${currentStepKey}`}
-            stepKey={currentStepKey}
-            index={STEP_ORDER.indexOf(currentStepKey as any)}
+            key={`inprog-${serverCurrent}`}
+            stepKey={serverCurrent}
+            index={STEP_ORDER.indexOf(serverCurrent as any)}
           />
         )}
 
-        {/* 다음 예정 단계 — 흐릿한 고스트 카드 */}
-        {isRunning && upcomingKeys.map((key) => (
+        {/* 예정 스텝 고스트 카드 */}
+        {isRunning && upcomingKeys.map(key => (
           <UpcomingStepCard
             key={`upcoming-${key}`}
             stepKey={key}
@@ -1205,12 +1315,24 @@ export default function AnalysisDetailScreen() {
   const insets    = useSafeAreaInsets();
   const router    = useRouter();
 
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [analysis, setAnalysis]     = useState<any>(null);
+  const [isLoading, setIsLoading]   = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [quote, setQuote] = useState<{ price: number | null; change: number | null; currency: string } | null>(null);
   const stats = useTickerStats(analysis?.ticker ?? null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── 스트리밍 상태 ──────────────────────────────────────────────────────────
+  const [streamingStep, setStreamingStep] = useState<StreamState | null>(null);
+  const hasInitiatedRef   = useRef(false);
+  const triggeredSteps    = useRef(new Set<string>());
+  const streamingStepRef  = useRef<((stepKey: string) => void) | null>(null);
+  const streamContentRef  = useRef("");       // 토큰 누적 버퍼 (setState throttle용)
+  const lastContentUpdate = useRef(0);
+  const xhrRef            = useRef<XMLHttpRequest | null>(null);
+
+  // 언마운트 시 진행 중 XHR 중단
+  useEffect(() => () => { xhrRef.current?.abort(); }, []);
 
   const loadAnalysis = React.useCallback(() => {
     if (!id) return;
@@ -1220,6 +1342,96 @@ export default function AnalysisDetailScreen() {
   }, [id]);
 
   useEffect(() => { loadAnalysis(); }, [loadAnalysis]);
+
+  // ── SSE 스트리밍 실행 ──────────────────────────────────────────────────────
+  const runStreamingStep = React.useCallback((stepKey: string) => {
+    if (!id) return;
+    streamContentRef.current = "";
+    setStreamingStep({ key: stepKey, content: "" });
+
+    const url = `${getApiBase()}/api/analysis/${id}/step`;
+    const xhr = new XMLHttpRequest();
+    xhrRef.current = xhr;
+    let processedLen = 0;
+    let gotDone = false;
+
+    const processChunk = (chunk: string) => {
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const msg = JSON.parse(line.slice(6));
+          if (msg.t) {
+            streamContentRef.current += msg.t;
+            // 200ms 간격으로 state 업데이트 (빈번한 re-render 방지)
+            const now = Date.now();
+            if (now - lastContentUpdate.current > 200) {
+              lastContentUpdate.current = now;
+              const snap = streamContentRef.current;
+              setStreamingStep(prev => prev ? { ...prev, content: snap } : null);
+            }
+          } else if (msg.debate === "challenging") {
+            setStreamingStep(prev => prev ? { ...prev, debateStatus: "challenging" } : null);
+          } else if (msg.debate === "synthesizing") {
+            streamContentRef.current = "";
+            setStreamingStep(prev => prev ? { ...prev, debateStatus: "synthesizing", content: "" } : null);
+          } else if (msg.qc === "checking") {
+            setStreamingStep(prev => prev ? { ...prev, debateStatus: undefined, qcStatus: "checking" } : null);
+          } else if (msg.qc === "revising") {
+            streamContentRef.current = "";
+            setStreamingStep(prev => prev ? { ...prev, qcStatus: "revising", qcScore: msg.score, content: "" } : null);
+          } else if (msg.qc === "approved" || msg.qc === "revised") {
+            setStreamingStep(prev => prev ? { ...prev, qcStatus: msg.qc, qcScore: msg.score } : null);
+          }
+          if (msg.done) gotDone = true;
+        } catch { /* ignore parse errors */ }
+      }
+    };
+
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(processedLen);
+      processedLen = xhr.responseText.length;
+      if (newData) processChunk(newData);
+    };
+
+    xhr.onload = () => {
+      const remaining = xhr.responseText.slice(processedLen);
+      if (remaining) processChunk(remaining);
+      xhrRef.current = null;
+      setStreamingStep(null);
+
+      if (xhr.status === 409) {
+        // 이미 서버 백그라운드에서 실행 중 — 폴링에 맡김
+        return;
+      }
+
+      // 완료 시: 분석 재조회 후 다음 스텝 자동 체이닝
+      loadAnalysis();
+      if (gotDone || xhr.status === 200) {
+        const nextIdx = STEP_ORDER.indexOf(stepKey as any) + 1;
+        if (nextIdx < STEP_ORDER.length) {
+          const nextKey = STEP_ORDER[nextIdx];
+          if (!triggeredSteps.current.has(nextKey)) {
+            triggeredSteps.current.add(nextKey);
+            setTimeout(() => streamingStepRef.current?.(nextKey), 300);
+          }
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      xhrRef.current = null;
+      setStreamingStep(null);
+      // 에러 시 폴링 폴백 유지
+    };
+
+    xhr.send(JSON.stringify({ stepKey }));
+  }, [id, loadAnalysis]);
+
+  streamingStepRef.current = runStreamingStep;
 
   // 실시간 현재가 fetch
   useEffect(() => {
@@ -1233,30 +1445,44 @@ export default function AnalysisDetailScreen() {
       .catch(() => {});
   }, [analysis?.ticker]);
 
-  // 분석 진행 중일 때 run-pipeline 킥 + 폴링
+  // ── 분석 진입 시 첫 미완료 스텝부터 스트리밍 시작 ──────────────────────────
   const pipelineKickedRef = useRef(false);
   useEffect(() => {
     const status = analysis?.status;
-    const steps = analysis?.steps ?? [];
+    const steps  = analysis?.steps ?? [];
+    if (!status || !id) return;
 
-    // in_progress 또는 error(미완료 스텝 있음) 상태면 서버 파이프라인 보장
-    const isResumable =
-      status === "in_progress" ||
-      status === "queued" ||
+    // 서버 파이프라인 안전망 (1회 킥)
+    const isResumable = status === "in_progress" || status === "queued" ||
       (status === "error" && steps.length < 7);
-
     if (isResumable && !pipelineKickedRef.current) {
       pipelineKickedRef.current = true;
       apiFetch(`/api/analysis/${id}/run-pipeline`, { method: "POST" }).catch(() => {});
     }
 
-    if (status === "in_progress" || status === "queued") {
-      pollRef.current = setInterval(() => loadAnalysis(), 4000);
+    // in_progress면 클라이언트 스트리밍 시작
+    if (status === "in_progress" && !hasInitiatedRef.current && !streamingStep) {
+      const completedKeys = new Set(steps.filter((s: any) => s.content).map((s: any) => s.stepKey));
+      const nextKey = STEP_ORDER.find(k => !completedKeys.has(k));
+      if (nextKey && !triggeredSteps.current.has(nextKey)) {
+        hasInitiatedRef.current = true;
+        triggeredSteps.current.add(nextKey);
+        runStreamingStep(nextKey);
+      }
+    }
+  }, [analysis?.status, analysis?.steps?.length, id]);
+
+  // ── 폴링: 스트리밍 비활성 시 폴백 (느린 주기) ──────────────────────────────
+  useEffect(() => {
+    const status = analysis?.status;
+    const active = streamingStep !== null;
+    if ((status === "in_progress" || status === "queued") && !active) {
+      pollRef.current = setInterval(() => loadAnalysis(), 8000);
     } else {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [analysis?.status, analysis?.steps?.length]);
+  }, [analysis?.status, streamingStep !== null]);
 
   const botPad = Platform.OS === "web" ? 34 : insets.bottom + 24;
   const analysisStatus = (analysis as any)?.status ?? "unknown";
@@ -1303,7 +1529,7 @@ export default function AnalysisDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* 분석 진행 중: 진행 상황 카드 먼저 표시 */}
-        {!isComplete && <RunningProgressCard analysis={analysis} />}
+        {!isComplete && <RunningProgressCard analysis={analysis} activeStepKey={streamingStep?.key ?? null} />}
 
         {/* 헤더 (완료 여부 관계없이 표시) */}
         <HeaderCard analysis={analysis} quote={quote} stats={stats} />
@@ -1315,7 +1541,7 @@ export default function AnalysisDetailScreen() {
             <ScenarioCard analysis={analysis} />
             <PeerMultiplesPanel ticker={analysis.ticker} />
             <AnalystConsensusPanel ticker={analysis.ticker} currentPrice={currentPrice} />
-            <AgentStepsSection analysis={analysis} />
+            <AgentStepsSection analysis={analysis} streamingStep={null} />
             {/* 추가 데이터 패널 */}
             <FinancialChartPanel ticker={analysis.ticker} />
             <DisclosurePanel ticker={analysis.ticker} />
@@ -1330,8 +1556,8 @@ export default function AnalysisDetailScreen() {
           </>
         )}
 
-        {/* 진행 중에도 완료된 단계는 미리 보여줌 */}
-        {!isComplete && <AgentStepsSection analysis={analysis} />}
+        {/* 진행 중에도 완료된 단계 + 스트리밍 카드 표시 */}
+        {!isComplete && <AgentStepsSection analysis={analysis} streamingStep={streamingStep} />}
 
         {/* Disclaimer */}
         <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
