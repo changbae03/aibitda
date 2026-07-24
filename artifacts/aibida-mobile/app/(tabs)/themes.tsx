@@ -165,59 +165,49 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
   const change = stock.priceChange;
   const momentum = momentumInfo(stock);
   const isKR = stock.market === "KR";
-  const sm = stock.smartMoneyAek ?? 0;
-  const isAccumulating = stock.smartMoneyAek != null && sm > 0 && Math.abs(change ?? 0) < 3;
+  const changeUp = (change ?? 0) >= 0;
 
   return (
-    <View style={[rs.stockRow, { borderBottomColor: colors.border }]}>
+    <TouchableOpacity
+      style={[rs.stockRow, { borderBottomColor: colors.border }]}
+      onPress={() => onAnalyze(stock.ticker, stock.name)}
+      activeOpacity={0.65}
+    >
       {/* 로고 */}
-      <TickerLogo ticker={stock.ticker} name={stock.name} size={38} borderRadius={10} />
+      <TickerLogo ticker={stock.ticker} name={stock.name} size={40} borderRadius={12} />
 
-      {/* 왼쪽 컨텐츠 */}
-      <View style={{ flex: 1, gap: 4, marginLeft: 10 }}>
-        {/* 1행: 배지들 */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-          {stock.isLeader && (
-            <View style={[rs.badge, { backgroundColor: "#FEF3C7" }]}>
-              <Text style={[rs.badgeText, { color: "#D97706" }]}>주도주</Text>
-            </View>
-          )}
-          {isAccumulating && (
-            <View style={[rs.badge, { backgroundColor: "#EDE9FE" }]}>
-              <Text style={[rs.badgeText, { color: "#7C3AED" }]}>매집 중</Text>
-            </View>
-          )}
-          <View style={[rs.badge, { backgroundColor: isKR ? "#EFF6FF" : "#F0FDF4" }]}>
-            <Text style={[rs.badgeText, { color: isKR ? "#3B82F6" : "#16A34A" }]}>{stock.market}</Text>
-          </View>
-        </View>
-
-        {/* 2행: 종목명 + 등락 */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={[rs.stockName, { color: colors.foreground }]}>{stock.name}</Text>
+      {/* 본문 */}
+      <View style={{ flex: 1, marginLeft: 12, gap: 5 }}>
+        {/* 1행: 종목명 + 등락률 */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={[rs.stockName, { color: colors.foreground, flex: 1, marginRight: 8 }]} numberOfLines={1}>
+            {stock.name}
+          </Text>
           {change != null && (
-            <Text style={[rs.stockChange, { color: change >= 0 ? "#EF4444" : "#3B82F6" }]}>
-              {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
+            <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: changeUp ? "#EF4444" : "#3B82F6" }}>
+              {changeUp ? "+" : ""}{change.toFixed(2)}%
             </Text>
           )}
-          <Text style={[rs.stockMomentum, { color: momentum.color }]}>{momentum.text}</Text>
         </View>
 
-        {/* 3행: 투자 근거 */}
-        <Text style={[rs.stockRationale, { color: colors.mutedForeground }]} numberOfLines={2}>
-          {stock.rationale}
-        </Text>
+        {/* 2행: 마켓 + 주도주 + 모멘텀 */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={[rs.mktPill, { backgroundColor: isKR ? "#EFF6FF" : "#F0FDF4" }]}>
+            <Text style={[rs.mktPillText, { color: isKR ? "#3B82F6" : "#16A34A" }]}>{stock.market}</Text>
+          </View>
+          {stock.isLeader && (
+            <View style={[rs.mktPill, { backgroundColor: "#FEF3C7" }]}>
+              <Text style={[rs.mktPillText, { color: "#B45309" }]}>주도주</Text>
+            </View>
+          )}
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: momentum.color }}>
+            {momentum.text}
+          </Text>
+        </View>
       </View>
 
-      {/* 분석 버튼 */}
-      <TouchableOpacity
-        style={rs.analyzeBtn}
-        onPress={() => onAnalyze(stock.ticker, stock.name)}
-        activeOpacity={0.75}
-      >
-        <Text style={rs.analyzeBtnText}>분석</Text>
-      </TouchableOpacity>
-    </View>
+      <Feather name="chevron-right" size={15} color={colors.border} style={{ marginLeft: 4 }} />
+    </TouchableOpacity>
   );
 }
 
@@ -233,60 +223,60 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
   const isEmerging = item.phase === "emerging";
   const isHot = item.phase === "hot";
   const sm = item.themeSmartMoney;
+  const accentColor = isEmerging ? "#7C3AED" : isHot ? "#EF4444" : meta.color;
 
   return (
     <View style={[rs.themeCard, {
       backgroundColor: colors.card,
       borderColor: isEmerging ? "#C4B5FD" : isHot ? "#FECACA" : colors.border,
-      borderWidth: (isEmerging || isHot) ? 1.5 : StyleSheet.hairlineWidth,
+      borderWidth: isEmerging || isHot ? 1 : StyleSheet.hairlineWidth,
     }]}>
-      {/* 수급 형성 배너 */}
-      {isEmerging && (
-        <View style={[rs.emergingBanner, { borderBottomColor: "#C4B5FD" }]}>
-          <Text style={rs.emergingEmoji}>📡</Text>
-          <Text style={rs.emergingTitle}>수급 형성 중</Text>
-          {sm != null && sm > 0 && (
-            <Text style={rs.emergingSm}>스마트머니 +{sm.toFixed(0)}억 유입 · 가격 반영 전</Text>
-          )}
+      {/* 스마트머니 배너 (emerging만) */}
+      {isEmerging && sm != null && sm > 0 && (
+        <View style={[rs.smBanner, { borderBottomColor: "#EDE9FE" }]}>
+          <Text style={{ fontSize: 12, color: "#7C3AED", fontFamily: "Pretendard-SemiBold" }}>
+            📡 스마트머니 +{sm.toFixed(0)}억 유입 중
+          </Text>
         </View>
       )}
 
-      {/* 헤더 행 (탭해서 펼침) */}
+      {/* 헤더 */}
       <TouchableOpacity
         style={rs.themeHeader}
         onPress={() => setExpanded(v => !v)}
-        activeOpacity={0.7}
+        activeOpacity={0.65}
       >
-        {/* 이모지 아바타 */}
+        {/* 이모지 */}
         <View style={[rs.themeEmoji, { backgroundColor: meta.bg }]}>
-          <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+          <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
         </View>
 
-        {/* 이름 + 상태 */}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-            <Text style={[rs.themeName, { color: colors.foreground }]}>{item.name}</Text>
-            <View style={[rs.phaseBadge, { backgroundColor: meta.bg }]}>
-              <Text style={[rs.phaseText, { color: meta.color }]}>{meta.label}</Text>
-            </View>
-          </View>
-          <Text style={[rs.themeStockCount, { color: colors.mutedForeground }]}>
-            종목 {item.stocks.length}개
+        {/* 텍스트 */}
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[rs.themeName, { color: colors.foreground }]} numberOfLines={1}>
+            {item.name}
           </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+            <View style={[rs.mktPill, { backgroundColor: meta.bg }]}>
+              <Text style={[rs.mktPillText, { color: accentColor }]}>{meta.label}</Text>
+            </View>
+            <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+              종목 {item.stocks.length}개
+            </Text>
+          </View>
         </View>
 
-        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={colors.mutedForeground} />
       </TouchableOpacity>
 
       {/* 펼쳐진 내용 */}
       {expanded && (
         <View style={[rs.themeBody, { borderTopColor: colors.border }]}>
-          {/* 테마 요약 */}
           {item.summary ? (
-            <Text style={[rs.themeSummary, { color: colors.mutedForeground }]}>{item.summary}</Text>
+            <Text style={[rs.themeSummary, { color: colors.mutedForeground }]} numberOfLines={2}>
+              {item.summary}
+            </Text>
           ) : null}
-
-          {/* 종목 목록 */}
           {item.stocks.map((stock, i) => (
             <StockRow
               key={`${stock.ticker}-${i}`}
@@ -1138,39 +1128,33 @@ const rs = StyleSheet.create({
 
   // Theme card
   themeCard: { borderRadius: 16, overflow: "hidden" },
-  emergingBanner: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9,
+  smBanner: {
+    paddingHorizontal: 14, paddingVertical: 7,
     backgroundColor: "#F5F3FF", borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  emergingEmoji: { fontSize: 15 },
-  emergingTitle: { fontSize: 14, fontFamily: "Pretendard-Bold", color: "#7C3AED" },
-  emergingSm: { fontSize: 13, color: "#8B5CF6", fontFamily: "Pretendard-Regular", flex: 1 },
-  themeHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  themeHeader: { flexDirection: "row", alignItems: "center", padding: 14 },
   themeEmoji: {
-    width: 42, height: 42, borderRadius: 13,
+    width: 40, height: 40, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
   },
-  themeName: { fontSize: 17, fontFamily: "Pretendard-Bold" },
-  themeStockCount: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 3 },
-  themeBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 },
+  themeName: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  themeBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 2 },
   themeSummary: {
-    fontSize: 15, fontFamily: "Pretendard-Regular",
-    lineHeight: 26, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, fontFamily: "Pretendard-Regular", color: "#64748b",
+    lineHeight: 22, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6,
   },
 
   // Stock row
   stockRow: {
-    flexDirection: "row", alignItems: "flex-start",
-    paddingHorizontal: 14, paddingVertical: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth, gap: 10,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  mktPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  mktPillText: { fontSize: 11, fontFamily: "Pretendard-SemiBold" },
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   badgeText: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
-  stockName: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
-  stockChange: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
-  stockMomentum: { fontSize: 13, fontFamily: "Pretendard-Regular" },
-  stockRationale: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 23 },
+  stockName: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
   analyzeBtn: {
     backgroundColor: "#eef2ff", paddingHorizontal: 12, paddingVertical: 8,
     borderRadius: 9, alignSelf: "flex-start", marginTop: 18,
