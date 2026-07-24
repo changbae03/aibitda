@@ -528,15 +528,12 @@ function InstitutionPickCard({ item, idx, colors, onAnalyze }: {
           <Text style={[rs.changeText, { color: changeUp ? "#EF4444" : "#3B82F6" }]}>
             {changeUp ? "+" : ""}{item.change.toFixed(1)}%
           </Text>
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: typeColor }}>
+            +{item.combined}억
+          </Text>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
         </View>
       </TouchableOpacity>
-
-      {item.rationale ? (
-        <Text style={[rs.pickRationale, { color: colors.mutedForeground, paddingLeft: 38 }]} numberOfLines={expanded ? undefined : 2}>
-          {item.rationale}
-        </Text>
-      ) : null}
 
       {expanded && (
         <View style={[rs.pickBody, { borderTopColor: colors.border }]}>
