@@ -1342,11 +1342,11 @@ export default function AnalysisDetailScreen() {
   // 언마운트 시 진행 중 XHR 중단
   useEffect(() => () => { xhrRef.current?.abort(); }, []);
 
-  const loadAnalysis = React.useCallback(() => {
-    if (!id) return;
-    apiFetch<any>(`/api/analysis/${id}`)
-      .then((data) => { setAnalysis(data); setIsLoading(false); setFetchError(false); })
-      .catch(() => { setFetchError(true); setIsLoading(false); });
+  const loadAnalysis = React.useCallback((): Promise<any> => {
+    if (!id) return Promise.resolve(null);
+    return apiFetch<any>(`/api/analysis/${id}`)
+      .then((data) => { setAnalysis(data); setIsLoading(false); setFetchError(false); return data; })
+      .catch(() => { setFetchError(true); setIsLoading(false); return null; });
   }, [id]);
 
   useEffect(() => { loadAnalysis(); }, [loadAnalysis]);
@@ -1411,13 +1411,42 @@ export default function AnalysisDetailScreen() {
       xhrRef.current = null;
       setStreamingStep(null);
 
+      const isLast = STEP_ORDER.indexOf(stepKey as any) === STEP_ORDER.length - 1;
+
       if (xhr.status === 409) {
-        // 이미 서버 백그라운드에서 실행 중 — 폴링에 맡김
+        // 서버 백그라운드가 이미 이 스텝 실행 중.
+        // 2초 간격으로 빠르게 폴링해 해당 스텝 완료 감지 → 다음 스텝 체이닝 재개.
+        let attempts = 0;
+        const watchTimer = setInterval(() => {
+          attempts++;
+          loadAnalysis().then((data: any) => {
+            if (!data) { clearInterval(watchTimer); return; }
+            const completedKeys = new Set((data.steps ?? []).filter((s: any) => s.content).map((s: any) => s.stepKey));
+            if (completedKeys.has(stepKey) || data.status === "completed") {
+              clearInterval(watchTimer);
+              if (data.status !== "completed") {
+                const nextIdx = STEP_ORDER.indexOf(stepKey as any) + 1;
+                if (nextIdx < STEP_ORDER.length) {
+                  const nextKey = STEP_ORDER[nextIdx];
+                  if (!triggeredSteps.current.has(nextKey)) {
+                    triggeredSteps.current.add(nextKey);
+                    setTimeout(() => streamingStepRef.current?.(nextKey), 200);
+                  }
+                }
+              }
+            }
+          }).catch(() => {});
+          if (attempts >= 90) clearInterval(watchTimer); // 최대 3분
+        }, 2000);
         return;
       }
 
       // 완료 시: 분석 재조회 후 다음 스텝 자동 체이닝
       loadAnalysis();
+      if (isLast) {
+        // 마지막 스텝 — 적정주가가 DB에 저장될 시간을 주고 한 번 더 조회
+        setTimeout(() => loadAnalysis(), 1200);
+      }
       if (gotDone || xhr.status === 200) {
         const nextIdx = STEP_ORDER.indexOf(stepKey as any) + 1;
         if (nextIdx < STEP_ORDER.length) {
@@ -1454,18 +1483,33 @@ export default function AnalysisDetailScreen() {
   }, [analysis?.ticker]);
 
   // ── 분석 진입 시 첫 미완료 스텝부터 스트리밍 시작 ──────────────────────────
-  const pipelineKickedRef = useRef(false);
+  const pipelineKickedRef   = useRef(false);
+  const pipelineTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 컴포넌트 언마운트 시 안전망 타이머도 정리
+  useEffect(() => () => {
+    if (pipelineTimerRef.current) clearTimeout(pipelineTimerRef.current);
+  }, []);
+
   useEffect(() => {
     const status = analysis?.status;
     const steps  = analysis?.steps ?? [];
     if (!status || !id) return;
 
-    // 서버 파이프라인 안전망 (1회 킥)
+    // 서버 파이프라인 안전망: 45초 후에도 완료되지 않으면 백그라운드 킥
+    // 즉시 킥하면 클라이언트 SSE와 충돌해 409 → 폴링 폴백으로 느려짐
     const isResumable = status === "in_progress" || status === "queued" ||
       (status === "error" && steps.length < 7);
     if (isResumable && !pipelineKickedRef.current) {
       pipelineKickedRef.current = true;
-      apiFetch(`/api/analysis/${id}/run-pipeline`, { method: "POST" }).catch(() => {});
+      pipelineTimerRef.current = setTimeout(() => {
+        apiFetch(`/api/analysis/${id}/run-pipeline`, { method: "POST" }).catch(() => {});
+      }, 45_000);
+    }
+    // 완료되면 타이머 취소
+    if (status === "completed" && pipelineTimerRef.current) {
+      clearTimeout(pipelineTimerRef.current);
+      pipelineTimerRef.current = null;
     }
 
     // in_progress면 클라이언트 스트리밍 시작
