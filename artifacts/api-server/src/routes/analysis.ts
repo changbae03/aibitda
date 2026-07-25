@@ -25,6 +25,7 @@ import {
 import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
+import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
@@ -238,6 +239,11 @@ router.post("/", async (req, res) => {
   const _analysisId = analysis.id;
   pendingDataFetch.add(_analysisId);
   console.log(`[analysis-create] #${_analysisId} 즉시 응답 완료 — 백그라운드 데이터 수집 시작`);
+
+  // 종목 마스터 자가 치유 — 마스터에 없는 종목이면 지금 등록한다.
+  // SEC 목록에도 없는 장외 ADR(NTDOY 등)과 상장 직후 종목이 여기서 메워진다.
+  // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분析을 막지 않는다.
+  ensureStockRegistered(upperTicker, companyName).catch(() => {});
 
   (async () => {
     try {
