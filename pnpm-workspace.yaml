@@ -4,6 +4,10 @@ packages:
   - lib/integrations/*
   - scripts
 
+# 빌드 스크립트 실행 허용 목록.
+# allowBuilds는 pnpm 11 형식, onlyBuiltDependencies는 그 이전 형식이다.
+# 로컬(pnpm 11)과 Replit(버전 불명)이 서로 다른 pnpm을 쓰므로 둘 다 남겨 둔다.
+# 하나만 두면 다른 쪽에서 esbuild 설치가 건너뛰어져 빌드가 실패한다.
 allowBuilds:
   '@clerk/shared': false
   '@swc/core': true
@@ -13,6 +17,12 @@ allowBuilds:
   msw: true
   protobufjs: false
   unrs-resolver: true
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild
+  - msw
+  - unrs-resolver
 
 autoInstallPeers: false
 
