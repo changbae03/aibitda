@@ -521,6 +521,27 @@ export async function runMigrations() {
         ON analysis_segment_forecasts (ticker, fiscal_year);
     `);
 
+    // ── 종목별 피어그룹 ──────────────────────────────────────────────────────
+    // 피어는 분석마다 AI가 새로 고르고 버려졌다. 남겨두면 다음 분석이 같은 피어를
+    // 재사용해 비교가 일관되고, 피어 지표는 stocks 뷰에서 조인해 오므로
+    // 외부 API를 피어 수만큼 호출하던 것이 사라진다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stock_peers (
+        id                     SERIAL PRIMARY KEY,
+        ticker                 TEXT NOT NULL,
+        peer_ticker            TEXT NOT NULL,
+        peer_name              TEXT,
+        rank                   INTEGER NOT NULL DEFAULT 0,
+        reason                 TEXT,
+        source                 TEXT NOT NULL DEFAULT 'ai',
+        selected_by_analysis_id INTEGER,
+        created_at             TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        updated_at             TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        CONSTRAINT stock_peers_ticker_peer_key UNIQUE (ticker, peer_ticker)
+      );
+      CREATE INDEX IF NOT EXISTS idx_stock_peers_ticker ON stock_peers (ticker, rank);
+    `);
+
     // ── 종목 통합 조회 창구 ──────────────────────────────────────────────────
     // 종목 마스터는 시장별로 krx_stocks / us_stocks로 나뉘어 있고 컬럼 구성은
     // 사실상 같다(공통 21개, 타입 전부 일치). 이름표만 code / ticker로 다르다.
