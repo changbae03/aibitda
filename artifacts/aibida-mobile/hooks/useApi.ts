@@ -1,10 +1,13 @@
 import { useAuth } from "@clerk/expo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+// 우선순위: 명시적 API 주소(로컬 개발·자체 배포) → Replit 도메인 → 상대경로(웹 빌드)
+// 시뮬레이터·실기기에는 origin이 없으므로 로컬 개발 시 EXPO_PUBLIC_API_URL을 반드시 지정한다.
 const getBase = () =>
-  process.env.EXPO_PUBLIC_DOMAIN
+  process.env.EXPO_PUBLIC_API_URL ??
+  (process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "";
+    : "");
 
 export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const url = `${getBase()}${path}`;

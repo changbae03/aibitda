@@ -41,6 +41,11 @@ testem.log
 .DS_Store
 Thumbs.db
 
+# 비밀 키 — 절대 커밋 금지 (.env.example만 커밋한다)
+.env
+.env.*
+!.env.example
+
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
