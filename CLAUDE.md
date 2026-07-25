@@ -50,9 +50,18 @@ API 서버는 `artifacts/hedge-fund-ai/dist/public`이 빌드돼 있으면 프�
 ## 검사
 
 ```bash
+pnpm run test        # vitest 1회 실행
+pnpm run test:watch  # 파일 저장할 때마다 재실행
 pnpm run typecheck   # 전체
 pnpm run build       # typecheck + 각 패키지 빌드
 ```
+
+테스트는 소스 옆에 `*.test.ts`로 둔다. 현재 커버되는 곳은 `lib/shared`(티커 표준화,
+포맷터)뿐이다 — 이 프로젝트에는 원래 테스트가 하나도 없었고, 여기서부터 넓혀간다.
+
+**새 테스트를 쓸 때는 반드시 "일부러 깨뜨려서 실패하는지" 확인할 것.** 통과만 하는
+테스트는 안전망이 아니다. 실제로 지표 캐시 적중률 0% 버그를 다시 넣어보니 7개가
+실패하는 것을 확인하고 안전망으로 인정했다.
 
 **기존 타입 에러가 남아 있다** (Replit 시절 타입 검사 없이 esbuild로만 빌드해온 결과):
 api-server 191개, hedge-fund-ai 33개, aibida-mobile 7개. 이건 알려진 기준선이다.
