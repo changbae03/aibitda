@@ -123,8 +123,13 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
   시장별 통화 구분과 "0은 결측" 처리가 여기 있다 — 프롬프트에 그대로 들어가
   AI 판단을 좌우하므로 `peer-format.test.ts`를 함께 갱신할 것.
 
-`krx_peer_data`는 **0행인데 `korea-context.ts` 6곳과 `stock-insights.ts` 1곳이
-아직 조회한다** — 늘 빈손으로 돌아온다. `getSectorPeers()`로 대체할 것.
+`krx_peer_data`(0행)를 조회하던 5곳은 `stocks` 뷰로 옮겼다. 표 정의와 일회성
+적재 스크립트만 남아 있으니 **새로 참조하지 말 것.**
+
+> **업종 분류가 피어 품질의 병목이다.** 2,800종목 중 의미 있는 섹터를 가진 것은
+> 921개(33%)뿐 — 1,257개가 `KR_OTHER`, 622개가 미분류다. 삼성전자가
+> `KR_CONSUMER`로 잡혀 반도체가 아닌 LG전자·LG디스플레이가 피어가 되는
+> 오분류도 있다. 업종 자동 피어와 업종 PBR 벤치마크의 정확도가 여기에 묶여 있다.
 
 ### 분석 결과의 구조화 저장
 
