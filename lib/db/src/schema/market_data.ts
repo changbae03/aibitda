@@ -33,16 +33,25 @@ export const tickerMetricCacheTable = pgTable("ticker_metric_cache", {
 });
 
 // DART 시계열 재무 데이터
-// 이 테이블의 DDL 소유자는 artifacts/api-server/src/lib/dart-store.ts (ensureTable)다.
-// 아래 정의는 그 모양의 미러이며, 실 DB 대조는 아직 못 했다(로컬에 DATABASE_URL 없음).
+// 실 DB 대조 완료(2026-07-25): 두 설계가 한 테이블에 섞여 있다.
+//   - migrate.ts가 먼저 만든 계정과목 방식(account_nm NOT NULL + 5컬럼 UNIQUE)
+//   - dart-store.ts가 나중에 ALTER로 덧붙인 지표 방식(revenue/operating_income…)
+// 그 결과 dart-store의 INSERT가 account_nm NOT NULL을 위반해 항상 실패하고,
+// 테이블은 0행 상태다. 아래는 "현재 실제 모양"이며 정상 상태가 아니다 — 수리 필요.
 export const tickerFinancialsTable = pgTable("ticker_financials", {
   id: serial("id").primaryKey(),
-  ticker: varchar("ticker", { length: 20 }).notNull(),
+  ticker: text("ticker").notNull(),
+  bsnsYear: text("bsns_year").notNull(),
+  reprtCode: text("reprt_code").notNull(),
+  fsType: text("fs_type").notNull(),
+  accountNm: text("account_nm").notNull(),
+  thstrmAmount: bigint("thstrm_amount", { mode: "number" }),
+  frmtrmAmount: bigint("frmtrm_amount", { mode: "number" }),
+  bfefrmtrmAmount: bigint("bfefrmtrm_amount", { mode: "number" }),
+  thstrmAddAmount: bigint("thstrm_add_amount", { mode: "number" }),
+  currency: text("currency").default("KRW"),
   corpCode: varchar("corp_code", { length: 20 }).notNull().default(""),
-  bsnsYear: integer("bsns_year").notNull(),
-  reprtCode: varchar("reprt_code", { length: 5 }).notNull(),
   periodLabel: varchar("period_label", { length: 16 }).notNull().default(""),
-  fsType: varchar("fs_type", { length: 3 }).notNull(),
   revenue: bigint("revenue", { mode: "number" }),
   operatingIncome: bigint("operating_income", { mode: "number" }),
   netIncome: bigint("net_income", { mode: "number" }),
@@ -54,7 +63,7 @@ export const tickerFinancialsTable = pgTable("ticker_financials", {
   bps: bigint("bps", { mode: "number" }),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow(),
 }, (t) => [
-  unique("ticker_financials_ticker_bsns_year_reprt_code_fs_type_key").on(t.ticker, t.bsnsYear, t.reprtCode, t.fsType),
+  unique("ticker_financials_ticker_bsns_year_reprt_code_fs_type_accou_key").on(t.ticker, t.bsnsYear, t.reprtCode, t.fsType, t.accountNm),
   index("idx_ticker_financials_ticker").on(t.ticker, t.bsnsYear.desc()),
 ]);
 

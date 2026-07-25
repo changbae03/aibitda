@@ -27,6 +27,10 @@ export const analysesTable = pgTable("analyses", {
   language: varchar("language", { length: 5 }).notNull().default("ko"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   errorMessage: text("error_message"),
+  // routes/analysis.ts의 ensureQaPeerColumns()가 런타임에 추가하는 컬럼들 (실 DB 확인됨)
+  qaScore: integer("qa_score"),
+  qaFlags: text("qa_flags"),
+  peerFlags: text("peer_flags"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
