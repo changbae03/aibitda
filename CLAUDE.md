@@ -90,15 +90,35 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 테이블·컬럼을 **삭제하려 시도**한다. `scripts/post-merge.sh`에서 이 명령을 제거한 이유다.
 스키마 반영은 `migrate.ts`가 담당한다.
 
+### 종목 마스터 — 조회는 `stocks` 뷰로
+
+종목은 시장별로 `krx_stocks`(code 기준) / `us_stocks`(ticker 기준)에 저장되지만,
+**조회는 두 테이블을 합친 `stocks` 뷰를 쓴다** (`ticker` 표준형 + `market` + 공통 21컬럼).
+뷰 정의는 `lib/db/src/migrate.ts`, 타입은 `lib/db/src/schema/market_data.ts`의 `stocksView`.
+
+- 저장(수집기·자가 등록)은 여전히 시장별 테이블로 간다.
+- 새 종목 등록은 `artifacts/api-server/src/lib/stock-registry.ts`의
+  `ensureStockRegistered()` 한 곳만 거친다 — 호출부에서 시장을 분기하지 말 것.
+- 미국 종목 목록 출처는 SEC 공식 목록(`lib/us-universe.ts`)이다.
+  `US_MASTER_LIST`는 SEC 조회 실패 시 폴백 시드일 뿐이므로 손으로 추가하지 말 것.
+
+**두 테이블의 실제 병합은 호스팅 이관 이후로 미뤄져 있다.** 지금 병합하면 옛 코드로
+돌고 있는 운영 서버가 멈춘다.
+
 ### 알려진 과제 (종목 DB 기초공사)
 
-- 종목 식별자가 통일돼 있지 않다: `krx_stocks.code`는 6자리(`005930`), `us_stocks.ticker`는
-  `NVDA`, `analyses.ticker`에는 `.KS` 접미사가 섞여 있다. 그래서 코드 곳곳에
-  `ticker.split(".")[0]`가 흩어져 있다.
-- 한국·미국 종목 테이블이 분리돼 있는데 컬럼 구성은 거의 같다.
-- `analyses`가 종목 마스터를 참조하지 않아 종목 단위 조회를 한 번에 못 한다.
+해결됨: 티커 표준화 관문(`lib/shared/ticker.ts`), 지표 캐시 적중률 0% 수리,
+DART 재무 저장 복구, 미국 목록 SEC 전환 + 자가 치유, 조회용 `stocks` 뷰.
 
-실 DB 진단은 `DATABASE_URL` 확보 후 진행한다.
+남은 것:
+- `krx_stocks` / `us_stocks` 실제 병합 (호스팅 이관 후).
+- `analyses`가 종목 마스터를 참조하지 않아 종목 단위 조회를 한 번에 못 한다.
+- 코드 곳곳에 남은 `ticker.split(".")[0]` — `normalizeTicker()`로 대체할 것.
+- `krx_stocks`의 PER·PBR은 KIS 기반 수집 코드가 배포돼야 채워진다(현재 0건).
+- FMP 연동은 v3 폐기로 전량 실패해 **제거하기로 결론**났다(요금제상 한국 종목 재무
+  불가, 야후 `quoteSummary`와 중복). 작업이 별도 브랜치에 있으니 병합 후
+  `fmp-client.ts` 참조가 남아 있지 않은지 확인할 것. 운영 DB의 `fmp_cache` 테이블은
+  고아로 남는다.
 
 ## Replit 관련 파일
 
