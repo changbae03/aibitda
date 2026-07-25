@@ -24,7 +24,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 
 // ─── 한국 업종별 밸류에이션 벤치마크 (KRX 기반, 2024~2025 평균) ──────────────────
 // 출처: KRX 업종 시가총액·멀티플 통계, Damodaran emerging market data 참고

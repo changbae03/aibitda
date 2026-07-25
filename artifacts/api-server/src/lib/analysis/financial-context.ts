@@ -25,7 +25,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 import YahooFinance from "yahoo-finance2";
 import { rawQuery, dbCacheGet, dbCacheSet } from "./store.js";
 import { getKRXSectorPeerContext, getDartCompetitorPeerContext, getDartCompetitorTickerPeers, KOREAN_SECTOR_MULTIPLES } from "./korea-context.js";

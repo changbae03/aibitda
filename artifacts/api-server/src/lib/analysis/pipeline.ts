@@ -24,7 +24,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 import { normalizeTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
