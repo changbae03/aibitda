@@ -35,6 +35,7 @@ import { yahooFinance, tryQuoteSummary, fetchTickerInfo, naverFmt, fetchNaverFin
 import { US_PEER_MAP, selectPeerTickers, fetchPeerFinancials, type PeerEntry } from "./peer-context.js";
 import { QC_STEPS, runQCCheck, DEBATE_STEPS, runDebateChallenge } from "./qc-debate.js";
 import { formatStep, formatAnalysis, stripDisplayContent, sanitizeFeedback } from "./format.js";
+import { storeValuationArtifacts } from "./valuation-store.js";
 
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
@@ -1446,6 +1447,17 @@ async function executeStep(
       [id, stepKey, agent.name, agent.role, finalContent, validationNotes, "data_based_estimate"]
     );
     const step = stepRows[0] ? mapStepRow(stepRows[0]) : null;
+
+    // 밸류에이션 근거 수치를 구조화해 보관한다.
+    // 예전에는 이 단계 본문에서 목표가(base) 하나만 꺼내 쓰고 시나리오 밴드와
+    // 절대·상대 평가, 부문별 실적 전망을 통째로 버렸다. 여기서 저장해 두면
+    // 나중에 목표가 변화 추적과 "예상 vs 실제" 대조가 가능해진다.
+    // 저장 실패가 분석을 막으면 안 되므로 예외는 삼킨다.
+    if (stepKey === "relative_valuation") {
+      storeValuationArtifacts(id, finalContent).catch((e) =>
+        console.warn(`[valuation-store] #${id} 저장 실패:`, e?.message?.slice(0, 80))
+      );
+    }
 
     const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
     const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;

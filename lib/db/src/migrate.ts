@@ -479,6 +479,48 @@ export async function runMigrations() {
       END $$;
     `);
 
+    // ── 밸류에이션·실적전망 구조화 저장 ──────────────────────────────────────
+    // AI는 relative_valuation 단계에서 FINAL_VALUATION_DATA와 SEGMENT_FORECAST_DATA를
+    // JSON으로 내보낸다. 예전에는 그중 base 하나만 analyses.target_price로 옮기고
+    // 나머지를 버렸다. 근거 수치를 남겨야 목표가 변화 추적과 "예상 vs 실제" 대조가 된다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analysis_valuations (
+        id             SERIAL PRIMARY KEY,
+        analysis_id    INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+        ticker         TEXT NOT NULL,
+        current_price  REAL,
+        bear           REAL,
+        base           REAL,
+        bull           REAL,
+        abs_model      TEXT,
+        abs_bear       REAL,
+        abs_base       REAL,
+        abs_bull       REAL,
+        rel_bear       REAL,
+        rel_base       REAL,
+        rel_bull       REAL,
+        created_at     TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        CONSTRAINT analysis_valuations_analysis_id_key UNIQUE (analysis_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_analysis_valuations_ticker
+        ON analysis_valuations (ticker, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS analysis_segment_forecasts (
+        id               SERIAL PRIMARY KEY,
+        analysis_id      INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+        ticker           TEXT NOT NULL,
+        segment_name     TEXT NOT NULL,
+        currency         TEXT NOT NULL DEFAULT 'KRW',
+        fiscal_year      INTEGER NOT NULL,
+        revenue          REAL,
+        operating_income REAL,
+        created_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        CONSTRAINT analysis_segment_forecasts_uniq UNIQUE (analysis_id, segment_name, fiscal_year)
+      );
+      CREATE INDEX IF NOT EXISTS idx_analysis_segment_forecasts_ticker
+        ON analysis_segment_forecasts (ticker, fiscal_year);
+    `);
+
     // ── 종목 통합 조회 창구 ──────────────────────────────────────────────────
     // 종목 마스터는 시장별로 krx_stocks / us_stocks로 나뉘어 있고 컬럼 구성은
     // 사실상 같다(공통 21개, 타입 전부 일치). 이름표만 code / ticker로 다르다.
