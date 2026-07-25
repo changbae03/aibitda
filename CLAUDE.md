@@ -126,10 +126,24 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 `krx_peer_data`(0행)를 조회하던 5곳은 `stocks` 뷰로 옮겼다. 표 정의와 일회성
 적재 스크립트만 남아 있으니 **새로 참조하지 말 것.**
 
-> **업종 분류가 피어 품질의 병목이다.** 2,800종목 중 의미 있는 섹터를 가진 것은
-> 921개(33%)뿐 — 1,257개가 `KR_OTHER`, 622개가 미분류다. 삼성전자가
-> `KR_CONSUMER`로 잡혀 반도체가 아닌 LG전자·LG디스플레이가 피어가 되는
-> 오분류도 있다. 업종 자동 피어와 업종 PBR 벤치마크의 정확도가 여기에 묶여 있다.
+### 업종 분류 — `lib/sector-taxonomy.ts`
+
+`industry`(야후의 영문 고정 명칭)를 업종 코드로 바꾼다. **순서가 의미를 갖는다** —
+부분 문자열로 검사하므로 좁은 항목이 위에 있어야 한다(`semiconductor equipment`가
+`semiconductor`보다 먼저).
+
+새 industry 값이 등장하면 표에 추가할 것. 안 그러면 조용히 `_OTHER`로 빠진다 —
+예전에 `Auto Manufacturers`가 안 걸려 현대차·기아가 미분류였던 게 그 사례다.
+`sector-taxonomy.test.ts`가 실제 오분류 사례를 회귀 테스트로 고정하고 있다.
+
+피어 비교에 쓸 수 있는지는 `isComparableSector()`로 판단한다(`_OTHER`·`_SHELL` 제외).
+SPAC(`Shell Companies`)은 사업 실체가 없어 멀티플 비교가 무의미하다.
+
+> 현재 비교 가능 비율: 한국 75%(2,097/2,800), 미국 4%(385/10,448 — 미국은 SEC
+> 목록을 새로 받아 industry 수집이 회차당 600개씩 진행 중이라 시간이 지나면 오른다).
+> 삼성전자는 야후가 `Consumer Electronics`로 주어 `KR_ELECTRONICS`다 —
+> SK하이닉스와 묶이지 않는다. 종목별 예외를 코드에 박지 말 것(업종 피어는
+> AI 선정 실패 시의 대비책이고, AI는 이 관계를 안다).
 
 ### 분석 결과의 구조화 저장
 
