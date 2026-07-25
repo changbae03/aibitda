@@ -1,3 +1,4 @@
+import { normalizeTicker } from "@workspace/shared";
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { loadKRXList, getKRXCache, lookupKoreanName, type StockEntry } from "../lib/krx-cache";
@@ -866,7 +867,7 @@ router.get("/search/:query", async (req, res) => {
 // 단일 티커 현재가 조회 (KQ/KS 자동 판별)
 async function resolveQuote(raw: string): Promise<{ price: number | null; currency: string; change: number | null }> {
   const ticker = raw.trim();
-  const sixDigit = ticker.split(".")[0];
+  const sixDigit = normalizeTicker(ticker);
   const isKoreanSix = /^\d{6}$/.test(sixDigit) && !ticker.includes(".");
 
   if (isKoreanSix) {
@@ -944,7 +945,7 @@ async function resolveQuote(raw: string): Promise<{ price: number | null; curren
   // ── 미국주식 or 이미 suffix 포함 (.KS/.KQ) ────────────────────────────────
   // suffix가 있는 한국 종목은 네이버에서 직접 가격 우선 조회
   if (ticker.endsWith(".KS") || ticker.endsWith(".KQ")) {
-    const code = ticker.split(".")[0];
+    const code = normalizeTicker(ticker);
     try {
       const naverRes = await fetch(
         `https://m.stock.naver.com/api/stock/${code}/basic`,
@@ -1052,12 +1053,12 @@ router.post("/batch-sparklines", async (req, res) => {
   await batchProcess(toFetch, async (ticker) => {
       const cacheKey = `bsp:${ticker}:${days}`;
       try {
-        const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
+        const isKoreanSix = /^\d{6}$/.test(normalizeTicker(ticker)) && !ticker.includes(".");
         let closes: number[] = [];
 
         if (isKoreanSix) {
           // KIS 기간별 시세 — 단일 호출, 실시간, .KQ/.KS 이중 시도 불필요
-          const history = await fetchKISDailyPriceHistory(ticker.split(".")[0]);
+          const history = await fetchKISDailyPriceHistory(normalizeTicker(ticker));
           if (history.length > 0) {
             closes = history.map(d => d.close);
           } else {
@@ -1130,8 +1131,8 @@ router.post("/batch-performance", async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const p2 = tomorrow.toISOString().split("T")[0];
 
-    const isKoreanSix = /^\d{6}(\.(KS|KQ))?$/.test(ticker.split(".")[0]);
-    const rawCode = ticker.replace(/\.(KS|KQ)$/, "");
+    const rawCode = normalizeTicker(ticker);
+    const isKoreanSix = /^\d{6}$/.test(rawCode);
     const isAlreadySuffixed = /\.(KS|KQ)$/i.test(ticker);
 
     if (isKoreanSix && !isAlreadySuffixed) {

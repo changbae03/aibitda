@@ -25,6 +25,7 @@ import {
 import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
+import { normalizeTicker } from "@workspace/shared";
 import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
@@ -163,9 +164,7 @@ router.post("/", async (req, res) => {
 
   const rawUpperTicker = ticker.toUpperCase();
   // 한국 종목은 .KS/.KQ 없이 6자리 코드만 저장 (005930.KS → 005930)
-  const upperTicker = /^\d{6}\.(KS|KQ)$/.test(rawUpperTicker)
-    ? rawUpperTicker.split(".")[0]
-    : rawUpperTicker;
+  const upperTicker = normalizeTicker(rawUpperTicker);
   let companyName = rawCompanyName?.trim();
   let englishName: string | null = null;
   let industry = rawIndustry?.trim();
@@ -179,7 +178,7 @@ router.post("/", async (req, res) => {
   resolvedSymbol = info.resolvedSymbol;
 
   // 한국 종목 코드 추출 (078160.KQ → 078160)
-  const krxCode = upperTicker.split(".")[0];
+  const krxCode = normalizeTicker(upperTicker);
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
   // ── 사용자 언어 설정 — 빠른 조회 ──────────────────────────────────────────

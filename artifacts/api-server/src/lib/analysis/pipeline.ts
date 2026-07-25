@@ -25,6 +25,7 @@ import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsi
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
 import { buildFmpContext } from "../fmp-client.js";
+import { normalizeTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
 import { extractJsonSafe, extractFvdJson, repairInvestmentStrategyContent } from "./json-repair.js";
@@ -135,7 +136,7 @@ async function executeStep(
     const snapName = analysis.companyName;
     const snapIndustry = analysis.industry;
     const snapTicker = analysis.ticker;
-    const snapKrxCode = snapTicker.split(".")[0];
+    const snapKrxCode = normalizeTicker(snapTicker);
     const isKoreanTicker = /^\d{6}$/.test(snapKrxCode);
 
     const peerPromise: Promise<{ peers: any[]; data: string }> = (async () => {
@@ -876,7 +877,7 @@ async function executeStep(
       }
 
       // 한국 주식: KRX 업종 PBR + DART 직접 경쟁사 병렬 조회
-      const tickerKrxCode = analysis.ticker.split(".")[0];
+      const tickerKrxCode = normalizeTicker(analysis.ticker);
       const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
       if (isKoreanTicker) {
         // 병렬 수집: KRX 업종 전체 + DART 명시 경쟁사

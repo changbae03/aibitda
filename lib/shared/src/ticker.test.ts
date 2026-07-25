@@ -78,6 +78,28 @@ describe("safeTicker — 저장 전 형식 검사", () => {
   });
 });
 
+describe("미국 클래스주·우선주 티커 (SEC 목록에 544개)", () => {
+  // SEC는 클래스주를 하이픈으로 쓴다(BRK-B, BF-A). 종목 목록을 SEC로 바꾸면서
+  // 이 형식이 대량으로 들어온다. 표준화가 이들을 건드리면 안 된다.
+  it("하이픈 티커를 손상시키지 않는다", () => {
+    expect(normalizeTicker("BRK-B")).toBe("BRK-B");
+    expect(normalizeTicker("BF-A")).toBe("BF-A");
+    expect(safeTicker("MOG-A")).toBe("MOG-A");
+  });
+
+  it("하이픈 티커를 한국 종목으로 오인하지 않는다", () => {
+    expect(detectMarket("BRK-B")).toBe("US");
+    expect(toYahooSymbol("BRK-B")).toBe("BRK-B");
+  });
+
+  // 점이 든 티커는 예전 코드가 ticker.split(".")[0]으로 잘라 BRK만 남겼다.
+  // 지금은 그 코드를 전부 normalizeTicker로 바꿨으므로 원형이 보존돼야 한다.
+  it("점이 든 티커는 앞부분만 남기지 않고 그대로 둔다", () => {
+    expect(normalizeTicker("BRK.B")).toBe("BRK.B");
+    expect("BRK.B".split(".")[0]).toBe("BRK"); // 예전 방식이 손상시키던 모습
+  });
+});
+
 describe("회귀 — 지표 캐시 적중률 0% 사건", () => {
   // 저장은 야후 심볼(005930.KS), 조회는 분석 테이블 표기(005930)로 갈려
   // 한국 종목 120개 중 0개가 적중했다. 두 경로가 같은 키로 수렴해야 한다.
