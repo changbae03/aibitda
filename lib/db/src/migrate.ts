@@ -408,11 +408,68 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS sector_benchmarks JSONB;
     `);
 
-    // ticker_financials는 여기서 만들지 않는다.
-    // 소유자: artifacts/api-server/src/lib/dart-store.ts (ensureTable)
-    // 과거 이 파일에도 account_nm 기반의 다른 정의가 있었으나, 실제 코드가 쓰는 모양은
-    // dart-store 쪽(revenue/operating_income 등 + UNIQUE 4컬럼)이다. 두 정의가 공존하면
-    // 새 DB에서 account_nm NOT NULL 때문에 INSERT가 실패하므로 정의를 한 곳으로 모았다.
+    // ticker_financials는 여기서 만들지 않는다 — 소유자는
+    // artifacts/api-server/src/lib/dart-store.ts (ensureTable).
+    //
+    // [수리] 과거 이 파일에도 account_nm 기반 정의가 있었고 그쪽이 먼저 실행돼 이겼다.
+    // 그 결과 실제 테이블은 account_nm NOT NULL + 5컬럼 UNIQUE를 갖게 됐는데,
+    // 데이터를 넣는 dart-store/financial-context는 account_nm을 채우지 않고
+    // ON CONFLICT (ticker, bsns_year, reprt_code, fs_type) 4컬럼에 의존한다.
+    // → 모든 INSERT가 NOT NULL 위반으로 실패해 테이블이 0행이었다(2026-07-25 실 DB 확인).
+    // 아래는 그 상태를 되돌리는 멱등 수리다. 표가 비어 있어 데이터 손실 위험은 없다.
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables
+                   WHERE table_schema='public' AND table_name='ticker_financials') THEN
+
+          -- account_nm은 계정과목 방식의 잔재다. 지표 방식 INSERT를 막지 않도록 NULL 허용.
+          IF EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_schema='public' AND table_name='ticker_financials'
+                       AND column_name='account_nm' AND is_nullable='NO') THEN
+            ALTER TABLE ticker_financials ALTER COLUMN account_nm DROP NOT NULL;
+          END IF;
+
+          -- bsns_year도 두 방식이 TEXT/INTEGER로 갈렸다. TEXT면 숫자도 그대로 들어가므로 유지.
+
+          -- ON CONFLICT가 요구하는 4컬럼 UNIQUE가 없으면 추가.
+          -- (5컬럼 UNIQUE는 account_nm이 NULL이면 중복을 막지 못하므로 4컬럼이 실질 키다.)
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid='ticker_financials'::regclass AND contype='u'
+              AND conname='ticker_financials_ticker_year_reprt_fs_key'
+          ) THEN
+            ALTER TABLE ticker_financials
+              ADD CONSTRAINT ticker_financials_ticker_year_reprt_fs_key
+              UNIQUE (ticker, bsns_year, reprt_code, fs_type);
+          END IF;
+        END IF;
+      END $$;
+    `);
+
+    // [수리] ticker_metric_cache의 티커 표기 통일.
+    // 저장은 야후 심볼(005930.KS), 조회는 표준형(005930)으로 갈려 적중률이 0%였다
+    // (2026-07-25 실 DB 확인: 한국 종목 120개 중 0개 적중). 코드는 normalizeTicker로
+    // 통일했고, 여기서는 기존 행의 접미사를 떼어 과거 캐시를 되살린다.
+    // 표준형 행이 이미 있으면 최신 것만 남긴다.
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables
+                   WHERE table_schema='public' AND table_name='ticker_metric_cache') THEN
+
+          DELETE FROM ticker_metric_cache old
+          WHERE old.ticker ~ '\\.(KS|KQ)$'
+            AND EXISTS (
+              SELECT 1 FROM ticker_metric_cache cur
+              WHERE cur.ticker = regexp_replace(old.ticker, '\\.(KS|KQ)$', '')
+                AND cur.updated_at >= old.updated_at
+            );
+
+          UPDATE ticker_metric_cache
+          SET ticker = regexp_replace(ticker, '\\.(KS|KQ)$', '')
+          WHERE ticker ~ '\\.(KS|KQ)$';
+        END IF;
+      END $$;
+    `);
 
     // ── 성능 인덱스 ─────────────────────────────────────────────────────────
     await client.query(`

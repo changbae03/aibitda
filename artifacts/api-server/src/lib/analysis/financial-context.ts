@@ -1,5 +1,6 @@
 // 재무 컨텍스트 빌더 — 티커 해석, Naver/Yahoo 재무 데이터, 뉴스 수집
 import { db, pool } from "@workspace/db";
+import { normalizeTicker } from "@workspace/shared";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { refreshBriefForTicker } from "../../routes/portfolio.js";
@@ -2371,7 +2372,9 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
                market_cap = EXCLUDED.market_cap,
                book_value = EXCLUDED.book_value,
                updated_at = NOW()`,
-        [resolvedSymbol, pbr, perTrail, perFwd, evEbitda, roe, opMargin,
+        // 캐시 키는 표준형. resolvedSymbol은 야후용(005930.KS)이라 그대로 쓰면
+        // 005930으로 조회하는 쪽과 어긋나 캐시가 영원히 미적중이 된다.
+        [normalizeTicker(resolvedSymbol), pbr, perTrail, perFwd, evEbitda, roe, opMargin,
          mcap != null ? Math.round(mcap) : null, bookVal]
       ).catch(() => {});
     }

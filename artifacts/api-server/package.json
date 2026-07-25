@@ -19,6 +19,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/shared": "workspace:*",
     "adm-zip": "^0.5.17",
     "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",

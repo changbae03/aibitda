@@ -352,6 +352,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/shared':
+        specifier: workspace:*
+        version: link:../../lib/shared
       adm-zip:
         specifier: ^0.5.17
         version: 0.5.17
