@@ -81,6 +81,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      "@workspace/shared": path.resolve(import.meta.dirname, "../../lib/shared/src/index.ts"),
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
