@@ -102,8 +102,14 @@ async function lookupCorpCode(stockCode: string): Promise<string | null> {
 
   // 2순위: ticker_financials에 이미 저장된 corp_code
   try {
+    // corp_code 컬럼은 기본값이 ''이라 값이 비어 있는 과거 행이 섞여 있다.
+    // 정렬 없이 DISTINCT + LIMIT 1로 뽑으면 그 빈 행이 집혀 조회가 실패하고
+    // (실측) 매번 DART API를 다시 부르게 된다. 비어 있지 않은 값만, 최신 것부터 고른다.
     const r = await pool.query<{ corp_code: string }>(
-      `SELECT DISTINCT corp_code FROM ticker_financials WHERE ticker = $1 LIMIT 1`,
+      `SELECT corp_code FROM ticker_financials
+        WHERE ticker = $1 AND corp_code <> ''
+        ORDER BY fetched_at DESC NULLS LAST
+        LIMIT 1`,
       [stockCode]
     );
     if (r.rows[0]?.corp_code) {
@@ -142,8 +148,12 @@ async function fetchDartPeriod(
   apiKey: string
 ): Promise<DartRow[] | null> {
   try {
+    // fnlttSinglAcnt(주요계정)은 30개 계정만 준다 — 현금·차입금·주당이익이 빠져
+    // 밸류에이션에 필요한 대차대조표 항목을 채울 수 없다(실측: 20행 전부 NULL).
+    // fnlttSinglAcntAll(전체 재무제표)은 198개를 주므로 이쪽을 쓴다.
+    // 주의: 전체본은 손익계산서를 sj_div="IS"가 아니라 "CIS"로 분류한다 — findIS 참고.
     const url =
-      `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json` +
+      `https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json` +
       `?crtfc_key=${apiKey}&corp_code=${corpCode}` +
       `&bsns_year=${bsnsYear}&reprt_code=${reprtCode}&fs_div=${fsType}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
@@ -164,9 +174,28 @@ function parseAmt(s: string | null | undefined): number | null {
 
 type AField = "thstrm_amount" | "frmtrm_amount" | "bfefrmtrm_amount";
 
+/**
+ * 손익계산서 계정 조회.
+ * 주요계정 API는 "IS", 전체 재무제표 API는 "CIS"(포괄손익계산서)로 분류한다.
+ * 둘 다 받아야 API를 바꿔도 매출·영업이익이 끊기지 않는다.
+ */
+/**
+ * 계정명 매칭은 "정확히 일치"를 먼저 시도하고, 없을 때만 부분 일치로 넘어간다.
+ *
+ * 부분 일치만 쓰면 다른 계정을 잘못 집는다. 실제 사고:
+ *   "부채총계"로 찾았더니 "자본과부채총계"(=자산총계, 3,746억)가 먼저 걸려
+ *   실제 부채총계 1,094억 대신 3배 넘는 값이 저장됐다.
+ * 반대로 "영업이익"은 실제 계정명이 "영업이익(손실)"이라 부분 일치가 필요하다.
+ */
+function matchRow(rows: DartRow[], name: string, ok: (sj: string) => boolean): DartRow | undefined {
+  const norm = (s: string | undefined) => (s ?? "").replace(/\s/g, "");
+  return rows.find(r => ok(r.sj_div) && norm(r.account_nm) === name)
+      ?? rows.find(r => ok(r.sj_div) && norm(r.account_nm).includes(name));
+}
+
 function findIS(rows: DartRow[], names: string[], field: AField): number | null {
   for (const name of names) {
-    const row = rows.find(r => r.sj_div === "IS" && r.account_nm?.replace(/\s/g, "").includes(name));
+    const row = matchRow(rows, name, (sj) => sj === "IS" || sj === "CIS");
     if (row) return parseAmt(row[field]);
   }
   return null;
@@ -174,7 +203,7 @@ function findIS(rows: DartRow[], names: string[], field: AField): number | null 
 
 function findBS(rows: DartRow[], names: string[], field: AField): number | null {
   for (const name of names) {
-    const row = rows.find(r => r.sj_div === "BS" && r.account_nm?.replace(/\s/g, "").includes(name));
+    const row = matchRow(rows, name, (sj) => sj === "BS");
     if (row) return parseAmt(row[field]);
   }
   return null;
@@ -186,33 +215,46 @@ function extractFinancials(rows: DartRow[], field: AField) {
   const netIncome = findIS(rows, ["당기순이익","당기순손실"], field);
   const totalAssets = findBS(rows, ["자산총계"], field);
   const equity = findBS(rows, ["자본총계"], field);
-  const cash = findBS(rows, ["현금및현금성자산","현금및단기금융상품","현금성자산"], field);
+  // 현금성 자산: 현금및현금성자산 + 단기금융상품.
+  // DART는 둘을 별도 계정으로 낸다(메디포스트 2025 3Q 기준 350억 + 20억).
+  // 장기금융상품은 즉시 유동화가 어려워 제외한다.
+  const cashOnly = findBS(rows, ["현금및현금성자산","현금및단기금융상품","현금성자산"], field);
+  const shortTermInvest = findBS(rows, ["단기금융상품"], field);
+  const cash = cashOnly == null && shortTermInvest == null
+    ? null
+    : (cashOnly ?? 0) + (shortTermInvest ?? 0);
+
   const eps = findIS(rows, ["기본주당이익","기본주당순이익","주당순이익","주당이익"], field);
   const bps = findBS(rows, ["주당순자산","주당자산가치"], field);
 
-  // 금융부채 합산
-  const debtItems = [
-    findBS(rows, ["단기차입금"], field),
-    findBS(rows, ["장기차입금","장기차입"], field),
-    findBS(rows, ["사채"], field),
-    findBS(rows, ["유동성장기부채","유동성장기차입금"], field),
-    findBS(rows, ["리스부채","금융리스부채"], field),
-    findBS(rows, ["단기금융부채","유동금융부채"], field),
-    findBS(rows, ["장기금융부채","비유동금융부채"], field),
-  ].filter((v): v is number => v !== null);
-  const totalDebt = debtItems.length > 0 ? debtItems.reduce((a, b) => a + b, 0) : null;
+  // 부채는 '부채총계'를 쓴다.
+  // 예전에는 단기차입금·장기차입금·사채… 를 각각 찾아 더했는데, DART 실제 계정명은
+  // "유동성 금융기관 차입금(사채 제외)" 처럼 길고 회사마다 달라 패턴이 거의 맞지 않았고
+  // (실측: 20행 전부 NULL), 맞더라도 "(사채 포함)"·"(사채 제외)" 항목이 함께 걸려
+  // 이중 합산될 위험이 있었다. 부채총계는 모든 회사·모든 보고서에 존재하고 모호하지 않다.
+  // 이자부부채만 필요하면 AI가 본문에서 별도로 판단하도록 두는 편이 안전하다.
+  const totalDebt = findBS(rows, ["부채총계"], field);
 
   return { revenue, operatingIncome, netIncome, totalAssets, equity, cash, totalDebt, eps, bps };
 }
 
 // ─── 캐시 유효 확인 ──────────────────────────────────────────────────────────
 
+/**
+ * 다시 받아올 필요가 없는지 판단한다.
+ *
+ * 시간만 보면 안 된다. 예전에는 주요계정 API를 쓰느라 대차대조표(현금·부채총계)가
+ * 통째로 비어 있었는데, 30일 캐시 때문에 코드를 고쳐도 한 달간 그 빈 행이 그대로
+ * 유지된다. 그래서 "받은 지 얼마 안 됐고 + 필요한 항목이 채워져 있을 때"만
+ * 최신으로 인정한다. 부채총계는 모든 회사·보고서에 존재하므로 완전성 판정 기준으로 쓴다.
+ */
 async function isFresh(ticker: string, bsnsYear: number, reprtCode: string): Promise<boolean> {
   try {
     const r = await pool.query(
       `SELECT 1 FROM ticker_financials
        WHERE ticker=$1 AND bsns_year=$2 AND reprt_code=$3
          AND fetched_at > NOW() - INTERVAL '30 days'
+         AND total_debt IS NOT NULL
        LIMIT 1`,
       [ticker, bsnsYear, reprtCode]
     );
@@ -379,6 +421,9 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
     const lines: string[] = [
       `\n[📊 DART 시계열 재무 데이터 — ${stockCode}]`,
       `⚠️ DART OpenAPI 원천 데이터. 현 시점 기준 최신 수집분. 단위 표기 포함.`,
+      `※ 여기 나온 자본총계·현금성자산·부채총계는 공시 원문 값이다. 밸류에이션에서 순현금·`
+      + `자본을 쓸 때 추정하지 말고 이 값을 사용할 것. '부채총계'는 매입채무 등을 포함한 총액이며 `
+      + `이자부차입금이 아니다 — 차입금만 필요하면 그 사실을 명시하고 별도 근거를 밝힐 것.`,
     ];
 
     // ── 최신 분기 사전 분석: 흑자전환/적자전환 감지 + 연간 앵커 표시 ──────────
@@ -514,9 +559,12 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
       if (rev !== null) parts.push(`매출 ${fmtKrw(rev)}`);
       if (op  !== null) parts.push(`영업이익 ${fmtKrw(op)}${opMargin}`);
       if (ni  !== null) parts.push(`순이익 ${fmtKrw(ni)}`);
-      if (eq  !== null) parts.push(`자본 ${fmtKrw(eq)}`);
-      if (ca  !== null) parts.push(`현금 ${fmtKrw(ca)}`);
-      if (td  !== null) parts.push(`금융부채 ${fmtKrw(td)}`);
+      if (eq  !== null) parts.push(`자본총계 ${fmtKrw(eq)}`);
+      // 라벨을 정확히 쓴다. 'cash'는 현금및현금성자산+단기금융상품,
+      // 'total_debt'는 부채총계(차입금이 아니다) — AI가 순현금을 계산할 때
+      // 이자부부채로 오해하면 순현금이 과소·과대 산출된다.
+      if (ca  !== null) parts.push(`현금성자산 ${fmtKrw(ca)}`);
+      if (td  !== null) parts.push(`부채총계 ${fmtKrw(td)}`);
       if (eps !== null) parts.push(`EPS ${eps.toLocaleString("ko-KR")}원`);
       if (bps !== null) parts.push(`BPS ${bps.toLocaleString("ko-KR")}원`);
 
