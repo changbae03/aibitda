@@ -109,6 +109,23 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 **두 테이블의 실제 병합은 호스팅 이관 이후로 미뤄져 있다.** 지금 병합하면 옛 코드로
 돌고 있는 운영 서버가 멈춘다.
 
+### 피어그룹 — 지표는 종목 마스터에서 조인한다
+
+피어 비교에 필요한 PER·PBR·ROE·시총은 **외부 API로 다시 받지 말 것.** 종목 마스터
+(`stocks` 뷰)에 한국 2,800 + 미국 10,400여 종목분이 이미 정리돼 있다.
+
+- 저장: `stock_peers` (종목별 피어 티커·순위·선정이유·출처)
+- 접근: `artifacts/api-server/src/lib/peer-store.ts`
+  - `savePeers()` — AI가 피어를 고를 때마다 저장. 티커는 표준형으로 정규화된다.
+  - `getPeersWithMetrics()` — 저장된 피어 + 지표를 한 번의 질의로
+  - `getSectorPeers()` — 같은 업종·유사 시총 자동 선정 (AI 선정 실패 시 대비책)
+- 표기 규칙은 `peer-format.ts`가 소유한다(순수 함수라 DB 없이 테스트 가능).
+  시장별 통화 구분과 "0은 결측" 처리가 여기 있다 — 프롬프트에 그대로 들어가
+  AI 판단을 좌우하므로 `peer-format.test.ts`를 함께 갱신할 것.
+
+`krx_peer_data`는 **0행인데 `korea-context.ts` 6곳과 `stock-insights.ts` 1곳이
+아직 조회한다** — 늘 빈손으로 돌아온다. `getSectorPeers()`로 대체할 것.
+
 ### 분석 결과의 구조화 저장
 
 AI는 `relative_valuation` 단계에서 두 JSON 블록을 내보낸다 — `FINAL_VALUATION_DATA`
