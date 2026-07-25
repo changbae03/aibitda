@@ -85,46 +85,31 @@ interface BatchStock {
   last_at: Date | null;
 }
 
-/** KRX 전체 종목 중 가장 오래 분석 안 된 top-N 선택 */
-async function pickKrStocks(count: number): Promise<BatchStock[]> {
+/**
+ * 지정한 시장에서 가장 오래 분석되지 않은 top-N 종목을 고른다.
+ *
+ * 예전에는 pickKrStocks / pickUsStocks가 테이블 이름과 티커 컬럼만 다른 채로
+ * 나란히 있었다. stocks 뷰가 두 마스터를 같은 모양으로 보여주므로 하나로 합쳤다.
+ * (뷰 정의는 lib/db/src/migrate.ts, 저장은 여전히 시장별 테이블로 간다.)
+ */
+async function pickStocks(market: "KR" | "US", count: number): Promise<BatchStock[]> {
   const { rows } = await pool.query<BatchStock>(
     `SELECT
-       k.code          AS ticker,
-       k.name,
-       COALESCE(k.industry, k.sector) AS industry,
+       s.ticker,
+       s.name,
+       COALESCE(s.industry, s.sector) AS industry,
        a.last_at
-     FROM krx_stocks k
+     FROM stocks s
      LEFT JOIN (
        SELECT ticker, MAX(created_at) AS last_at
        FROM   analyses
        WHERE  status = 'completed'
        GROUP  BY ticker
-     ) a ON a.ticker = k.code
+     ) a ON a.ticker = s.ticker
+     WHERE s.market = $1
      ORDER BY a.last_at ASC NULLS FIRST
-     LIMIT $1`,
-    [count]
-  );
-  return rows;
-}
-
-/** US 전체 종목 중 가장 오래 분석 안 된 top-N 선택 */
-async function pickUsStocks(count: number): Promise<BatchStock[]> {
-  const { rows } = await pool.query<BatchStock>(
-    `SELECT
-       u.ticker,
-       u.name,
-       COALESCE(u.industry, u.sector) AS industry,
-       a.last_at
-     FROM us_stocks u
-     LEFT JOIN (
-       SELECT ticker, MAX(created_at) AS last_at
-       FROM   analyses
-       WHERE  status = 'completed'
-       GROUP  BY ticker
-     ) a ON a.ticker = u.ticker
-     ORDER BY a.last_at ASC NULLS FIRST
-     LIMIT $1`,
-    [count]
+     LIMIT $2`,
+    [market, count]
   );
   return rows;
 }
@@ -167,19 +152,19 @@ export async function runDailyAutoBatch(port: number): Promise<void> {
 
   console.log(`[auto-batch] 일일 자동 배치 시작 (${todayKST})`);
 
-  // DB에서 종목 선택 (krx_stocks / us_stocks 없으면 빈 배열)
+  // DB에서 종목 선택 (stocks 뷰가 아직 없으면 빈 배열로 두고 계속 진행)
   let krBatch: BatchStock[] = [];
   let usBatch: BatchStock[] = [];
 
   try {
-    krBatch = await pickKrStocks(DAILY_BATCH_KR);
+    krBatch = await pickStocks("KR", DAILY_BATCH_KR);
   } catch (e: any) {
-    console.warn("[auto-batch] krx_stocks 조회 실패 (테이블 미준비?):", e?.message);
+    console.warn("[auto-batch] 한국 종목 조회 실패 (stocks 뷰 미준비?):", e?.message);
   }
   try {
-    usBatch = await pickUsStocks(DAILY_BATCH_US);
+    usBatch = await pickStocks("US", DAILY_BATCH_US);
   } catch (e: any) {
-    console.warn("[auto-batch] us_stocks 조회 실패 (테이블 미준비?):", e?.message);
+    console.warn("[auto-batch] 미국 종목 조회 실패 (stocks 뷰 미준비?):", e?.message);
   }
 
   const batch = [...krBatch, ...usBatch];

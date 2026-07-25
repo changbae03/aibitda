@@ -1619,32 +1619,27 @@ router.get("/harvest-status", async (req, res) => {
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
 
   try {
-    const [krx, us] = await Promise.all([
-      pool.query(`
-        SELECT
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE data_fetched = true) AS fetched,
-          COUNT(*) FILTER (WHERE fetch_error IS NOT NULL) AS errors,
-          COUNT(*) FILTER (WHERE data_fetched = false AND fetch_error IS NULL) AS pending,
-          COUNT(*) FILTER (WHERE industry IS NOT NULL) AS with_industry,
-          COUNT(*) FILTER (WHERE per IS NOT NULL) AS with_per,
-          MAX(last_updated) AS last_updated
-        FROM krx_stocks
-      `),
-      pool.query(`
-        SELECT
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE data_fetched = true) AS fetched,
-          COUNT(*) FILTER (WHERE fetch_error IS NOT NULL) AS errors,
-          COUNT(*) FILTER (WHERE data_fetched = false AND fetch_error IS NULL) AS pending,
-          MAX(last_updated) AS last_updated
-        FROM us_stocks
-      `),
-    ]);
+    // stocks 뷰 덕에 시장별 통계를 한 번의 질의로 낸다.
+    // 예전에는 같은 집계를 krx_stocks·us_stocks에 각각 날렸고, 미국 쪽에만
+    // with_industry·with_per가 빠져 있어 두 시장의 응답 모양이 달랐다.
+    const { rows } = await pool.query(`
+      SELECT
+        market,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE data_fetched = true) AS fetched,
+        COUNT(*) FILTER (WHERE fetch_error IS NOT NULL) AS errors,
+        COUNT(*) FILTER (WHERE data_fetched = false AND fetch_error IS NULL) AS pending,
+        COUNT(*) FILTER (WHERE industry IS NOT NULL) AS with_industry,
+        COUNT(*) FILTER (WHERE per IS NOT NULL) AS with_per,
+        MAX(last_updated) AS last_updated
+      FROM stocks
+      GROUP BY market
+    `);
+    const byMarket = Object.fromEntries(rows.map((r: any) => [r.market, r]));
     res.json({
       running: harvestRunning,
-      krx: krx.rows[0],
-      us: us.rows[0],
+      krx: byMarket["KR"] ?? null,
+      us: byMarket["US"] ?? null,
     });
   } catch (e: any) {
     res.status(500).json({ error: e?.message });

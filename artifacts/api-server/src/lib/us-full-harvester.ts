@@ -1,26 +1,34 @@
 /**
  * us-full-harvester.ts
- * S&P 500 + NASDAQ 주요 종목 ~600개의 재무 데이터를 us_stocks 테이블에 구축.
+ * 미국 상장 종목의 재무 데이터를 us_stocks 테이블에 구축.
  *
  * 동작 방식:
- * 1. syncUsList()    — 하드코딩 마스터 리스트 → us_stocks INSERT (중복 스킵)
- * 2. fetchPending()  — data_fetched=false 종목 Yahoo Finance 호출 → 업데이트
- *    · CONCURRENCY=10, 배치간 200ms 딜레이, 1회 300건 처리
+ * 1. syncUsList()    — SEC 공식 목록(약 10,400개) → us_stocks INSERT (중복 스킵)
+ *                      SEC 조회 실패 시에만 US_MASTER_LIST를 폴백 시드로 사용
+ * 2. fetchUsPending() — data_fetched=false 종목 Yahoo Finance 호출 → 업데이트
+ *    · CONCURRENCY=10, 배치간 150ms 딜레이, 1회 BATCH_LIMIT건만 처리
+ *    · 분석·포트폴리오에 등장한 종목을 먼저 채운다(우선순위 정렬)
  *    · 서버 시작 시 + 12시간 주기 자동 실행
  */
 
 import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
+import { normalizeTicker } from "@workspace/shared";
 import { classifySector } from "../routes/performance.js";
+import { fetchSecUniverse } from "./us-universe.js";
 
 const yahoo = new YahooFinance();
 
 const CONCURRENCY  = 10;
 const DELAY_MS     = 150;
-const BATCH_LIMIT  = 9999;
+// 대상이 SEC 목록(약 10,400개)으로 늘어난 뒤로는 회차당 상한이 안전장치 역할을 한다.
+// 9999로 두면 한 번에 1만 건을 야후에 던져 차단당한다. 우선순위 정렬과 함께 쓰인다.
+const BATCH_LIMIT  = 600;
 const REFRESH_DAYS = 7;
 
-// ─── 미국 주요 종목 마스터 리스트 (~600개) ────────────────────────────────────
+// ─── 폴백 시드 목록 ───────────────────────────────────────────────────────────
+// SEC 조회가 실패했을 때만 쓰인다. 평소 목록 출처는 lib/us-universe.ts다.
+// 새 종목을 여기 손으로 추가할 필요는 없다 — 자가 치유(lib/stock-registry.ts)가 처리한다.
 export interface UsStockEntry {
   ticker: string;
   name: string;
@@ -447,21 +455,41 @@ async function ensureTable(): Promise<void> {
 }
 
 // ─── 1단계: 마스터 리스트 → DB 동기화 ────────────────────────────────────────
-export async function syncUsList(): Promise<{ inserted: number; total: number }> {
+//
+// 출처는 SEC 공식 목록(약 10,400건)이다. 예전에는 이 파일의 US_MASTER_LIST(358건)를
+// 손으로 관리했는데, 분석한 종목이 마스터에 없는 일이 반복됐다(SAP·IONQ 등).
+// SEC 조회가 실패하면 US_MASTER_LIST를 폴백 시드로 써서 최소한의 목록은 유지한다.
+export async function syncUsList(): Promise<{ inserted: number; total: number; source: "sec" | "fallback" }> {
   await ensureTable();
+
+  const sec = await fetchSecUniverse();
+  const source: "sec" | "fallback" = sec ? "sec" : "fallback";
+  const entries = sec
+    ? sec.map((e) => ({ ticker: e.ticker, name: e.name, exchange: null as string | null }))
+    : US_MASTER_LIST.map((e) => ({ ticker: e.ticker, name: e.name, exchange: e.exchange as string | null }));
+
+  // 거래소는 SEC가 주지 않는다. 지표 수집 단계(fetchMetrics)에서 야후가 채워주므로
+  // 여기서는 비워두되, NOT NULL 제약이 있어 임시값을 넣는다.
   let inserted = 0;
-  for (const stock of US_MASTER_LIST) {
+  const CHUNK = 500;
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    const chunk = entries.slice(i, i + CHUNK);
+    const values = chunk.map((_, k) => `($${k * 3 + 1}, $${k * 3 + 2}, $${k * 3 + 3})`).join(", ");
+    const params = chunk.flatMap((e) => [e.ticker, e.name, e.exchange ?? "UNKNOWN"]);
     const res = await pool.query(
       `INSERT INTO us_stocks (ticker, name, exchange)
-       VALUES ($1, $2, $3)
+       VALUES ${values}
        ON CONFLICT (ticker) DO NOTHING`,
-      [stock.ticker, stock.name, stock.exchange]
+      params
     );
-    if ((res.rowCount ?? 0) > 0) inserted++;
+    inserted += res.rowCount ?? 0;
   }
-  console.log(`[us-full] 종목 목록 동기화: ${inserted}개 신규 추가 (전체 ${US_MASTER_LIST.length}개)`);
-  return { inserted, total: US_MASTER_LIST.length };
+
+  console.log(`[us-full] 종목 목록 동기화(${source}): ${inserted}개 신규 추가 (전체 ${entries.length}개)`);
+  return { inserted, total: entries.length, source };
 }
+
+// 자가 치유(종목 자동 등록)는 시장을 가리지 않아야 하므로 lib/stock-registry.ts가 맡는다.
 
 // ─── 2단계: Yahoo Finance 재무 데이터 수집 ────────────────────────────────────
 interface StockMetrics {
@@ -525,11 +553,23 @@ async function fetchMetrics(ticker: string): Promise<StockMetrics | null> {
 export async function fetchUsPending(): Promise<{ processed: number; succeeded: number; failed: number }> {
   const cutoff = new Date(Date.now() - REFRESH_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
+  // 우선순위 수집.
+  // SEC 목록으로 전환하면서 대상이 358개 → 10,400개로 늘었다. 한 번에 다 긁으면
+  // 야후가 차단하므로 회차당 BATCH_LIMIT만 처리하고, 실제로 쓰이는 종목을 먼저 채운다.
+  //   1순위 분석에 등장한 종목 · 2순위 사용자 포트폴리오 종목 · 3순위 나머지
+  // 나머지는 매 회차 조금씩 채워지고, REFRESH_DAYS가 지나면 다시 갱신 대상이 된다.
   const { rows: pending } = await pool.query<{ ticker: string }>(
-    `SELECT ticker FROM us_stocks
-     WHERE (data_fetched = false OR last_updated < $1)
-     ORDER BY last_updated ASC NULLS FIRST
-     LIMIT $2`,
+    `SELECT s.ticker
+       FROM us_stocks s
+      WHERE (s.data_fetched = false OR s.last_updated < $1)
+      ORDER BY
+        CASE
+          WHEN EXISTS (SELECT 1 FROM analyses a WHERE a.ticker = s.ticker) THEN 0
+          WHEN EXISTS (SELECT 1 FROM portfolio_holdings p WHERE p.ticker = s.ticker) THEN 1
+          ELSE 2
+        END,
+        s.last_updated ASC NULLS FIRST
+      LIMIT $2`,
     [cutoff, BATCH_LIMIT]
   );
 

@@ -61,6 +61,7 @@ async function ensureTable(): Promise<void> {
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS eps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS bps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS fetched_at      TIMESTAMPTZ DEFAULT NOW()`,
+    `CREATE INDEX IF NOT EXISTS idx_ticker_financials_ticker ON ticker_financials (ticker, bsns_year DESC)`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch { /* 이미 존재하면 무시 */ }

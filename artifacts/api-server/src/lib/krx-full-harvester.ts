@@ -12,9 +12,12 @@
 
 import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
+import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
 import { loadKRXList } from "./krx-cache.js";
 import { classifySector } from "../routes/performance.js";
 import { getFmpValuation } from "./fmp-client.js";
+import { fetchKISStockQuote } from "./kis-client.js";
+import { Semaphore } from "./analysis/semaphore.js";
 
 const yahoo = new YahooFinance();
 
@@ -22,6 +25,10 @@ const CONCURRENCY   = 10;
 const DELAY_MS      = 150;   // 배치 간 딜레이
 const BATCH_LIMIT   = 9999;  // 전체 수집 (스케줄러가 알아서 증분 처리)
 const REFRESH_DAYS  = 7;     // 이 일수 이상 지난 종목은 재수집
+
+// KIS는 초당 호출 제한이 있다. 수집기 동시성(10)과 별개로 KIS만 따로 묶어
+// 전체 호출량을 제한한다 — 안 그러면 한도 초과로 토큰이 막힌다.
+const kisSemaphore = new Semaphore(4);
 
 // ─── 테이블 초기화 (멱등) ──────────────────────────────────────────────────────
 let tableReady = false;
@@ -111,12 +118,34 @@ async function fetchMetrics(symbol: string): Promise<StockMetrics | null> {
     const industry = sp?.industry ?? (fd as any)?.industry ?? null;
     const sector   = industry ? classifySector(industry, "KR") : null;
 
-    // PER: summaryDetail.trailingPE 우선 → 직접 계산 fallback
+    // PER: summaryDetail.trailingPE 우선 → 직접 계산 → forwardPE 순 fallback
     const perFromSD   = sd?.trailingPE ?? null;
     const perCalc     = ks?.trailingEps != null && p?.regularMarketPrice != null
                           ? p.regularMarketPrice / ks.trailingEps
                           : null;
-    const per = perFromSD ?? perCalc;
+    let per = perFromSD ?? perCalc;
+    let pbr: number | null = (ks?.priceToBook ?? sd?.priceToBook ?? null) as number | null;
+
+    // 야후는 한국 종목의 trailingPE·priceToBook·trailingEps·bookValue를 더 이상 주지 않는다
+    // (2026-07 확인: 005930.KS·000660.KS·035720.KS 모두 undefined). 그래서 2,800종목
+    // 전부 PER·PBR이 비어 있었다. 한국 종목은 이미 연동된 KIS를 1차 출처로 쓴다.
+    //
+    // 야후의 forwardPE(예상 PER)는 KIS의 실적 기준 PER과 성격이 다르다. 종목마다
+    // 기준이 섞이면 피어 멀티플 비교가 왜곡되므로, 한국 종목은 KIS 값으로 통일하고
+    // 야후 forwardPE는 KIS가 실패했을 때만 쓴다.
+    if (isKoreanTicker(symbol)) {
+      await kisSemaphore.acquire();
+      try {
+        const kis = await fetchKISStockQuote(normalizeTicker(symbol)).catch(() => null);
+        if (kis?.per != null) per = kis.per;
+        if (kis?.pbr != null) pbr = kis.pbr;
+      } finally {
+        kisSemaphore.release();
+      }
+      per ??= (ks as any)?.forwardPE ?? null;
+    } else {
+      per ??= (ks as any)?.forwardPE ?? null;
+    }
 
     return {
       sector,
@@ -124,7 +153,7 @@ async function fetchMetrics(symbol: string): Promise<StockMetrics | null> {
       market_cap:    p?.marketCap              ?? null,
       current_price: p?.regularMarketPrice     ?? null,
       per,
-      pbr:           ks?.priceToBook ?? sd?.priceToBook ?? null,
+      pbr,
       roe:           fd?.returnOnEquity != null  ? fd.returnOnEquity * 100  : null,
       opm:           fd?.operatingMargins != null ? fd.operatingMargins * 100 : null,
       rev_growth:    fd?.revenueGrowth != null    ? fd.revenueGrowth * 100   : null,
@@ -132,8 +161,9 @@ async function fetchMetrics(symbol: string): Promise<StockMetrics | null> {
       net_income:    fd?.netIncomeToCommon       ?? null,
       shares_out:    ks?.sharesOutstanding       ?? null,
       beta:          ks?.beta ?? sd?.beta        ?? null,
-      week52_high:   p?.fiftyTwoWeekHigh         ?? null,
-      week52_low:    p?.fiftyTwoWeekLow          ?? null,
+      // 52주 고저는 summaryDetail에 있다. price 모듈에서 읽고 있어 2,800종목 전부 비어 있었다.
+      week52_high:   sd?.fiftyTwoWeekHigh ?? (p as any)?.fiftyTwoWeekHigh ?? null,
+      week52_low:    sd?.fiftyTwoWeekLow  ?? (p as any)?.fiftyTwoWeekLow  ?? null,
     };
   } catch {
     return null;

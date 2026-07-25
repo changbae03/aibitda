@@ -24,12 +24,29 @@ AI 기반 헤지펀드 리서치 플랫폼. 팀장(Lead Portfolio Strategist) + 
 artifacts-monorepo/
 ├── artifacts/
 │   ├── api-server/         # Express API server
-│   └── hedge-fund-ai/      # React frontend (preview at /)
+│   │   └── src/
+│   │       ├── routes/     # 얇은 HTTP 핸들러 (도메인별 파일)
+│   │       └── lib/
+│   │           └── analysis/   # 분석 도메인 핵심 모듈 (routes/analysis.ts에서 분리)
+│   │               ├── pipeline.ts          # 파이프라인 엔진: executeStep, 백그라운드 완주, 큐
+│   │               ├── qc-debate.ts         # 팀장 QC 검증 + Devil's Advocate 토론
+│   │               ├── financial-context.ts # 티커 해석, Naver/Yahoo 재무, 뉴스 수집
+│   │               ├── korea-context.ts     # KRX 업종 피어, DART 경쟁사 컨텍스트
+│   │               ├── peer-context.ts      # 피어 선정·재무 수집 (US 맵 + AI 선택)
+│   │               ├── gemini.ts            # Gemini 클라이언트 + 동시 호출 제한
+│   │               ├── store.ts             # raw SQL·DB 캐시·row 매핑 헬퍼
+│   │               ├── json-repair.ts       # LLM 응답 JSON 복구
+│   │               ├── format.ts            # API 응답 포맷터
+│   │               └── semaphore.ts         # 동시성 제어
+│   ├── hedge-fund-ai/      # React frontend (preview at /)
+│   ├── aibida-mobile/      # Expo/React Native 모바일 앱
+│   └── mockup-sandbox/     # 디자인 컴포넌트 프리뷰 서버
 ├── lib/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas
-│   └── db/                 # Drizzle ORM schema + DB connection
+│   ├── db/                 # Drizzle ORM schema + DB connection
+│   └── shared/             # 웹·모바일 공용: 브랜드 토큰(BRAND_COLOR)·포맷터(formatCurrency 등)
 ```
 
 ## AI Research Organization
@@ -50,11 +67,21 @@ artifacts-monorepo/
 
 ## Analysis Flow
 
-Step 1: industry_structure → Step 2: macro → Step 3: fundamental →
-Step 4: valuation → Step 5: market_microstructure → Step 6: technical →
-Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verdict)
+실제 코드 기준 7단계 (`STEP_ORDER` in `artifacts/api-server/src/lib/ai-agents.ts`):
+
+Step 1: company_intro → Step 2: industry_analysis → Step 3: catalyst_analysis →
+Step 4: company_analysis → Step 5: relative_valuation → Step 6: market_analysis →
+Step 7: investment_strategy (final verdict)
+
+파이프라인 오케스트레이션은 `artifacts/api-server/src/lib/analysis/pipeline.ts`의
+`executeStep()`·`runPipelineBackground()`가 담당하고, `routes/analysis.ts`는 HTTP 처리만 한다.
 
 ## Database Schema
+
+**진실의 원천**: 실제 마이그레이션은 `lib/db/src/migrate.ts`(서버 시작 시 idempotent SQL 실행)가 수행하고,
+`lib/db/src/schema/`의 Drizzle 스키마는 그 전체 미러(타입 안전 쿼리용)다.
+**스키마를 바꿀 때는 반드시 두 곳을 함께 수정할 것.**
+FK는 기존 데이터가 있어도 안전하도록 `NOT VALID`로 추가되며, `relations()` 정의로 `db.query.*` 조인 쿼리를 지원한다.
 
 - `analyses` - 분석 세션 (ticker, company, status, verdict, prices, token_count, estimated_cost_usd)
 - `analysis_steps` - 각 에이전트 분석 결과
@@ -119,3 +146,11 @@ Every package extends `tsconfig.base.json`. Run `pnpm run typecheck` from root.
 - `pnpm --filter @workspace/hedge-fund-ai run dev` - 프론트엔드
 - `pnpm --filter @workspace/db run push` - DB 스키마 push
 - `pnpm --filter @workspace/api-spec run codegen` - API 코드젠
+
+## 로컬(맥) 개발 참고
+
+- pnpm 11 기준 `allowBuilds` 설정 사용 (pnpm-workspace.yaml).
+- esbuild/rollup/tailwind-oxide/lightningcss의 darwin-arm64 바이너리는 워크스페이스 overrides에서
+  제외하지 않는다 (제외 시 맥에서 빌드 불가). 리눅스 외 기타 플랫폼 제외는 유지.
+- api-server의 타입 에러 잔존분(2026-07 기준 191개)은 Replit 시절 esbuild-only 빌드로 누적된 것 —
+  신규 코드는 타입 에러 0을 유지하고 잔존분은 점진 해소할 것.

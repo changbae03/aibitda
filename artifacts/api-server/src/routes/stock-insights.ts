@@ -1,3 +1,4 @@
+import { normalizeTicker } from "@workspace/shared";
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
@@ -164,7 +165,7 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
 
   // 3) 미국 주식: 주요 미국 ETF에서 해당 종목 편입 비중 조회 (Yahoo Finance topHoldings)
   if (isUsTicker && domesticEtfs.length === 0) {
-    const baseSymbol = ticker.split(".")[0];
+    const baseSymbol = normalizeTicker(ticker);
     const cacheKey = `etf-inclusion-us:${baseSymbol}`;
     const cached = cache.get<typeof domesticEtfs>(cacheKey);
     if (cached) {

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, real, timestamp, varchar, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -22,6 +22,15 @@ export const analysesTable = pgTable("analyses", {
   isPublic: text("is_public").notNull().default("true"),
   userRating: integer("user_rating"), // 1=부정적, 3=보통, 5=긍정적
   userFeedback: text("user_feedback"),
+  tokenCount: integer("token_count").default(0),
+  estimatedCostUsd: real("estimated_cost_usd").default(0),
+  language: varchar("language", { length: 5 }).notNull().default("ko"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  errorMessage: text("error_message"),
+  // routes/analysis.ts의 ensureQaPeerColumns()가 런타임에 추가하는 컬럼들 (실 DB 확인됨)
+  qaScore: integer("qa_score"),
+  qaFlags: text("qa_flags"),
+  peerFlags: text("peer_flags"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -40,7 +49,10 @@ export const analysisStepsTable = pgTable("analysis_steps", {
   validationNotes: text("validation_notes"),
   informationType: text("information_type").notNull().default("data_based_estimate"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => [
+  // 실제 DB에 존재하는 제약 (migrate.ts에서 생성) — 스텝 캐시의 ON CONFLICT가 의존
+  unique("analysis_steps_analysis_id_step_key_key").on(t.analysisId, t.stepKey),
+]);
 
 export const insertAnalysisStepSchema = createInsertSchema(analysisStepsTable).omit({ id: true, createdAt: true });
 export type InsertAnalysisStep = z.infer<typeof insertAnalysisStepSchema>;

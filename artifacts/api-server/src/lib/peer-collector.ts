@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
 import { pool } from "@workspace/db";
+import { normalizeTicker } from "@workspace/shared";
 import { sanitizePathComponent, validateDateStr } from "./sanitize.js";
 
 const NAVER_HEADERS = {
@@ -24,20 +25,23 @@ interface CachedMetrics {
 }
 
 async function readMetricCache(ticker: string): Promise<CachedMetrics | null> {
+  // 캐시 키는 항상 표준형. 호출부가 005930이든 005930.KS든 같은 행을 찾는다.
+  const key = normalizeTicker(ticker);
+  if (!key) return null;
   try {
     const client = await pool.connect();
     try {
       const res = await client.query(
         `SELECT pbr, per_trailing, ev_ebitda, roe, operating_margin, market_cap, book_value, updated_at
          FROM ticker_metric_cache WHERE ticker = $1`,
-        [ticker]
+        [key]
       );
       if (res.rows.length === 0) return null;
       const row = res.rows[0];
       // 30일 이상 된 캐시는 무효화
       const ageDays = (Date.now() - new Date(row.updated_at).getTime()) / (1000 * 60 * 60 * 24);
       if (ageDays > 30) return null;
-      console.log(`[metric-cache] HIT for ${ticker} (${Math.round(ageDays)}d old)`);
+      console.log(`[metric-cache] HIT for ${key} (${Math.round(ageDays)}d old)`);
       return {
         pbr: row.pbr ?? null,
         per_trailing: row.per_trailing ?? null,
@@ -57,6 +61,9 @@ async function readMetricCache(ticker: string): Promise<CachedMetrics | null> {
 }
 
 export async function writeMetricCache(ticker: string, metrics: Partial<CachedMetrics>): Promise<void> {
+  // 저장 키도 표준형으로 통일 — 읽는 쪽과 어긋나면 캐시가 영원히 미적중이 된다.
+  const key = normalizeTicker(ticker);
+  if (!key) return;
   try {
     const client = await pool.connect();
     try {
@@ -74,7 +81,7 @@ export async function writeMetricCache(ticker: string, metrics: Partial<CachedMe
            book_value      = COALESCE($8, ticker_metric_cache.book_value),
            updated_at      = NOW()`,
         [
-          ticker,
+          key,
           metrics.pbr ?? null,
           metrics.per_trailing ?? null,
           metrics.ev_ebitda ?? null,
@@ -84,7 +91,7 @@ export async function writeMetricCache(ticker: string, metrics: Partial<CachedMe
           metrics.book_value ?? null,
         ]
       );
-      console.log(`[metric-cache] WRITE for ${ticker}: pbr=${metrics.pbr}`);
+      console.log(`[metric-cache] WRITE for ${key}: pbr=${metrics.pbr}`);
     } finally {
       client.release();
     }

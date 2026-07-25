@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, varchar } from "drizzle-orm/pg-core";
 
 export const userCreditsTable = pgTable("user_credits", {
   id: serial("id").primaryKey(),
@@ -9,12 +9,19 @@ export const userCreditsTable = pgTable("user_credits", {
   bonusCredits: integer("bonus_credits").notNull().default(0),
   referralCode: text("referral_code").unique(),
   totalAnalyses: integer("total_analyses").notNull().default(0),
+  tier: varchar("tier").notNull().default("free"),
+  adminMemo: text("admin_memo").notNull().default(""),
+  displayName: text("display_name"),
+  email: text("email"),
+  lastLoginAt: timestamp("last_login_at"),
+  sharePendingAnalysisId: integer("share_pending_analysis_id"),
+  sharePendingAt: timestamp("share_pending_at", { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const referralUsesTable = pgTable("referral_uses", {
   id: serial("id").primaryKey(),
-  referralCode: text("referral_code").notNull(),
+  referralCode: text("referral_code").notNull().references(() => userCreditsTable.referralCode),
   refereeId: text("referee_id").unique().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

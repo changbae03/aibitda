@@ -4,6 +4,26 @@ packages:
   - lib/integrations/*
   - scripts
 
+# 빌드 스크립트 실행 허용 목록.
+# allowBuilds는 pnpm 11 형식, onlyBuiltDependencies는 그 이전 형식이다.
+# 로컬(pnpm 11)과 Replit(버전 불명)이 서로 다른 pnpm을 쓰므로 둘 다 남겨 둔다.
+# 하나만 두면 다른 쪽에서 esbuild 설치가 건너뛰어져 빌드가 실패한다.
+allowBuilds:
+  '@clerk/shared': false
+  '@swc/core': true
+  browser-tabs-lock: false
+  core-js: false
+  esbuild: true
+  msw: true
+  protobufjs: false
+  unrs-resolver: true
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild
+  - msw
+  - unrs-resolver
+
 autoInstallPeers: false
 
 catalog:
@@ -31,12 +51,6 @@ catalog:
 
 minimumReleaseAge: 1440
 
-onlyBuiltDependencies:
-  - '@swc/core'
-  - esbuild
-  - msw
-  - unrs-resolver
-
 overrides:
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
@@ -50,7 +64,6 @@ overrides:
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-x64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-android-arm64': '-'
-  '@tailwindcss/oxide>@tailwindcss/oxide-darwin-arm64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-darwin-x64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-freebsd-x64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-arm-gnueabihf': '-'
@@ -66,7 +79,6 @@ overrides:
   esbuild>@esbuild/android-arm: '-'
   esbuild>@esbuild/android-arm64: '-'
   esbuild>@esbuild/android-x64: '-'
-  esbuild>@esbuild/darwin-arm64: '-'
   esbuild>@esbuild/darwin-x64: '-'
   esbuild>@esbuild/freebsd-arm64: '-'
   esbuild>@esbuild/freebsd-x64: '-'
@@ -91,7 +103,6 @@ overrides:
   fast-uri@<=3.1.1: '>=3.1.2'
   ip-address@<=10.1.0: '>=10.1.1'
   lightningcss>lightningcss-android-arm64: '-'
-  lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
   lightningcss>lightningcss-freebsd-x64: '-'
   lightningcss>lightningcss-linux-arm-gnueabihf: '-'
@@ -109,7 +120,6 @@ overrides:
   protobufjs: '>=7.5.5'
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
-  rollup>@rollup/rollup-darwin-arm64: '-'
   rollup>@rollup/rollup-darwin-x64: '-'
   rollup>@rollup/rollup-freebsd-arm64: '-'
   rollup>@rollup/rollup-freebsd-x64: '-'
