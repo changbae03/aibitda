@@ -109,6 +109,17 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 **두 테이블의 실제 병합은 호스팅 이관 이후로 미뤄져 있다.** 지금 병합하면 옛 코드로
 돌고 있는 운영 서버가 멈춘다.
 
+### 분석 결과의 구조화 저장
+
+AI는 `relative_valuation` 단계에서 두 JSON 블록을 내보낸다 — `FINAL_VALUATION_DATA`
+(시나리오별 목표가·절대/상대 평가)와 `SEGMENT_FORECAST_DATA`(부문별 실적 전망).
+이를 `analysis_valuations` / `analysis_segment_forecasts`에 저장한다.
+파싱은 `artifacts/api-server/src/lib/analysis/valuation-extract.ts`,
+저장은 같은 폴더의 `valuation-store.ts`, 훅은 `pipeline.ts`의 스텝 저장 직후.
+
+**프롬프트에서 이 블록들의 형식을 바꾸면 파서가 조용히 빈손이 된다.**
+`valuation-extract.test.ts`가 실제 분석 본문을 픽스처로 쓰고 있으니 함께 갱신할 것.
+
 ### 알려진 과제 (종목 DB 기초공사)
 
 해결됨: 티커 표준화 관문(`lib/shared/ticker.ts`), 지표 캐시 적중률 0% 수리,
