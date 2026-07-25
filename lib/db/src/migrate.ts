@@ -456,14 +456,22 @@ export async function runMigrations() {
         IF EXISTS (SELECT 1 FROM information_schema.tables
                    WHERE table_schema='public' AND table_name='ticker_metric_cache') THEN
 
-          DELETE FROM ticker_metric_cache old
-          WHERE old.ticker ~ '\\.(KS|KQ)$'
-            AND EXISTS (
-              SELECT 1 FROM ticker_metric_cache cur
-              WHERE cur.ticker = regexp_replace(old.ticker, '\\.(KS|KQ)$', '')
-                AND cur.updated_at >= old.updated_at
-            );
+          -- 같은 종목이 표준형·접미사형 두 행으로 있으면 오래된 쪽을 버린다.
+          -- 어느 쪽이 최신인지 모르므로 양방향을 모두 처리해야 한다. 한쪽만 지우면
+          -- 이어지는 이름 변경에서 기본키가 충돌해 마이그레이션 전체가 실패한다.
+          DELETE FROM ticker_metric_cache a
+           USING ticker_metric_cache b
+           WHERE a.ticker ~ '\\.(KS|KQ)$'
+             AND b.ticker = regexp_replace(a.ticker, '\\.(KS|KQ)$', '')
+             AND a.updated_at <= b.updated_at;   -- 접미사형이 더 오래됨
 
+          DELETE FROM ticker_metric_cache b
+           USING ticker_metric_cache a
+           WHERE a.ticker ~ '\\.(KS|KQ)$'
+             AND b.ticker = regexp_replace(a.ticker, '\\.(KS|KQ)$', '')
+             AND a.updated_at > b.updated_at;    -- 접미사형이 더 최신
+
+          -- 짝이 없어진 접미사형만 남았으므로 이제 안전하게 이름을 정리한다.
           UPDATE ticker_metric_cache
           SET ticker = regexp_replace(ticker, '\\.(KS|KQ)$', '')
           WHERE ticker ~ '\\.(KS|KQ)$';
