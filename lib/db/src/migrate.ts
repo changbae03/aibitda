@@ -408,26 +408,11 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS sector_benchmarks JSONB;
     `);
 
-    // ticker_financials 테이블 (DART 시계열 재무 데이터)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS ticker_financials (
-        id          SERIAL PRIMARY KEY,
-        ticker      TEXT NOT NULL,
-        bsns_year   TEXT NOT NULL,
-        reprt_code  TEXT NOT NULL,
-        fs_type     TEXT NOT NULL,
-        account_nm  TEXT NOT NULL,
-        thstrm_amount  BIGINT,
-        frmtrm_amount  BIGINT,
-        bfefrmtrm_amount BIGINT,
-        thstrm_add_amount BIGINT,
-        currency    TEXT DEFAULT 'KRW',
-        fetched_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-        UNIQUE (ticker, bsns_year, reprt_code, fs_type, account_nm)
-      );
-      CREATE INDEX IF NOT EXISTS idx_ticker_financials_ticker
-        ON ticker_financials (ticker, bsns_year DESC);
-    `);
+    // ticker_financials는 여기서 만들지 않는다.
+    // 소유자: artifacts/api-server/src/lib/dart-store.ts (ensureTable)
+    // 과거 이 파일에도 account_nm 기반의 다른 정의가 있었으나, 실제 코드가 쓰는 모양은
+    // dart-store 쪽(revenue/operating_income 등 + UNIQUE 4컬럼)이다. 두 정의가 공존하면
+    // 새 DB에서 account_nm NOT NULL 때문에 INSERT가 실패하므로 정의를 한 곳으로 모았다.
 
     // ── 성능 인덱스 ─────────────────────────────────────────────────────────
     await client.query(`

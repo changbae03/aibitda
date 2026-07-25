@@ -33,21 +33,28 @@ export const tickerMetricCacheTable = pgTable("ticker_metric_cache", {
 });
 
 // DART 시계열 재무 데이터
+// 이 테이블의 DDL 소유자는 artifacts/api-server/src/lib/dart-store.ts (ensureTable)다.
+// 아래 정의는 그 모양의 미러이며, 실 DB 대조는 아직 못 했다(로컬에 DATABASE_URL 없음).
 export const tickerFinancialsTable = pgTable("ticker_financials", {
   id: serial("id").primaryKey(),
-  ticker: text("ticker").notNull(),
-  bsnsYear: text("bsns_year").notNull(),
-  reprtCode: text("reprt_code").notNull(),
-  fsType: text("fs_type").notNull(),
-  accountNm: text("account_nm").notNull(),
-  thstrmAmount: bigint("thstrm_amount", { mode: "number" }),
-  frmtrmAmount: bigint("frmtrm_amount", { mode: "number" }),
-  bfefrmtrmAmount: bigint("bfefrmtrm_amount", { mode: "number" }),
-  thstrmAddAmount: bigint("thstrm_add_amount", { mode: "number" }),
-  currency: text("currency").default("KRW"),
-  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow().notNull(),
+  ticker: varchar("ticker", { length: 20 }).notNull(),
+  corpCode: varchar("corp_code", { length: 20 }).notNull().default(""),
+  bsnsYear: integer("bsns_year").notNull(),
+  reprtCode: varchar("reprt_code", { length: 5 }).notNull(),
+  periodLabel: varchar("period_label", { length: 16 }).notNull().default(""),
+  fsType: varchar("fs_type", { length: 3 }).notNull(),
+  revenue: bigint("revenue", { mode: "number" }),
+  operatingIncome: bigint("operating_income", { mode: "number" }),
+  netIncome: bigint("net_income", { mode: "number" }),
+  totalAssets: bigint("total_assets", { mode: "number" }),
+  equity: bigint("equity", { mode: "number" }),
+  cash: bigint("cash", { mode: "number" }),
+  totalDebt: bigint("total_debt", { mode: "number" }),
+  eps: bigint("eps", { mode: "number" }),
+  bps: bigint("bps", { mode: "number" }),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow(),
 }, (t) => [
-  unique("ticker_financials_ticker_bsns_year_reprt_code_fs_type_accou_key").on(t.ticker, t.bsnsYear, t.reprtCode, t.fsType, t.accountNm),
+  unique("ticker_financials_ticker_bsns_year_reprt_code_fs_type_key").on(t.ticker, t.bsnsYear, t.reprtCode, t.fsType),
   index("idx_ticker_financials_ticker").on(t.ticker, t.bsnsYear.desc()),
 ]);
 
