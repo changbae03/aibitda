@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, timestamp, varchar, numeric, bigint, date, boolean, uniqueIndex, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, pgView, serial, text, integer, real, timestamp, varchar, numeric, bigint, date, boolean, uniqueIndex, index, unique } from "drizzle-orm/pg-core";
 
 // KRX 업종 피어 데이터 (밸류에이션 비교용 스냅샷)
 export const krxPeerDataTable = pgTable("krx_peer_data", {
@@ -125,6 +125,37 @@ export const usStocksTable = pgTable("us_stocks", {
   index("idx_us_stocks_sector").on(t.sector),
   index("idx_us_stocks_exchange").on(t.exchange),
 ]);
+
+// ─── 종목 통합 조회 창구 ──────────────────────────────────────────────────────
+// 실제 정의는 lib/db/src/migrate.ts에 있다(.existing()은 "이미 있는 뷰를 쓰겠다"는 선언).
+// 조회는 이 뷰로, 저장은 여전히 krx_stocks / us_stocks로 한다.
+// 두 테이블의 실제 병합은 호스팅 이관 후로 미뤄져 있다 — migrate.ts의 주석 참고.
+export const stocksView = pgView("stocks", {
+  ticker: text("ticker").notNull(),
+  market: text("market").notNull(),
+  name: text("name").notNull(),
+  exchange: text("exchange"),
+  sector: text("sector"),
+  industry: text("industry"),
+  marketCap: bigint("market_cap", { mode: "number" }),
+  currentPrice: real("current_price"),
+  per: real("per"),
+  pbr: real("pbr"),
+  roe: real("roe"),
+  opm: real("opm"),
+  revGrowth: real("rev_growth"),
+  revenue: bigint("revenue", { mode: "number" }),
+  netIncome: bigint("net_income", { mode: "number" }),
+  sharesOut: bigint("shares_out", { mode: "number" }),
+  beta: real("beta"),
+  week52High: real("week52_high"),
+  week52Low: real("week52_low"),
+  dataFetched: boolean("data_fetched"),
+  fetchError: text("fetch_error"),
+  lastUpdated: timestamp("last_updated", { withTimezone: true }),
+}).existing();
+
+export type Stock = typeof stocksView.$inferSelect;
 
 export type KrxPeerData = typeof krxPeerDataTable.$inferSelect;
 export type TickerMetricCache = typeof tickerMetricCacheTable.$inferSelect;

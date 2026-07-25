@@ -471,6 +471,41 @@ export async function runMigrations() {
       END $$;
     `);
 
+    // ── 종목 통합 조회 창구 ──────────────────────────────────────────────────
+    // 종목 마스터는 시장별로 krx_stocks / us_stocks로 나뉘어 있고 컬럼 구성은
+    // 사실상 같다(공통 21개, 타입 전부 일치). 이름표만 code / ticker로 다르다.
+    //
+    // 두 테이블을 실제로 합치지 않고 뷰만 얹는 이유:
+    // 운영 서버가 아직 옛 코드로 돌고 있어 krx_stocks·us_stocks를 직접 조회한다.
+    // 지금 테이블을 병합하면 그 서버가 즉시 멈춘다. 뷰는 더하기만 하는 변경이라
+    // 옛 코드는 그대로 동작하고 새 코드는 창구 하나만 보면 된다.
+    // 실제 병합은 배포를 통제할 수 있게 된 뒤(호스팅 이관 후)에 한다.
+    //
+    // ticker는 양쪽 모두 표준형(접미사 없는 원형)이다 — lib/shared/ticker.ts 참고.
+    // 야후 호출용 symbol(005930.KS)은 저장값이 아니라 파생값이므로 뷰에 넣지 않는다.
+    await client.query(`
+      CREATE OR REPLACE VIEW stocks AS
+        SELECT
+          k.code          AS ticker,
+          'KR'::text      AS market,
+          k.name, k.exchange, k.sector, k.industry,
+          k.market_cap, k.current_price, k.per, k.pbr, k.roe, k.opm,
+          k.rev_growth, k.revenue, k.net_income, k.shares_out, k.beta,
+          k.week52_high, k.week52_low,
+          k.data_fetched, k.fetch_error, k.last_updated
+        FROM krx_stocks k
+        UNION ALL
+        SELECT
+          u.ticker        AS ticker,
+          'US'::text      AS market,
+          u.name, u.exchange, u.sector, u.industry,
+          u.market_cap, u.current_price, u.per, u.pbr, u.roe, u.opm,
+          u.rev_growth, u.revenue, u.net_income, u.shares_out, u.beta,
+          u.week52_high, u.week52_low,
+          u.data_fetched, u.fetch_error, u.last_updated
+        FROM us_stocks u
+    `);
+
     // ── 성능 인덱스 ─────────────────────────────────────────────────────────
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_analyses_user_id_created_at
