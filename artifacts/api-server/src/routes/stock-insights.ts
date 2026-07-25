@@ -388,11 +388,10 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
     const krxMcapMap = new Map<string, number>();
     if (koreanPeerCodes.length > 0) {
       try {
+        // 종목 마스터에서 조회 — 예전에는 krx_peer_data를 봤으나 0행이라 늘 빈 맵이었다
         const krxRes = await pool.query<{ code: string; mcap: string }>(
-          `SELECT code, mcap FROM krx_peer_data
-           WHERE code = ANY($1)
-             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
-             AND mcap IS NOT NULL`,
+          `SELECT ticker AS code, market_cap AS mcap FROM stocks
+           WHERE market = 'KR' AND ticker = ANY($1) AND market_cap IS NOT NULL`,
           [koreanPeerCodes]
         );
         for (const row of krxRes.rows) {
