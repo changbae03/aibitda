@@ -32,8 +32,12 @@ cp .env.example .env   # 그다음 .env에 실제 값을 채운다
 pnpm --filter @workspace/api-server run dev      # API 서버 :8080
 pnpm --filter @workspace/hedge-fund-ai run dev   # 웹 :22315 (/api는 8080으로 프록시)
 pnpm --filter @workspace/mockup-sandbox run dev  # 디자인 프리뷰
-pnpm --filter @workspace/aibida-mobile run dev   # 모바일 :23339
+pnpm --filter @workspace/aibida-mobile run dev:local   # 모바일 :23339 (맥에서는 dev:local)
 ```
+
+모바일만 스크립트가 둘이다. `dev`는 **Replit 전용**(Replit 프리뷰 주소·프록시 환경변수를 넘김)이고
+`artifacts/aibida-mobile/.replit-artifact/artifact.toml`이 그것을 호출한다. 맥에서는 `dev:local`을 쓴다.
+**`dev`를 로컬용으로 바꾸면 Replit 모바일 프리뷰가 크래시한다** — 실제로 한 번 그렇게 만들었다.
 
 dev 스크립트는 Node 24의 `--env-file-if-exists`로 루트 `.env`를 읽는다(dotenv 불필요).
 
