@@ -284,16 +284,31 @@ router.post("/", async (req, res) => {
       if (dartBalance) {
         const fmtKrw = (v: number | null) =>
           v == null ? "N/A" : `${(v / 1e8).toFixed(1)}억원`;
+        // 순차입금은 IFRS 표준 코드로 집계한 값을 쓴다. 한글 계정명 매칭은 회사마다
+        // 표기가 달라 누락이 잦았고(SK하이닉스는 유동·비유동 차입금이 둘 다 "차입금"),
+        // 그 결과 AI가 순부채를 자체 추정해 목표주가가 크게 어긋났다.
+        const nd = dartBalance.netDebt;
         let netDebtStr: string;
-        if (dartBalance.totalDebt != null && dartBalance.cash != null) {
+        let debtDetailStr: string;
+        if (nd) {
+          netDebtStr = nd.netDebt < 0
+            ? `${fmtKrw(-nd.netDebt)} (순현금 상태)  ← SOTP·DCF 주주가치 환산 시 반드시 이 값 사용. 자체 추정 금지.`
+            : `${fmtKrw(nd.netDebt)} (순부채 상태)  ← SOTP·DCF 주주가치 환산 시 반드시 이 값 사용. 자체 추정 금지.`;
+          debtDetailStr =
+            `이자부부채 합계: ${fmtKrw(nd.interestBearingDebt)}` +
+            (nd.debtItems.length
+              ? ` (${nd.debtItems.map((d) => `${d.name} ${fmtKrw(d.amount)}`).join(" + ")})`
+              : "");
+        } else if (dartBalance.totalDebt != null && dartBalance.cash != null) {
           const netDebt = dartBalance.totalDebt - dartBalance.cash;
           netDebtStr = netDebt < 0
             ? `${fmtKrw(-netDebt)} (순현금)  ← DCF 주주가치 환산 시 이 값 사용`
             : `${fmtKrw(netDebt)} (순부채)  ← DCF 주주가치 환산 시 이 값 사용`;
-        } else if (dartBalance.cash != null && dartBalance.totalDebt == null) {
-          netDebtStr = `금융부채 항목 미검출 (차입금·사채 계정이 DART 별도 항목으로 존재하지 않을 수 있음) — Yahoo Finance "[⚡ WACC·EBITDA 계산 핵심 데이터]" 섹션의 총부채(Total Debt) 수치로 보완하세요. 보완 후: 순현금 = 현금 ${fmtKrw(dartBalance.cash)} − Yahoo총부채`;
+          debtDetailStr = `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}`;
         } else {
-          netDebtStr = "N/A";
+          // 수집 실패를 "빚이 없다"로 오해하면 기업가치가 부풀려진다 — 명확히 구분해 알린다
+          netDebtStr = `산출 불가 (차입금 계정을 확보하지 못함). 무차입으로 단정하지 말고 "[⚡ WACC·EBITDA]" 섹션의 총부채로 보완하거나 N/A로 표기하세요.`;
+          debtDetailStr = `이자부부채: 확보 실패 ※ 0원이라는 뜻이 아님`;
         }
         const constructionLines: string[] = [];
         if (dartBalance.unbilledWork != null) {
@@ -307,9 +322,9 @@ router.post("/", async (req, res) => {
           `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
           `현금및현금성자산: ${fmtKrw(dartBalance.cash)}`,
           `자산총계: ${fmtKrw(dartBalance.totalAssets)}`,
-          `부채총계(DART전체): ${fmtKrw(dartBalance.totalLiab)}  ※ 매입채무·충당부채 등 영업부채 포함, 순현금 계산엔 금융부채만 사용`,
+          `부채총계(DART전체): ${fmtKrw(dartBalance.totalLiab)}  ※ 매입채무·충당부채 등 영업부채 포함, 순차입금 계산엔 이자부부채만 사용`,
           `자본총계: ${fmtKrw(dartBalance.equity)}`,
-          dartBalance.totalDebt != null ? `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}` : `금융부채: 개별 차입금·사채 항목 미검출 (무차입/소액 차입 가능성)`,
+          debtDetailStr,
           `순현금/순부채: ${netDebtStr}`,
           ...constructionLines,
         ].filter(Boolean).join("\n");

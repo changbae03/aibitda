@@ -74,7 +74,7 @@ async function ensureTable(): Promise<void> {
 //           ② system_cache DB (TTL 만료돼도 사용 — corp_code는 거의 변하지 않음) →
 //           ③ ticker_financials DB → ④ DART API 직접
 
-async function lookupCorpCode(stockCode: string): Promise<string | null> {
+export async function lookupCorpCode(stockCode: string): Promise<string | null> {
   const key = process.env["DART_API_KEY"];
   if (!key) return null;
 
