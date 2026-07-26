@@ -7,6 +7,7 @@
  * - 30일 캐시 유효 기간으로 API 호출 절약
  */
 
+import { isKoreanTicker } from "@workspace/shared";
 import { pool } from "@workspace/db";
 import { getCorpCodeFromCache } from "./dart-corp-cache.js";
 
@@ -295,7 +296,7 @@ async function upsertFinancial(
 export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<void> {
   const key = process.env["DART_API_KEY"];
   if (!key) return;
-  if (!/^\d{6}$/.test(stockCode)) return;
+  if (!isKoreanTicker(stockCode)) return;
 
   try {
     await ensureTable();
@@ -396,7 +397,7 @@ function opm(revenue: bigint | null, opIncome: bigint | null): string {
  * 데이터가 없으면 null 반환.
  */
 export async function getDartHistoricalContext(stockCode: string): Promise<string | null> {
-  if (!/^\d{6}$/.test(stockCode)) return null;
+  if (!isKoreanTicker(stockCode)) return null;
   try {
     await ensureTable();
     const r = await pool.query<{
@@ -621,7 +622,7 @@ export interface DartAnchorNumerics {
  * 데이터 없으면 null 반환.
  */
 export async function getDartAnchorNumerics(stockCode: string): Promise<DartAnchorNumerics | null> {
-  if (!/^\d{6}$/.test(stockCode)) return null;
+  if (!isKoreanTicker(stockCode)) return null;
   try {
     await ensureTable();
     const r = await pool.query<{

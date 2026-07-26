@@ -44,6 +44,33 @@ describe("시장 판별", () => {
     expect(detectMarket("NVDA")).toBe("US");
     expect(detectMarket("NTDOY")).toBe("US");
   });
+
+  /**
+   * KRX가 신규상장·스팩에 영문이 섞인 코드를 발급한다. 예전 규칙(6자리 전부 숫자)에서는
+   * 이런 종목 55개가 "미국"으로 판정돼 KIS·DART 조회가 통째로 막혀 있었다.
+   */
+  it("영문이 섞인 신규 종목코드도 한국", () => {
+    expect(isKoreanTicker("0004Y0"), "디비금융제14호스팩").toBe(true);
+    expect(isKoreanTicker("0126Z0"), "삼성에피스홀딩스").toBe(true);
+    expect(isKoreanTicker("0203K0"), "송우인포텍").toBe(true);
+    expect(detectMarket("0156T0")).toBe("KR");
+  });
+
+  /**
+   * 첫 글자를 숫자로 못박은 이유. 실제 데이터로 확인했다 —
+   * 미국 10,448종목 중 숫자로 시작하는 티커는 0개, 6글자 티커는 전부 하이픈 우선주다.
+   */
+  it("미국 티커를 한국으로 오인하지 않는다", () => {
+    expect(isKoreanTicker("GOOGL")).toBe(false);
+    expect(isKoreanTicker("ICRPA")).toBe(false);
+    expect(isKoreanTicker("ICR-PA")).toBe(false); // 6글자지만 하이픈
+    expect(isKoreanTicker("ABCDEF")).toBe(false); // 6글자지만 숫자로 시작하지 않음
+  });
+
+  it("자릿수가 어긋나면 한국이 아니다", () => {
+    expect(isKoreanTicker("00593")).toBe(false);   // 5자리
+    expect(isKoreanTicker("0059300")).toBe(false); // 7자리
+  });
 });
 
 describe("toYahooSymbol — 외부 호출 직전에만 쓰는 변환", () => {

@@ -7,6 +7,7 @@ import type { ValuationModel } from "./model-registry.js";
 
 export const RNPV_US: ValuationModel = {
   key: "rnpv_us",
+  reportFormat: "rnpv",
   label: "rNPV",
   rationale: `rNPV 기본 구조는 한국 바이오와 동일합니다. FDA 지정에 따른 PoS 보정이 의무입니다.`,
   absName: "rNPV Sum of Parts 주당가치",
@@ -25,6 +26,7 @@ Bull: 승인 + 조기 상업화 시나리오 = $__`,
 
 export const SOTP_BIGTECH: ValuationModel = {
   key: "sotp_bigtech",
+  reportFormat: "dcf",
   label: "Segment SOTP",
   rationale: `⛔ GAAP PER 단독 사용 금지 (주식보상비용(SBC)으로 왜곡).
 ⛔ 단일 EV/EBITDA 배수를 전체에 적용하는 것 금지 (사업부별 구조가 완전히 다름).`,
@@ -50,6 +52,7 @@ Bull: AI 신사업 개화 + 자사주 누적 효과 + 세그먼트 마진 확장
 
 export const REIT_US: ValuationModel = {
   key: "reit_us",
+  reportFormat: "pbDdm",
   label: "NAV+P/AFFO",
   rationale: `⛔ EPS·EV/EBITDA 기반 분석 금지 (D&A로 왜곡).
 ⛔ FFO 단독 사용 금지 — 반드시 AFFO(Adjusted FFO) 기준.
@@ -81,6 +84,7 @@ Bull: 금리 인하 + 서브섹터 수요 호조(AI 데이터센터 등) + NAV �
 
 export const TBV_ROTCE: ValuationModel = {
   key: "tbv_rotce",
+  reportFormat: "pbDdm",
   label: "P/TBVPS",
   rationale: `⛔ EV/EBITDA 금지 (이자비용이 영업비용 → EV 개념 부적합).
 ⛔ P/B(총장부가) 단독 사용 금지 → 굿윌·무형자산 제거 후 P/TBVPS 사용.
@@ -110,6 +114,7 @@ Bull: CCAR 초과자본 활용 대규모 자사주 + NIM 회복 + PCL 사이클 
 
 export const DEFENSE_US: ValuationModel = {
   key: "defense_us",
+  reportFormat: "dcf",
   label: "EV/EBITDA(Adj.)",
   rationale: `⛔ P/Book 의미 없음 (경쟁우위가 자산이 아닌 기술·인력·분류프로그램).
 ⛔ EAC 손실이 포함된 분기 EBITDA·EPS를 그대로 배수 적용 금지 → 정상화 필수.`,
@@ -134,6 +139,7 @@ Bull: 예산 증액(지정학 리스크 상승) + Backlog 신기록 + EAC 정상
 
 export const MLP: ValuationModel = {
   key: "mlp",
+  reportFormat: "dcf",
   label: "DCF per Unit",
   rationale: `⛔ EPS·PER 기반 분석 완전 금지 (법인세 없는 패스스루 구조라 순이익이 왜곡).
 ⛔ 단순 순이익 배당성향 계산 금지 (배분금은 DCF per Unit으로만 계산).`,
@@ -152,6 +158,7 @@ Fee-based Revenue 비중 __% (원자재 가격 노출도 판단)`,
 
 export const BDC: ValuationModel = {
   key: "bdc",
+  reportFormat: "pbDdm",
   label: "P/NAV+NII",
   rationale: `⛔ EV/EBITDA 적용 금지 (대출 포트폴리오 기업에 부적합).
 ⛔ 순이익·PER 단독 사용 금지 (NII Coverage가 핵심 지속가능성 지표).`,
@@ -173,6 +180,7 @@ Debt/Equity __x (1.0~1.5x 일반적, 2.0x 초과 위험)
 
 export const ROYALTY: ValuationModel = {
   key: "royalty",
+  reportFormat: "dcf",
   label: "스트림NPV+P/NAV",
   rationale: `⛔ 일반 광산사 EV/EBITDA 배수 직접 적용 금지 (로열티 구조는 2~3배 프리미엄).
 ⛔ CapEx·광산 운영비 가정 불필요 (Operator 귀속).`,

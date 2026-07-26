@@ -59,7 +59,18 @@ export interface ValuationModel {
   bands: string;
   /** 조율에 넣지 않고 별도로 확인만 하는 보조 지표. 예전 3-way의 세 번째 방법 */
   crossCheck?: string;
+  /**
+   * 보고서 본문 서식(표 양식)을 어느 것으로 쓸지. report-formats.ts가 이 값으로 하나만 고른다.
+   *
+   * 예전에는 네 서식이 모든 프롬프트에 전부 들어가고 "모델이 X인 경우 이 섹션만 작성"이라는
+   * 문장으로 AI가 알아서 고르게 했다. 삼성전자 프롬프트에 임상 rNPV 작성법 21k자가 함께
+   * 실려 있었다 — relative_valuation userPrompt의 54%였다.
+   */
+  reportFormat: ReportFormatKey;
 }
+
+/** 보고서 본문 서식 종류. 실제 서식 문자열은 report-formats.ts가 갖는다. */
+export type ReportFormatKey = "dcf" | "rnpv" | "evSales" | "pbDdm";
 
 /** 조율 절차 — 모든 모델이 같은 형식을 쓴다 */
 export function renderReconciliation(m: ValuationModel): string {

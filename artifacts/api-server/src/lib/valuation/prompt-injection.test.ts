@@ -11,6 +11,7 @@ import { buildPrompt } from "../ai-agents.js";
  */
 
 const MODEL_HEADER = /## ⚖️ 밸류에이션 모델: (.+)/g;
+const MODEL_HEADER_ONE = /## ⚖️ 밸류에이션 모델: (.+)/;
 
 function modelsIn(ticker: string, name: string, industry: string): string[] {
   const p = buildPrompt("relative_valuation", ticker, name, industry, null, []);
@@ -76,6 +77,74 @@ describe("업종별로 의도한 모델이 배정된다", () => {
 
   it.each(cases)("%s %s → %s", (ticker, name, industry, expected) => {
     expect(modelsIn(ticker, name, industry)[0]).toBe(expected);
+  });
+});
+
+describe("보고서 서식도 고른 모델 것만 들어간다", () => {
+  // 예전에는 DCF·rNPV·EV/Sales·Gordon P/B 네 벌(640줄)이 전부 들어가고 "모델이 X인
+  // 경우 이 섹션만 작성"이라는 문장으로 AI가 고르게 했다. 삼성전자 프롬프트에 임상
+  // 파이프라인 rNPV 작성법 21k자가 실려 relative_valuation userPrompt의 54%를 차지했다.
+  const FMT = {
+    dcf: "### [모델이 DCF (NOPAT/FCFF)인 경우",
+    rnpv: "### [모델이 Pipeline rNPV인 경우",
+    evSales: "### [모델이 EV/Sales인 경우",
+    pbDdm: "### [모델이 Gordon Growth P/B 또는 DDM인 경우",
+  };
+
+  function formatsIn(
+    ticker: string, name: string, industry: string, opm?: number | null,
+  ): string[] {
+    const p = buildPrompt(
+      "relative_valuation", ticker, name, industry, null, [], null, "ko", null, { opm },
+    );
+    const all = p.systemPrompt + p.userPrompt;
+    return Object.entries(FMT).filter(([, h]) => all.includes(h)).map(([k]) => k);
+  }
+
+  it("일반 사업회사는 rNPV·P/B 서식을 받지 않는다", () => {
+    // EV/Sales는 적자 성장기업 대비용이라 DCF와 짝으로 붙는다
+    expect(formatsIn("005930", "삼성전자", "Consumer Electronics", 42.7))
+      .toEqual(["dcf", "evSales"]);
+  });
+
+  it("금융은 P/B·DDM 서식 하나만 받는다", () => {
+    expect(formatsIn("105560", "KB금융", "Banks - Regional", 60.7)).toEqual(["pbDdm"]);
+  });
+
+  it("임상 바이오는 rNPV 서식 하나만 받는다", () => {
+    expect(formatsIn("217730", "강스템바이오텍", "Biotechnology", -567.6)).toEqual(["rnpv"]);
+  });
+});
+
+describe("한국 바이오는 접미사가 없어도 감지된다", () => {
+  /**
+   * 회귀 방지선. `needsKorBiotech`가 `ticker.includes(".KS")`로 한국을 판정하고 있었는데,
+   * 티커를 접미사 없는 표준형(217730)으로 통일한 뒤로 이 조건이 어떤 한국 종목에도
+   * 참이 되지 않았다. 그 결과 한국 바이오텍이 **하나도** rNPV를 받지 못했고
+   * 강스템바이오텍이 DCF, 코오롱티슈진이 SOTP로 갔다.
+   */
+  it("적자 임상 바이오텍은 rNPV", () => {
+    expect(modelsIn("217730", "강스템바이오텍", "Biotechnology")[0]).toBe("rNPV");
+    expect(modelsIn("078160", "메디포스트", "Biotechnology")[0]).toBe("rNPV");
+  });
+
+  /**
+   * 다만 rNPV는 "가치의 대부분이 아직 팔지 않은 파이프라인에 있는" 회사를 위한 방법이다.
+   * 이미 이익을 내는 CDMO·바이오시밀러에 쓰면 벌고 있는 돈을 통째로 빼고 임상
+   * 성공확률만 세게 된다.
+   */
+  it("흑자 바이오(CDMO·바이오시밀러)는 rNPV가 아니다", () => {
+    const p = (t: string, n: string, opm: number) =>
+      buildPrompt("relative_valuation", t, n, "Biotechnology", null, [], null, "ko", null, { opm });
+    for (const [t, n, opm] of [["207940", "삼성바이오로직스", 46.2], ["068270", "셀트리온", 28.1]] as const) {
+      const all = p(t, n, opm).systemPrompt + p(t, n, opm).userPrompt;
+      expect(all.match(MODEL_HEADER_ONE)?.[1]?.trim(), n).not.toBe("rNPV");
+    }
+  });
+
+  it("지표가 없으면 예전처럼 업종으로 판단한다", () => {
+    // 아직 수집되지 않은 종목에서 갑자기 동작이 달라지면 안 된다
+    expect(modelsIn("217730", "강스템바이오텍", "Biotechnology")[0]).toBe("rNPV");
   });
 });
 

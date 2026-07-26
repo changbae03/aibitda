@@ -26,6 +26,8 @@ async function getMl() {
 
 import { invalidateBriefCache, refreshBriefInBackground, fetchMarketNews, refreshUsBriefInBackground } from "../routes/market-analysis.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
+import { refreshSectorBands } from "./valuation/sector-bands.js";
+import { backfillKisIndustry } from "./kis-industry-backfill.js";
 import { pool } from "@workspace/db";
 import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
 import { triggerSignalsRefresh } from "../routes/themes.js";
@@ -183,6 +185,30 @@ function checkAndRun() {
         if (r.sectorsUpdated > 0) await autoUpdateAllSectorPriors();
       })
       .catch(e => console.error("[scheduler] 일별 재보정 실패:", e?.message));
+
+    // KIS 업종분류 채우기 → 업종 배수 밴드 재집계.
+    //
+    // 순서가 중요하다. 밴드는 classifySector로 종목을 묶는데 그 판정이 KIS 분류를 보므로,
+    // 분류를 먼저 채우고 집계해야 한다. 반대로 하면 하루 늦은 분류로 묶인다.
+    //
+    // backfill은 kis_industry가 비어 있는 종목만 건드리므로, 다 채워진 날은 즉시 끝난다.
+    // 신규 상장분만 매일 조금씩 흡수하는 자가 치유 장치다.
+    (async () => {
+      try {
+        const b = await backfillKisIndustry();
+        if (b.filled > 0) {
+          console.log(`[scheduler] KIS 업종 채움 — ${b.filled}개 (재판정 ${b.reclassified}개)`);
+        }
+      } catch (e) {
+        console.error("[scheduler] KIS 업종 채우기 실패:", (e as Error)?.message);
+      }
+      try {
+        const r = await refreshSectorBands();
+        console.log(`[scheduler] 업종 배수 밴드 갱신 — ${r.sectors}개 섹터 / ${r.stocks}종목`);
+      } catch (e) {
+        console.error("[scheduler] 업종 배수 밴드 갱신 실패:", (e as Error)?.message);
+      }
+    })();
   }
 
   // ── 오늘 급등 종목 수집 (피드백 루프): 평일 16:40 KST = 07:40 UTC ──────────

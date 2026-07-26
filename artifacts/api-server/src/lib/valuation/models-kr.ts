@@ -15,6 +15,7 @@ import type { ValuationModel } from "./model-registry.js";
 
 export const DCF: ValuationModel = {
   key: "dcf",
+  reportFormat: "dcf",
   label: "DCF",
   absName: "DCF 내재가치",
   relName: "피어 멀티플 목표가",
@@ -30,6 +31,7 @@ Bull: 핵심 촉매 실현 시나리오 = __(현지통화)`,
 
 export const RNPV_KR: ValuationModel = {
   key: "rnpv_kr",
+  reportFormat: "rnpv",
   label: "rNPV",
   rationale: `⛔ 영업적자 임상단계 바이오텍은 DCF 사용 금지 — rNPV(위험조정 순현재가치)만 사용합니다.
 ⛔ 한국 허가 완료 제품에 임상 PoS를 다시 적용하는 이중할인 금지.`,
@@ -54,6 +56,7 @@ Bull: 급여 등재·기술수출 등 촉매 실현 시나리오 = __(현지통�
 
 export const SOTP: ValuationModel = {
   key: "sotp",
+  reportFormat: "dcf",
   label: "SOTP",
   rationale: `SOTP는 **절대가치 산출 방법**입니다. 복합기업은 사업부별 특성이 달라 단일 배수로는
 평가할 수 없으므로 SOTP를 절대가치의 Lead로 쓰지만, 상대가치(피어)와 조율하는 절차는
@@ -84,6 +87,7 @@ export const SOTP: ValuationModel = {
 
 export const REIT_KR: ValuationModel = {
   key: "reit_kr",
+  reportFormat: "pbDdm",
   label: "NAV+P/FFO",
   rationale: `⛔ 리츠는 일반 DCF 단독 목표주가 사용 금지 (D&A가 비현금 → 순이익·EBITDA 왜곡).`,
   absName: "NAV 기반 목표주가",
@@ -110,6 +114,7 @@ Bull: Cap Rate −0.5%p 적용 NAV × (1 + 적정 P/NAV프리미엄) = __원`,
 
 export const PB_ROE: ValuationModel = {
   key: "pb_roe",
+  reportFormat: "pbDdm",
   label: "P/B-ROE",
   rationale: `⛔ EV/EBITDA 사용 금지 (이자비용이 영업비용 → EBITDA 개념 무의미).`,
   absName: "Justified P/B × BPS",
@@ -136,6 +141,7 @@ Bull: ROE 개선 시나리오 P/B __x × BPS = __원`,
 
 export const RESOURCE_NAV: ValuationModel = {
   key: "resource_nav",
+  reportFormat: "dcf",
   label: "자산NAV",
   rationale: `⛔ 스팟 원자재 가격 기반 단순 EV/EBITDA 사용 금지 (사이클 왜곡).`,
   absName: "자산 NAV 기반 목표주가",
@@ -157,6 +163,7 @@ Bull: 장기가격 +15% + P/NAV 프리미엄 확대 = __원`,
 
 export const RNAV_PBV: ValuationModel = {
   key: "rnav_pbv",
+  reportFormat: "pbDdm",
   label: "RNAV+P/BV",
   rationale: `⛔ RNAV 산출은 컨텍스트에 분양 예정 사업의 현장명·세대수·분양가가 명시된 경우에만 합니다.
    해당 데이터가 없으면 RNAV를 건너뛰고 P/BV를 절대가치로 사용하세요.
@@ -183,6 +190,7 @@ Bull: 분양 성적률 정상 + 토지가치 추가 상승 = __원`,
 
 export const RAB: ValuationModel = {
   key: "rab",
+  reportFormat: "dcf",
   label: "EV/EBITDA+배당",
   rationale: `⛔ 단기 PER 사용 금지 (연료비 급등 시 일시 대규모 손실로 왜곡).`,
   absName: "정상화 EV/EBITDA 목표주가",
@@ -206,6 +214,7 @@ Bull: 요금 인상 승인 + 연료비 정상화 = __원`,
 
 export const EV_OPFCF: ValuationModel = {
   key: "ev_opfcf",
+  reportFormat: "dcf",
   label: "EV/EBITDA+EV/OpFCF",
   rationale: `⛔ 높은 D&A로 PER 단독 사용 금지.`,
   absName: "EV/OpFCF 목표주가",

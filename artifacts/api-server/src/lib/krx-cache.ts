@@ -1,3 +1,5 @@
+import { isKoreanTicker } from "@workspace/shared";
+
 export interface StockEntry {
   name: string;
   code: string;
@@ -76,7 +78,7 @@ export function lookupSymbolByName(name: string): string | null {
 export function correctKoreanTicker(ticker: string): string {
   if (cache.length === 0) return ticker;
   const code = ticker.replace(/\.(KS|KQ)$/i, "");
-  if (!/^\d{6}$/.test(code)) return ticker; // 한국 주식 아님
+  if (!isKoreanTicker(code)) return ticker; // 한국 주식 아님
   const entry = cache.find(e => e.code === code);
   if (!entry) return ticker; // 캐시에 없으면 원본 유지
   return entry.symbol; // e.g. "079550.KS" (올바른 거래소)
