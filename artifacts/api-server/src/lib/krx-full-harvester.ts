@@ -16,6 +16,7 @@ import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
 import { loadKRXList } from "./krx-cache.js";
 import { classifySector } from "../routes/performance.js";
 import { getFmpValuation } from "./fmp-client.js";
+import { fetchKISStockNames } from "./kis-client.js";
 import { fetchKISStockQuote } from "./kis-client.js";
 import { Semaphore } from "./analysis/semaphore.js";
 
@@ -197,11 +198,17 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
 
     await Promise.all(
       chunk.map(async ({ code, symbol }) => {
-        const metrics = await fetchMetrics(symbol);
+        // 지표와 종목약명을 함께 받는다. 이름 조회가 실패해도 지표 수집은 계속한다.
+        const [metrics, names] = await Promise.all([
+          fetchMetrics(symbol),
+          fetchKISStockNames(code).catch(() => null),
+        ]);
+        const shortName = names?.shortName ?? null;
 
         if (metrics) {
           await pool.query(
             `UPDATE krx_stocks SET
+               name          = COALESCE($17, name),
                sector        = $2,
                industry      = $3,
                market_cap    = $4,
@@ -238,6 +245,9 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
               metrics.beta,
               metrics.week52_high,
               metrics.week52_low,
+              // 종목약명(현대차)이 KRX 법인명(현대자동차)보다 거래 화면 표기에 맞다.
+              // 못 받아오면 COALESCE가 기존 이름을 지킨다.
+              shortName,
             ]
           );
           succeeded++;

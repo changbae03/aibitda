@@ -275,14 +275,31 @@ function _setEngNameCache(key: string, value: string | null) {
   _engNameCache.set(key, value);
 }
 
+export interface KISStockNames {
+  /** 종목약명 — 거래 화면에 나오는 이름. "현대차" (법인명 "현대자동차보통주"와 다름) */
+  shortName: string | null;
+  /** 영문 상품명 */
+  engName: string | null;
+  /** 한국 표준산업분류 — "자동차용 엔진 및 자동차 제조업" */
+  stdIndustry: string | null;
+  /** KRX 업종 중분류 — "운수장비", "전기,전자" */
+  krxSector: string | null;
+}
+
+const _namesCache = new Map<string, KISStockNames | null>();
+
 /**
- * KIS search-stock-info → prdt_eng_name (영문 상품명) 조회
+ * KIS search-stock-info → 종목 이름·업종 일괄 조회.
  * TR_ID: CTPF1002R, PRDT_TYPE_CD: 300 (주식)
+ *
+ * 종목명 출처가 중요하다. KRX 상장법인 목록(kind.krx.co.kr)은 **법인 등록명**을 주므로
+ * 005380이 "현대자동차"로 나온다. 하지만 거래 화면·시세표에 쓰이는 정식 표기는
+ * **종목약명** "현대차"다. 그 값이 prdt_abrv_name이다.
  */
-export async function fetchKISEngName(code: string): Promise<string | null> {
+export async function fetchKISStockNames(code: string): Promise<KISStockNames | null> {
   const normalized = code.replace(/\.(KS|KQ)$/i, "");
   if (!/^\d{6}$/.test(normalized)) return null;
-  if (_engNameCache.has(normalized)) return _engNameCache.get(normalized) ?? null;
+  if (_namesCache.has(normalized)) return _namesCache.get(normalized) ?? null;
 
   try {
     const token = await getAccessToken();
@@ -301,12 +318,45 @@ export async function fetchKISEngName(code: string): Promise<string | null> {
       },
     });
 
-    if (!res.ok) { _setEngNameCache(normalized, null); return null; }
-
+    if (!res.ok) { _namesCache.set(normalized, null); return null; }
     const json = await res.json();
-    if (json.rt_cd !== "0") { _setEngNameCache(normalized, null); return null; }
+    if (json.rt_cd !== "0") { _namesCache.set(normalized, null); return null; }
 
-    const raw = json.output?.prdt_eng_name?.trim() || null;
+    const o = json.output ?? {};
+    const pick = (v: unknown) => {
+      const s = typeof v === "string" ? v.trim() : "";
+      return s || null;
+    };
+    const names: KISStockNames = {
+      shortName: pick(o.prdt_abrv_name),
+      engName: pick(o.prdt_eng_name),
+      stdIndustry: pick(o.std_idst_clsf_cd_name),
+      krxSector: pick(o.idx_bztp_mcls_cd_name),
+    };
+
+    if (_namesCache.size >= ENG_NAME_CACHE_MAX && !_namesCache.has(normalized)) {
+      _namesCache.delete(_namesCache.keys().next().value!);
+    }
+    _namesCache.set(normalized, names);
+    return names;
+  } catch {
+    _namesCache.set(normalized, null);
+    return null;
+  }
+}
+
+/**
+ * KIS search-stock-info → prdt_eng_name (영문 상품명) 조회
+ * fetchKISStockNames와 같은 엔드포인트라 그쪽 캐시를 재사용한다.
+ */
+export async function fetchKISEngName(code: string): Promise<string | null> {
+  const normalized = code.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(normalized)) return null;
+  if (_engNameCache.has(normalized)) return _engNameCache.get(normalized) ?? null;
+
+  try {
+    const names = await fetchKISStockNames(normalized);
+    const raw = names?.engName ?? null;
     _setEngNameCache(normalized, raw);
     return raw;
   } catch {
