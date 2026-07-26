@@ -149,6 +149,12 @@ KIS `search-stock-info`의 `prdt_abrv_name`이 그 값이다.
 예전에 `Auto Manufacturers`가 안 걸려 현대차·기아가 미분류였던 게 그 사례다.
 `sector-taxonomy.test.ts`가 실제 오분류 사례를 회귀 테스트로 고정하고 있다.
 
+한국 종목은 KIS 표준산업분류(`krx_stocks.kis_industry`)를 보조로 쓴다. 다만
+**`KIS_OVERRIDE`에 함부로 추가하지 말 것** — KIS는 법인 등록 업종이라 실제 사업과
+어긋난다. 넓게 적용해봤더니 두산(지주)·한화시스템(방산전자)이 전자부품으로
+잘못 옮겨졌다. 현재 덮어쓰는 건 조선뿐이고, 나머지는 야후가 못 잡았을 때만 메운다.
+추가 전에 반드시 실제 종목으로 드라이런할 것.
+
 피어 비교에 쓸 수 있는지는 `isComparableSector()`로 판단한다(`_OTHER`·`_SHELL` 제외).
 SPAC(`Shell Companies`)은 사업 실체가 없어 멀티플 비교가 무의미하다.
 
