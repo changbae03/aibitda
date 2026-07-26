@@ -24,7 +24,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 import { rawQuery, dbCacheGet, dbCacheSet } from "./store.js";
 import { yahooFinance, fetchNaverFinanceData, naverFmt, fmtNum, pct, opm, NAVER_HEADERS } from "./financial-context.js";
 import { getDartCompetitorTickerPeers, extractCompanyNamesFromDart } from "./korea-context.js";

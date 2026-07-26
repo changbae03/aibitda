@@ -49,50 +49,15 @@ async function fetchCurrentPrice(ticker: string): Promise<number | null> {
   }
 }
 
-export function classifySector(industry: string, market: "KR" | "US"): string {
-  const ind = (industry ?? "").toLowerCase();
-  if (market === "KR") {
-    // 바이오·제약 (semiconductor equipment보다 먼저 체크해야 "bio" 포함 오류 방지)
-    if (ind.includes("biotech") || ind.includes("pharma") || ind.includes("바이오") || ind.includes("제약") || ind.includes("drug")) return "KR_BIOTECH";
-    // 반도체 장비·소재 (순수 반도체보다 먼저 체크)
-    if (ind.includes("semiconductor equipment") || ind.includes("semiconductor material") || ind.includes("반도체 장비") || ind.includes("반도체 소재")) return "KR_SEMICONDUCTOR_EQ";
-    // 반도체·메모리
-    if (ind.includes("반도체") || ind.includes("semiconductor") || ind.includes("memory") || ind.includes("foundry")) return "KR_SEMICONDUCTOR";
-    // 금융
-    if (ind.includes("금융") || ind.includes("은행") || ind.includes("보험") || ind.includes("증권") || ind.includes("financial") || ind.includes("bank") || ind.includes("insurance") || ind.includes("capital market")) return "KR_FINANCIAL";
-    // 건설·건자재
-    if (ind.includes("건설") || ind.includes("건자재") || ind.includes("construc") || ind.includes("engineering & construction")) return "KR_CONSTRUCTION";
-    // 통신
-    if (ind.includes("통신") || ind.includes("telecom") || ind.includes("wireless") || ind.includes("communication services")) return "KR_TELECOM";
-    // 리츠·부동산
-    if (ind.includes("리츠") || ind.includes("reit") || ind.includes("real estate")) return "KR_REIT";
-    // 자동차·부품
-    if (ind.includes("자동차") || ind.includes("automotive") || ind.includes("auto part") || ind.includes("car")) return "KR_AUTO";
-    // IT·게임·플랫폼·소프트웨어
-    if (ind.includes("software") || ind.includes("internet") || ind.includes("gaming") || ind.includes("multimedia") || ind.includes("platform") || ind.includes("게임") || ind.includes("it서비스")) return "KR_IT";
-    // 소비재·전자
-    if (ind.includes("consumer electronics") || ind.includes("소비재") || ind.includes("consumer cyclical") || ind.includes("retail")) return "KR_CONSUMER";
-    // 에너지·화학
-    if (ind.includes("energy") || ind.includes("oil") || ind.includes("chemical") || ind.includes("에너지") || ind.includes("화학")) return "KR_ENERGY";
-    // 방산·조선 (※ "machinery" 단독은 방산 아님 — "defense", "aerospace", "shipbuilding", "naval", "military"만 허용)
-    if (ind.includes("defense") || ind.includes("aerospace") || ind.includes("shipbuilding") ||
-        ind.includes("naval") || ind.includes("military") || ind.includes("방위산업") || ind.includes("방위")) return "KR_DEFENSE";
-    return "KR_OTHER";
-  } else {
-    if (ind.includes("biotech") || ind.includes("pharmaceutical") || ind.includes("drug")) return "US_BIOTECH";
-    if (ind.includes("semiconductor equipment") || ind.includes("semiconductor material")) return "US_SEMICONDUCTOR_EQ";
-    if (ind.includes("semiconductor") || ind.includes("foundry") || ind.includes("memory")) return "US_TECH";
-    if (ind.includes("software") || ind.includes("technology") || ind.includes("internet") || ind.includes("cloud")) return "US_TECH";
-    if (ind.includes("bank") || ind.includes("financial") || ind.includes("insurance") || ind.includes("capital market")) return "US_FINANCIAL";
-    if (ind.includes("reit") || ind.includes("real estate")) return "US_REIT";
-    if (ind.includes("energy") || ind.includes("oil") || ind.includes("mining")) return "US_ENERGY";
-    if (ind.includes("defense") || ind.includes("aerospace")) return "US_DEFENSE";
-    if (ind.includes("telecom") || ind.includes("communication")) return "US_TELECOM";
-    if (ind.includes("utilities")) return "US_UTILITIES";
-    if (ind.includes("consumer") || ind.includes("retail")) return "US_CONSUMER";
-    return "US_OTHER";
-  }
-}
+/**
+ * 업종 분류 — 실제 구현은 lib/sector-taxonomy.ts에 있다.
+ * 예전에는 여기에 키워드 몇 개를 나열했는데 실제 데이터와 어긋나 58%가 미분류였다
+ * (특히 "Auto Manufacturers"가 안 걸려 현대차·기아가 빠졌다).
+ * 호출부가 많아 시그니처는 그대로 두고 위임만 한다.
+ */
+export { classifySector, isComparableSector } from "../lib/sector-taxonomy.js";
+// 재수출만으로는 이 파일 안에서 쓸 수 없어 별도로 들여온다
+import { classifySector } from "../lib/sector-taxonomy.js";
 
 function isBullishVerdict(verdict: string): boolean | null {
   const v = verdict.trim();

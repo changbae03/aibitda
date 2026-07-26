@@ -24,7 +24,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 import { normalizeTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
@@ -33,6 +32,7 @@ import { rawQuery, dbCacheGet, dbCacheSet, mapAnalysisRow, mapStepRow, ensureQaP
 import { KOREAN_SECTOR_MULTIPLES, getKRXSectorPeerContext, getDartCompetitorPeerContext, getDartCompetitorTickerPeers } from "./korea-context.js";
 import { yahooFinance, tryQuoteSummary, fetchTickerInfo, naverFmt, fetchNaverFinanceData, toYear, fmtNum, pct, opm, computeHistoricalBeta, fetchFinancialContext, fetchCompanyNews } from "./financial-context.js";
 import { US_PEER_MAP, selectPeerTickers, fetchPeerFinancials, type PeerEntry } from "./peer-context.js";
+import { savePeers, getPeersWithMetrics, getSectorPeers, formatPeerTable, type PeerWithMetrics } from "../peer-store.js";
 import { QC_STEPS, runQCCheck, DEBATE_STEPS, runDebateChallenge } from "./qc-debate.js";
 import { formatStep, formatAnalysis, stripDisplayContent, sanitizeFeedback } from "./format.js";
 import { storeValuationArtifacts } from "./valuation-store.js";
@@ -154,26 +154,69 @@ async function executeStep(
           }
         }
 
-        // ② AI 피어 선정: DART 힌트 주입 + 부족한 피어 보완
-        let peers = await selectPeerTickers(snapName, snapIndustry, prevCtx, snapTicker, dartHint);
+        // ② 저장된 피어 재사용 — 같은 종목을 재분석할 때마다 AI가 다시 고르면
+        //    피어가 달라져 비교가 흔들리고 토큰도 매번 든다. 최근에 고른 게 있으면 그대로 쓴다.
+        let peers: any[] = [];
+        const savedPeers: PeerWithMetrics[] = await getPeersWithMetrics(snapTicker, 6).catch(() => []);
+        const fresh = savedPeers.filter(p => p.source !== "sector");
+        if (fresh.length >= 3) {
+          peers = fresh.map(p => ({
+            ticker: p.ticker,
+            name: p.name ?? p.ticker,
+            exchange: p.market === "KR" ? "KRX" : "NASDAQ",
+            reason: p.reason ?? "",
+          }));
+          console.log(`[pre-fetch-peers] 저장된 피어 재사용 ${peers.length}개 — AI 선정 생략`);
+        }
+
+        // ③ 저장된 게 없으면 AI 선정: DART 힌트 주입 + 부족한 피어 보완
         if (peers.length === 0) {
-          peers = await selectPeerTickers(snapName, snapIndustry ?? "일반", prevCtx.slice(0, 3000), snapTicker, dartHint);
-        }
-        if (peers.length === 0 && !/^\d{6}/.test(snapTicker)) {
-          const mapped = US_PEER_MAP[snapTicker.toUpperCase()];
-          if (mapped?.length) peers = mapped;
+          peers = await selectPeerTickers(snapName, snapIndustry, prevCtx, snapTicker, dartHint);
+          if (peers.length === 0) {
+            peers = await selectPeerTickers(snapName, snapIndustry ?? "일반", prevCtx.slice(0, 3000), snapTicker, dartHint);
+          }
+          if (peers.length === 0 && !/^\d{6}/.test(snapTicker)) {
+            const mapped = US_PEER_MAP[snapTicker.toUpperCase()];
+            if (mapped?.length) peers = mapped;
+          }
+
+          // ④ DART seed 피어를 최우선 병합 (중복 제거)
+          if (dartSeedPeers.length > 0) {
+            const aiTickers = new Set(peers.map(p => p.ticker));
+            const dartOnly = dartSeedPeers.filter(p => !aiTickers.has(p.ticker));
+            // DART 피어 앞에 배치 (피어 테이블에서 먼저 보이도록)
+            peers = [...dartOnly, ...peers].slice(0, 6); // 최대 6개
+            console.log(`[pre-fetch-peers] 최종 피어 (DART+AI): ${peers.map(p => p.name).join(", ")}`);
+          }
+
+          // ⑤ 그래도 비면 같은 업종·유사 시총에서 자동 선정.
+          //    예전에는 여기서 피어 없이 진행돼 상대가치 평가가 통째로 비었다.
+          if (peers.length === 0) {
+            const sectorPeers: PeerWithMetrics[] = await getSectorPeers(snapTicker, 5).catch(() => []);
+            peers = sectorPeers.map(p => ({
+              ticker: p.ticker,
+              name: p.name ?? p.ticker,
+              exchange: p.market === "KR" ? "KRX" : "NASDAQ",
+              reason: p.reason ?? "같은 업종·유사 시가총액",
+            }));
+            if (peers.length > 0) {
+              console.log(`[pre-fetch-peers] 업종 자동 피어 ${peers.length}개로 대체`);
+              await savePeers(snapTicker, peers, { source: "sector", analysisId: id }).catch(() => {});
+            }
+          } else {
+            // ⑥ 고른 피어를 남긴다. 다음 분석이 같은 피어를 재사용해 비교가 일관된다.
+            await savePeers(snapTicker, peers, { source: "ai", analysisId: id }).catch(() => {});
+          }
         }
 
-        // ③ DART seed 피어를 최우선 병합 (중복 제거)
-        if (dartSeedPeers.length > 0) {
-          const aiTickers = new Set(peers.map(p => p.ticker));
-          const dartOnly = dartSeedPeers.filter(p => !aiTickers.has(p.ticker));
-          // DART 피어 앞에 배치 (피어 테이블에서 먼저 보이도록)
-          peers = [...dartOnly, ...peers].slice(0, 6); // 최대 6개
-          console.log(`[pre-fetch-peers] 최종 피어 (DART+AI): ${peers.map(p => p.name).join(", ")}`);
-        }
+        // ⑦ 종목 마스터에서 조인해 온 지표표를 앞에 붙인다.
+        //    모든 분석이 같은 출처를 보므로 숫자가 흔들리지 않는다(외부 호출 0회).
+        const metricRows: PeerWithMetrics[] = await getPeersWithMetrics(snapTicker, 6).catch(() => []);
+        const metricTable = metricRows.length > 0
+          ? `\n### 피어 지표 (종목 마스터 기준 — 전 분석 공통)\n${formatPeerTable(metricRows)}\n`
+          : "";
 
-        const data = peers.length > 0 ? await fetchPeerFinancials(peers) : "";
+        const data = peers.length > 0 ? metricTable + await fetchPeerFinancials(peers) : metricTable;
         console.log(`[pre-fetch-peers] #${id} 완료 — ${peers.length}개 피어, ${data.length}chars`);
         return { peers, data };
       } catch (err) {

@@ -24,7 +24,6 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { buildFmpContext } from "../fmp-client.js";
 
 // ─── 한국 업종별 밸류에이션 벤치마크 (KRX 기반, 2024~2025 평균) ──────────────────
 // 출처: KRX 업종 시가총액·멀티플 통계, Damodaran emerging market data 참고
@@ -65,27 +64,30 @@ WACC 공통 가정 (한국 주식):
 async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> {
   try {
     // 1. 해당 종목의 업종 조회
-    const stockRes = await pool.query<{ sector: string; market: string; name: string }>(
-      `SELECT sector, market, name FROM krx_peer_data WHERE code = $1 ORDER BY snapshot_date DESC LIMIT 1`,
+    //    예전에는 krx_peer_data를 봤으나 그 표는 0행이라 여기서 늘 null로 빠져나갔다
+    //    — 즉 업종 PBR 비교가 통째로 동작하지 않았다. 종목 마스터(stocks 뷰)로 옮긴다.
+    const stockRes = await pool.query<{ sector: string; exchange: string; name: string }>(
+      `SELECT sector, exchange, name FROM stocks WHERE ticker = $1 AND market = 'KR' LIMIT 1`,
       [krxCode]
     );
     if (!stockRes.rows.length) return null;
 
-    const { sector, market, name } = stockRes.rows[0];
+    const { sector, exchange, name } = stockRes.rows[0];
+    if (!sector) return null; // 섹터 미수집 종목은 업종 비교 불가
 
-    // 2. 같은 업종 피어 전체 조회 (최신 스냅샷)
+    // 2. 같은 업종·같은 거래소 피어 조회
+    //    bps는 예전 표에만 있던 컬럼인데, 실제로는 KIS 값이 우선이고 이 폴백은
+    //    표가 비어 있어 한 번도 쓰인 적이 없다. 조회에서 제외한다.
     const peerRes = await pool.query<{
-      code: string; name: string; pbr: string | null; per: string | null;
-      bps: string | null; mcap: string | null;
+      code: string; name: string; pbr: string | null; per: string | null; mcap: string | null;
     }>(
-      `SELECT code, name, pbr, per, bps, mcap
-       FROM krx_peer_data
-       WHERE sector = $1 AND market = $2
-         AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
+      `SELECT ticker AS code, name, pbr, per, market_cap AS mcap
+       FROM stocks
+       WHERE market = 'KR' AND sector = $1 AND exchange = $2
          AND pbr IS NOT NULL AND pbr > 0
-       ORDER BY mcap DESC NULLS LAST
+       ORDER BY market_cap DESC NULLS LAST
        LIMIT 30`,
-      [sector, market]
+      [sector, exchange]
     );
 
     if (!peerRes.rows.length) return null;
@@ -120,7 +122,7 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
         name: r.name,
         pbr: kis?.pbr ?? (r.pbr ? parseFloat(r.pbr) : null),
         per: kis?.per ?? (r.per ? parseFloat(r.per) : null),
-        bps: kis?.bps ?? (r.bps ? parseFloat(r.bps) : null),
+        bps: kis?.bps ?? null,
         mcapEok,                                              // 억원 단위로 통일
         price: kis?.price ?? null,
         roe: kis?.roe ?? null,
@@ -178,7 +180,7 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
 
     return `
 === KRX + KIS 실시간 업종 피어 벤치마크 ===
-분석 대상: ${name} (${krxCode}) | 업종: ${sector} | 시장: ${market}
+분석 대상: ${name} (${krxCode}) | 업종: ${sector} | 시장: ${exchange}
 데이터 출처: ${dataSource}
 피어 모수: ${validPBR.length}개 종목 (PBR 유효 기준)
 ${targetSection}
@@ -240,10 +242,9 @@ async function getDartCompetitorPeerContext(krxCode: string): Promise<string | n
       companyNames.slice(0, 12).map(async (rawName) => {
         const keyword = rawName.replace(/[\(\)（）\s]/g, "").slice(0, 8);
         const res = await pool.query<{ code: string; name: string }>(
-          `SELECT code, name FROM krx_peer_data
-           WHERE name ILIKE $1
-             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
-           ORDER BY mcap DESC NULLS LAST
+          `SELECT ticker AS code, name FROM stocks
+           WHERE market = 'KR' AND name ILIKE $1
+           ORDER BY market_cap DESC NULLS LAST
            LIMIT 1`,
           [`%${keyword}%`]
         );
@@ -334,11 +335,11 @@ async function getDartCompetitorTickerPeers(krxCode: string): Promise<{
     await Promise.allSettled(
       hintNames.slice(0, 12).map(async (rawName) => {
         const keyword = rawName.replace(/[\(\)（）\s]/g, "").slice(0, 8);
+        // exchange(KOSPI/KOSDAQ)로 .KS/.KQ 접미사를 정한다 — 예전 표의 market 컬럼과 같은 역할
         const res = await pool.query<{ code: string; name: string; market: string }>(
-          `SELECT code, name, market FROM krx_peer_data
-           WHERE name ILIKE $1
-             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
-           ORDER BY mcap DESC NULLS LAST
+          `SELECT ticker AS code, name, exchange AS market FROM stocks
+           WHERE market = 'KR' AND name ILIKE $1
+           ORDER BY market_cap DESC NULLS LAST
            LIMIT 1`,
           [`%${keyword}%`]
         );

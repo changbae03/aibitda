@@ -109,6 +109,61 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 **두 테이블의 실제 병합은 호스팅 이관 이후로 미뤄져 있다.** 지금 병합하면 옛 코드로
 돌고 있는 운영 서버가 멈춘다.
 
+### 피어그룹 — 지표는 종목 마스터에서 조인한다
+
+피어 비교에 필요한 PER·PBR·ROE·시총은 **외부 API로 다시 받지 말 것.** 종목 마스터
+(`stocks` 뷰)에 한국 2,800 + 미국 10,400여 종목분이 이미 정리돼 있다.
+
+- 저장: `stock_peers` (종목별 피어 티커·순위·선정이유·출처)
+- 접근: `artifacts/api-server/src/lib/peer-store.ts`
+  - `savePeers()` — AI가 피어를 고를 때마다 저장. 티커는 표준형으로 정규화된다.
+  - `getPeersWithMetrics()` — 저장된 피어 + 지표를 한 번의 질의로
+  - `getSectorPeers()` — 같은 업종·유사 시총 자동 선정 (AI 선정 실패 시 대비책)
+- 표기 규칙은 `peer-format.ts`가 소유한다(순수 함수라 DB 없이 테스트 가능).
+  시장별 통화 구분과 "0은 결측" 처리가 여기 있다 — 프롬프트에 그대로 들어가
+  AI 판단을 좌우하므로 `peer-format.test.ts`를 함께 갱신할 것.
+
+`krx_peer_data`(0행)를 조회하던 5곳은 `stocks` 뷰로 옮겼다. 표 정의와 일회성
+적재 스크립트만 남아 있으니 **새로 참조하지 말 것.**
+
+### 한국 종목명 — 법인명이 아니라 종목약명
+
+`kind.krx.co.kr` 상장법인 목록은 **법인 등록명**을 준다(005380 → "현대자동차",
+"케이티앤지"). 거래 화면·시세표의 정식 표기는 **종목약명**("현대차", "KT&G")이며
+KIS `search-stock-info`의 `prdt_abrv_name`이 그 값이다.
+
+`fetchKISStockNames()`(`lib/kis-client.ts`)가 종목약명·영문명과 함께
+**한국 표준산업분류·KRX 업종중분류**도 돌려준다. 야후 industry보다 한국 종목에
+정확할 수 있으니 업종 분류를 더 개선할 때 쓸 것.
+
+새 종목 이름을 어딘가에 저장할 때는 이 함수를 거칠 것 — KRX 목록을 그대로 쓰면
+표기가 다시 갈라진다.
+
+### 업종 분류 — `lib/sector-taxonomy.ts`
+
+`industry`(야후의 영문 고정 명칭)를 업종 코드로 바꾼다. **순서가 의미를 갖는다** —
+부분 문자열로 검사하므로 좁은 항목이 위에 있어야 한다(`semiconductor equipment`가
+`semiconductor`보다 먼저).
+
+새 industry 값이 등장하면 표에 추가할 것. 안 그러면 조용히 `_OTHER`로 빠진다 —
+예전에 `Auto Manufacturers`가 안 걸려 현대차·기아가 미분류였던 게 그 사례다.
+`sector-taxonomy.test.ts`가 실제 오분류 사례를 회귀 테스트로 고정하고 있다.
+
+한국 종목은 KIS 표준산업분류(`krx_stocks.kis_industry`)를 보조로 쓴다. 다만
+**`KIS_OVERRIDE`에 함부로 추가하지 말 것** — KIS는 법인 등록 업종이라 실제 사업과
+어긋난다. 넓게 적용해봤더니 두산(지주)·한화시스템(방산전자)이 전자부품으로
+잘못 옮겨졌다. 현재 덮어쓰는 건 조선뿐이고, 나머지는 야후가 못 잡았을 때만 메운다.
+추가 전에 반드시 실제 종목으로 드라이런할 것.
+
+피어 비교에 쓸 수 있는지는 `isComparableSector()`로 판단한다(`_OTHER`·`_SHELL` 제외).
+SPAC(`Shell Companies`)은 사업 실체가 없어 멀티플 비교가 무의미하다.
+
+> 현재 비교 가능 비율: 한국 75%(2,097/2,800), 미국 4%(385/10,448 — 미국은 SEC
+> 목록을 새로 받아 industry 수집이 회차당 600개씩 진행 중이라 시간이 지나면 오른다).
+> 삼성전자는 야후가 `Consumer Electronics`로 주어 `KR_ELECTRONICS`다 —
+> SK하이닉스와 묶이지 않는다. 종목별 예외를 코드에 박지 말 것(업종 피어는
+> AI 선정 실패 시의 대비책이고, AI는 이 관계를 안다).
+
 ### 분석 결과의 구조화 저장
 
 AI는 `relative_valuation` 단계에서 두 JSON 블록을 내보낸다 — `FINAL_VALUATION_DATA`
