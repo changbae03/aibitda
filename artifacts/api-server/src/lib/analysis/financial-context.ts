@@ -54,24 +54,47 @@ async function tryQuoteSummary(symbol: string) {
   }
 }
 
+/**
+ * 종목 마스터에 저장된 이름을 먼저 본다.
+ *
+ * 예전에는 KRX 상장법인 목록(메모리 캐시)만 봤는데, 그건 **법인 등록명**이라
+ * 005380이 "현대자동차", 033780이 "케이티앤지"로 들어갔다. 마스터에는 거래 화면
+ * 표기(종목약명)로 고쳐 두었는데도 분석 기록에는 옛 이름이 남는 원인이었다.
+ * 이름의 단일 출처는 종목 마스터다.
+ */
+async function lookupMasterName(ticker: string): Promise<string | null> {
+  try {
+    const { rows } = await pool.query<{ name: string }>(
+      `SELECT name FROM stocks WHERE ticker = $1 LIMIT 1`, [ticker]);
+    return rows[0]?.name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; englishName: string | null; industry: string; resolvedSymbol: string }> {
   await loadKRXList();
 
   if (/^\d{6}$/.test(ticker)) {
-    const [ksResult, kqResult] = await Promise.all([
+    const [ksResult, kqResult, masterName] = await Promise.all([
       tryQuoteSummary(`${ticker}.KS`),
       tryQuoteSummary(`${ticker}.KQ`),
+      lookupMasterName(ticker),
     ]);
     const yahooResult = kqResult ?? ksResult;
     const resolvedSymbol = kqResult ? `${ticker}.KQ` : `${ticker}.KS`;
-    const koreanName = lookupKoreanName(ticker);
+    // 마스터(종목약명) → KRX 목록(법인명) → 야후 영문명 → 티커 순
+    const koreanName = masterName ?? lookupKoreanName(ticker);
     const englishName = yahooResult?.companyName ?? null;
     const companyName = koreanName ?? englishName ?? ticker;
     return { companyName, englishName: englishName !== companyName ? englishName : null, industry: yahooResult?.industry ?? "일반", resolvedSymbol };
   }
 
-  const result = await tryQuoteSummary(ticker);
-  const koreanName = lookupKoreanName(ticker);
+  const [result, masterName] = await Promise.all([
+    tryQuoteSummary(ticker),
+    lookupMasterName(ticker),
+  ]);
+  const koreanName = masterName ?? lookupKoreanName(ticker);
   const englishName = result?.companyName ?? null;
   const companyName = koreanName ?? englishName ?? ticker;
   return { companyName, englishName: englishName !== companyName ? englishName : null, industry: result?.industry ?? "일반", resolvedSymbol: ticker };
