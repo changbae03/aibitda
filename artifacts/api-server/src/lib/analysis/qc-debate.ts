@@ -13,6 +13,7 @@ import { validatePeers } from "../peer-validator.js";
 import { fetchKISStockQuotes, buildKISStockContext } from "../kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
+import { auditSotp, formatSotpIssues } from "./sotp-audit.js";
 import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
@@ -39,6 +40,18 @@ async function runQCCheck(
   ticker: string,
   dartFloorAuk?: number | null
 ): Promise<{ approved: boolean; score: number; feedback: string }> {
+  // SOTP 표의 산수는 서버가 직접 검산한다. LLM에게 물으면 자기가 쓴 숫자를
+  // 그대로 옳다고 하는 경우가 있어, 어긋나면 판정을 기다리지 않고 즉시 불승인한다.
+  // 실제 사고: EV/Sales 두 행이 1/10로 계산돼 목표주가가 6배 왜곡됐다(한화시스템).
+  if (stepKey === "relative_valuation") {
+    const audit = auditSotp(content);
+    const issues = formatSotpIssues(audit);
+    if (issues) {
+      console.warn(`[qc] ${ticker} SOTP 검산 실패 — ${audit.mismatches.length}행 불일치`);
+      return { approved: false, score: 3, feedback: issues };
+    }
+  }
+
   const agentName = AGENTS[stepKey].name;
   const isFundamental = stepKey === "company_analysis";
   const isRelativeValuation = stepKey === "relative_valuation";
