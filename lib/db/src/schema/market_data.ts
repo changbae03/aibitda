@@ -75,6 +75,8 @@ export const krxStocksTable = pgTable("krx_stocks", {
   symbol: text("symbol"),
   sector: text("sector"),
   industry: text("industry"),
+  /** 한국 표준산업분류 (KIS). 야후 industry가 한국 종목에 부정확할 때의 보정 신호 */
+  kisIndustry: text("kis_industry"),
   marketCap: bigint("market_cap", { mode: "number" }),
   currentPrice: real("current_price"),
   per: real("per"),

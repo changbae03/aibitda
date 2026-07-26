@@ -97,11 +97,15 @@ const RULES: readonly Rule[] = [
   ["automotive", "AUTO"],
   ["자동차", "AUTO"],
 
-  // ── 방산·항공우주·조선 ────────────────────────────────────────────────────
+  // ── 조선 (방산보다 먼저 — 야후가 조선사를 Aerospace & Defense로 주기 때문) ──
+  ["shipbuilding", "SHIPBUILDING"],
+  ["marine engineering", "SHIPBUILDING"],
+  ["조선", "SHIPBUILDING"],
+
+  // ── 방산·항공우주 ────────────────────────────────────────────────────────
   ["aerospace & defense", "DEFENSE"],
   ["defense", "DEFENSE"],
   ["aerospace", "DEFENSE"],
-  ["shipbuilding", "DEFENSE"],
   ["방위", "DEFENSE"],
 
   // ── 건설 ─────────────────────────────────────────────────────────────────
@@ -208,15 +212,112 @@ const RULES: readonly Rule[] = [
 ] as const;
 
 /**
+ * 한국 표준산업분류(KIS search-stock-info) 기반 규칙.
+ *
+ * 야후 industry는 한국 종목에서 틀릴 때가 있다. 대표적으로 삼성중공업·한화오션·
+ * HD현대중공업이 모두 "Aerospace & Defense"로 와서 방산으로 분류됐다.
+ * KIS는 "선박 및 보트 건조업"으로 정확히 준다.
+ *
+ * 반대로 KIS가 약한 영역도 있다 — 지주회사를 전부 "기타 금융업"으로 뭉뚱그린다
+ * (SK스퀘어·SK·HD한국조선해양). 그런 모호한 값은 AMBIGUOUS_KIS에 넣어 야후로 넘긴다.
+ */
+/**
+ * 야후 결과를 **덮어쓰는** 규칙. 야후가 확실히 틀린다고 검증된 것만 넣는다.
+ *
+ * 조선이 유일한 사례다 — 야후는 삼성중공업·한화오션·HD현대중공업을 모두
+ * "Aerospace & Defense"로 준다. 방산과 조선은 사업도 밸류에이션도 다르다.
+ *
+ * ⚠️ 여기에 함부로 추가하지 말 것. KIS 표준산업분류는 **법인 등록 업종**이라
+ * 실제 사업과 어긋나는 경우가 많다. 실제로 넓게 적용해봤더니
+ * 두산(지주회사)이 "전자부품 제조업"으로, 한화시스템(방산전자)도 마찬가지로
+ * 잘못 옮겨졌다. 추가 전에 반드시 실제 종목으로 드라이런할 것.
+ */
+const KIS_OVERRIDE: readonly Rule[] = [
+  ["선박 및 보트 건조업", "SHIPBUILDING"],
+] as const;
+
+/**
+ * 야후가 분류하지 못했을 때(OTHER)만 쓰는 보조 규칙.
+ * 덮어쓰지 않으므로 위 목록보다 느슨해도 안전하다.
+ */
+const KIS_FALLBACK: readonly Rule[] = [
+  ["반도체 제조업", "SEMICONDUCTOR"],
+  ["자동차용 엔진", "AUTO"],
+  ["자동차 부품", "AUTO"],
+  ["1차 철강", "MATERIALS"],
+  ["1차 비철금속", "MATERIALS"],
+  ["석유 정제품", "ENERGY"],
+  ["기초화학물질", "ENERGY"],
+  ["전기통신업", "TELECOM"],
+  ["해상 운송업", "TRANSPORT"],
+  ["항공 여객 운송업", "TRANSPORT"],
+  ["은행 및 저축기관", "FINANCIAL"],
+  ["보험업", "FINANCIAL"],
+  ["금융지원 서비스업", "FINANCIAL"],
+  ["무기 및 총포탄", "DEFENSE"],
+  ["항공기", "DEFENSE"],
+  ["전자부품 제조업", "ELECTRONICS"],
+  ["통신 및 방송 장비", "ELECTRONICS"],
+  ["일차전지 및 축전지", "ELECTRONICS"],
+  ["전동기, 발전기", "ELECTRONICS"],
+  ["기초 의약물질", "BIOTECH"],
+  ["의약품 제조업", "BIOTECH"],
+  ["자료처리, 호스팅", "IT"],
+  ["소프트웨어 개발", "IT"],
+  ["담배 제조업", "FOOD"],
+  ["건축물 건설", "CONSTRUCTION"],
+  ["토목 건설", "CONSTRUCTION"],
+] as const;
+
+/**
+ * KIS가 실체를 못 담는 값들. 보조 규칙에서도 쓰지 않는다.
+ * - "기타 금융업": 지주회사를 전부 여기로 보낸다(SK스퀘어는 반도체 지주다)
+ * - "특수/일반 목적용 기계": 반도체 장비 업체도 여기로 온다(한미반도체)
+ * - "기타 전문 도매업": 삼성물산(건설)이 여기로 온다
+ */
+const AMBIGUOUS_KIS: readonly string[] = [
+  "기타 금융업",
+  "기타 전문 도매업",
+  "특수 목적용 기계",
+  "일반 목적용 기계",
+  "기타 서비스업",
+  "그외 기타",
+];
+
+/**
  * industry 문자열을 업종 코드로 바꾼다. 어디에도 안 걸리면 `{시장}_OTHER`.
  * industry가 비어 있으면 분류할 근거가 없으므로 그대로 OTHER를 돌려준다.
+ *
+ * kisIndustry(한국 표준산업분류)를 주면 그쪽을 먼저 본다 — 단 모호한 값은 건너뛴다.
  */
-export function classifySector(industry: string | null | undefined, market: Market): string {
-  const ind = (industry ?? "").toLowerCase().trim();
-  if (!ind) return `${market}_OTHER`;
-  for (const [needle, sector] of RULES) {
-    if (ind.includes(needle)) return `${market}_${sector}`;
+export function classifySector(
+  industry: string | null | undefined,
+  market: Market,
+  kisIndustry?: string | null,
+): string {
+  const kis = (kisIndustry ?? "").trim();
+  const kisUsable = kis.length > 0 && !AMBIGUOUS_KIS.some((a) => kis.includes(a));
+
+  // ① 야후가 확실히 틀리는 경우만 먼저 덮어쓴다 (지금은 조선뿐)
+  if (kisUsable) {
+    for (const [needle, sector] of KIS_OVERRIDE) {
+      if (kis.includes(needle)) return `${market}_${sector}`;
+    }
   }
+
+  // ② 야후 분류
+  const ind = (industry ?? "").toLowerCase().trim();
+  for (const [needle, sector] of RULES) {
+    if (ind && ind.includes(needle)) return `${market}_${sector}`;
+  }
+
+  // ③ 야후가 못 잡았을 때만 KIS로 메운다 — 덮어쓰지 않으므로 손해가 없다
+  if (kisUsable) {
+    for (const [needle, sector] of KIS_FALLBACK) {
+      if (kis.includes(needle)) return `${market}_${sector}`;
+    }
+  }
+
   return `${market}_OTHER`;
 }
 

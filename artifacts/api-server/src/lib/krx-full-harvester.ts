@@ -117,6 +117,8 @@ async function fetchMetrics(symbol: string): Promise<StockMetrics | null> {
     const sd = (summary as any).summaryDetail;
 
     const industry = sp?.industry ?? (fd as any)?.industry ?? null;
+    // sector는 여기서 정하지 않는다 — KIS 한국 표준산업분류를 함께 봐야 하는데
+    // 그 값은 호출부에서 병렬로 받아오므로, 두 신호가 모인 뒤 계산한다.
     const sector   = industry ? classifySector(industry, "KR") : null;
 
     // PER: summaryDetail.trailingPE 우선 → 직접 계산 → forwardPE 순 fallback
@@ -204,11 +206,13 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
           fetchKISStockNames(code).catch(() => null),
         ]);
         const shortName = names?.shortName ?? null;
+        const kisIndustry = names?.stdIndustry ?? null;
 
         if (metrics) {
           await pool.query(
             `UPDATE krx_stocks SET
                name          = COALESCE($17, name),
+               kis_industry  = COALESCE($18, kis_industry),
                sector        = $2,
                industry      = $3,
                market_cap    = $4,
@@ -230,7 +234,9 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
              WHERE code = $1`,
             [
               code,
-              metrics.sector,
+              // KIS 한국 분류를 함께 넘겨 야후가 틀린 경우를 보정한다
+              // (조선 3사가 야후에선 Aerospace & Defense로 온다)
+              classifySector(metrics.industry, "KR", kisIndustry),
               metrics.industry,
               metrics.market_cap,
               metrics.current_price,
@@ -248,6 +254,7 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
               // 종목약명(현대차)이 KRX 법인명(현대자동차)보다 거래 화면 표기에 맞다.
               // 못 받아오면 COALESCE가 기존 이름을 지킨다.
               shortName,
+              kisIndustry,
             ]
           );
           succeeded++;

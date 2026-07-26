@@ -521,6 +521,14 @@ export async function runMigrations() {
         ON analysis_segment_forecasts (ticker, fiscal_year);
     `);
 
+    // 한국 표준산업분류(KIS search-stock-info) 보관.
+    // 야후 industry는 한국 종목에 부정확할 때가 있다 — 조선 3사가 "Aerospace & Defense"로
+    // 묶여 방산으로 분류됐다. KIS는 "선박 및 보트 건조업"으로 정확히 준다.
+    // 저장해두면 분류 규칙을 고칠 때 API를 다시 부르지 않아도 된다.
+    await client.query(`
+      ALTER TABLE krx_stocks ADD COLUMN IF NOT EXISTS kis_industry TEXT;
+    `);
+
     // ── 종목별 피어그룹 ──────────────────────────────────────────────────────
     // 피어는 분석마다 AI가 새로 고르고 버려졌다. 남겨두면 다음 분석이 같은 피어를
     // 재사용해 비교가 일관되고, 피어 지표는 stocks 뷰에서 조인해 오므로
