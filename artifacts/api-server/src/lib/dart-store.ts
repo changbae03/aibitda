@@ -8,7 +8,7 @@
  */
 
 import { isKoreanTicker } from "@workspace/shared";
-import { pool } from "@workspace/db";
+import { pool, readJsonb } from "@workspace/db";
 import { getCorpCodeFromCache } from "./dart-corp-cache.js";
 
 // ─── reprt_code 정의 ─────────────────────────────────────────────────────────
@@ -88,12 +88,17 @@ export async function lookupCorpCode(stockCode: string): Promise<string | null> 
 
   // 1순위: system_cache DB — TTL 만료돼도 허용 (corp_code는 거의 불변)
   try {
-    const r = await pool.query<{ data: string }>(
+    const r = await pool.query<{ data: unknown }>(
       `SELECT data FROM system_cache WHERE key = 'dart_corp_code_map_v1' ORDER BY expires_at DESC LIMIT 1`
     );
     if (r.rows[0]?.data) {
-      const map = JSON.parse(r.rows[0].data) as Record<string, string>;
-      const found = map[stockCode];
+      // ⚠️ system_cache.data는 jsonb다 — pg 드라이버가 **이미 객체로** 돌려준다.
+      // 예전에는 여기서 무조건 JSON.parse를 걸었고, 객체를 넣으면 "[object Object]"가 되어
+      // 예외가 났다. 그 예외를 아래 catch가 조용히 삼켜, 3,977개짜리 맵이 멀쩡히 있는데도
+      // 이 단계가 **항상 실패**했다. 그래서 이미 분석한 종목(ticker_financials)만 겨우
+      // corp_code를 얻고 나머지는 폐기된 API로 흘러가 null이 됐다.
+      const map = readJsonb<Record<string, string>>(r.rows[0].data);
+      const found = map?.[stockCode];
       if (found) {
         console.log(`[dart-store] ${stockCode} corp_code=${found} (system_cache)`);
         return found;

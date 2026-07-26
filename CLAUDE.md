@@ -75,6 +75,47 @@ api-server 191개, hedge-fund-ai 33개, aibida-mobile 7개. 이건 알려진 기
 cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -c "error TS"
 ```
 
+### 조용한 실패를 만들지 말 것
+
+이 저장소에서 나온 큰 결함은 거의 전부 같은 모양이었다. **데이터가 안 들어오는데
+아무도 모른 채 분석이 그대로 진행된다.** 지표 캐시 0% 적중, DART 재무 0행,
+한국 PER 0건, 사업보고서 0건이 모두 그랬다.
+
+- 수집 실패는 괜찮다(분석을 막지 않는다). **말 없이 실패하는 것**이 문제다.
+  `return null` 앞에는 사유를 남길 것 — 어느 단계에서 끊겼는지 알아야 고칠 수 있다.
+- `catch {}`로 삼키기 전에, 그 예외가 기능을 통째로 죽이는 종류인지 볼 것.
+- 표가 0행이면 의심할 것. 코드가 그 표를 참조하는데 비어 있다면 십중팔구 고장이다.
+
+> **jsonb 컬럼에 `JSON.parse`를 걸지 말 것.** pg 드라이버가 이미 객체로 돌려주므로
+> `"[object Object]" is not valid JSON` 예외가 나고, 그게 catch에 삼켜지면 캐시가
+> 통째로 죽는다. corp_code 맵 3,977건이 `system_cache`에 멀쩡히 있는데도 조회가
+> **항상 실패**했고, 그래서 DART 사업보고서가 한 건도 수집되지 않았다.
+> `@workspace/db`의 `readJsonb()`를 쓸 것. jsonb 컬럼은 `system_cache.data`,
+> `kv_cache.value`, `market_brief_history.data`, `portfolio_snapshots.holdings_json`,
+> `model_calibration.sector_benchmarks`, `sector_priors.specific_levers`다.
+
+### DART 원문(사업보고서) 수집 규격
+
+`document.xml` + `rcept_no`이고 **응답이 곧 ZIP**이다. `document.json?rcpNo=`이라는
+규격은 없다(status 101을 돌려준다). 목록의 접수번호 필드도 `rcp_no`가 아니라 `rcept_no`다.
+
+- `last_reprt_at=N`으로 받을 것. `Y`는 최신판만 주는데, 정정공시(`[첨부정정]`·`[기재정정]`)는
+  원문 ZIP이 없어 status 014가 난다. 원본까지 받아 **정정이 아닌 것부터** 시도한다.
+- `page_count`는 넉넉히(30). 5로 두면 분기·반기 공시에 밀려 사업보고서가 잘린다.
+- ZIP 파싱은 **중앙 디렉터리** 기준으로 한다. DART ZIP은 스트리밍 압축(플래그 bit 3)이라
+  로컬 헤더의 압축크기가 항상 0이다 — 그걸 보고 건너뛰면 항목을 하나도 못 찾는다.
+- 원문 파일은 `.xml`이다(`.html` 아님). 태그 구조는 같아 `htmlToText`로 처리된다.
+
+### 타입 검사에서 `lib/*` 변경이 안 보일 때
+
+`artifacts/api-server/tsconfig.json`이 `references`로 `lib/db`를 참조한다. 프로젝트 참조는
+소스가 아니라 **빌드된 선언 파일**(`lib/db/dist/*.d.ts`)을 본다. 그래서 `lib/db/src`에
+export를 추가하면 `has no exported member` 오류가 난다. 해당 패키지를 먼저 빌드할 것.
+
+```bash
+cd lib/db && pnpm exec tsc -p tsconfig.json
+```
+
 ## DB — 반드시 알아야 할 것
 
 **스키마의 진실은 두 곳에 나뉘어 있다.**
