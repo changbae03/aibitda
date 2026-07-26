@@ -2234,7 +2234,11 @@ function needsCBDilutionCheck(industry: string, companyName: string, ticker?: st
   return false;
 }
 
-function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
+/**
+ * SOTP(사업부 합산) 대상인가. 밸류에이션 모델 선택과 입력 점검이 같은 판정을 써야 하므로
+ * 여기 하나만 둔다 — 파이프라인이 자체 정규식으로 다시 판정하면 또 엇갈린다.
+ */
+export function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");

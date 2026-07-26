@@ -13,7 +13,7 @@ import { validatePeers } from "../peer-validator.js";
 import { fetchKISStockQuotes, buildKISStockContext } from "../kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
-import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
+import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, needsSOTP, type AgentKey } from "../ai-agents.js";
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
@@ -25,6 +25,7 @@ import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsi
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
 import { buildSectorBandBlock } from "../valuation/sector-bands.js";
+import { collectValuationInputs, renderInputGaps, describeInputs } from "../valuation/inputs.js";
 import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
@@ -985,6 +986,25 @@ async function executeStep(
           isKoreanTicker ? "KR" : "US",
         );
         if (bandBlock) guideLines.push(bandBlock);
+
+        // ── 확보하지 못한 입력을 명시한다 ────────────────────────────────────
+        // 예전에는 데이터가 비어도 프롬프트가 아무 말을 하지 않아, AI가 조용히 추정으로
+        // 메웠다. 순부채를 추정한 분석에서 목표주가가 실제의 6배로 나온 적이 있다.
+        // 무엇이 없는지 알려주고 "지어내지 말라"고 못박는다. 로그에도 남겨,
+        // 어떤 분석이 무엇 없이 돌았는지 나중에 되짚을 수 있게 한다.
+        try {
+          const vInputs = await collectValuationInputs(
+            analysis.ticker,
+            analysis.companyName,
+            analysis.industry ?? "",
+            needsSOTP(analysis.industry ?? "", analysis.companyName ?? "", analysis.ticker),
+          );
+          console.log(`[val-inputs] ${describeInputs(vInputs)}`);
+          const gapBlock = renderInputGaps(vInputs);
+          if (gapBlock) guideLines.push(gapBlock);
+        } catch (e) {
+          console.warn(`[val-inputs] 입력 점검 실패 — 생략하고 진행:`, (e as Error)?.message);
+        }
 
         guideLines.push(`\n[🎯 밸류에이션 공통 규칙]`);
         guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);

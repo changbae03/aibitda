@@ -62,6 +62,13 @@ async function ensureTable(): Promise<void> {
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS eps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS bps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS fetched_at      TIMESTAMPTZ DEFAULT NOW()`,
+    // 순차입금(이자부부채 − 현금). total_debt와 **다른 값**이다.
+    //   total_debt = 부채총계(매입채무·충당부채까지 포함) — 한화시스템 5.3조
+    //   net_debt   = 이자부부채 − 현금성자산            — 한화시스템 0.7조 수준
+    // 둘을 혼동하면 기업가치에서 7배를 잘못 빼게 된다.
+    // 예전에는 IFRS 코드로 정확히 계산해놓고 프롬프트에 넣은 뒤 버렸다 — 저장해서 재사용한다.
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS net_debt             BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS interest_bearing_debt BIGINT`,
     `CREATE INDEX IF NOT EXISTS idx_ticker_financials_ticker ON ticker_financials (ticker, bsns_year DESC)`,
   ];
   for (const sql of migrations) {
@@ -289,6 +296,41 @@ async function upsertFinancial(
   `, [ticker, corpCode, bsnsYear, reprtCode, periodLabel, fsType,
       f.revenue, f.operatingIncome, f.netIncome, f.totalAssets,
       f.equity, f.cash, f.totalDebt, f.eps, f.bps]);
+}
+
+/**
+ * IFRS 코드로 집계한 순차입금을 남긴다.
+ *
+ * 예전에는 분석할 때마다 DART 전체 재무제표를 받아 순차입금을 계산하고, 프롬프트에
+ * 넣은 뒤 버렸다. 같은 종목을 다시 분석하면 다시 받았고, 무엇보다 **저장된 곳이 없어서
+ * 다른 코드가 쓸 수 없었다** — 목표주가 검산도, 입력 점검도 불가능했다.
+ *
+ * total_debt(부채총계)와 반드시 구분할 것. 한화시스템 기준 부채총계 5.3조 vs 순차입금
+ * 0.7조 수준이다. 기업가치에서 빼야 하는 것은 후자다.
+ */
+export async function saveNetDebt(
+  ticker: string,
+  corpCode: string,
+  bsnsYear: number,
+  fsType: "CFS" | "OFS",
+  netDebt: number,
+  interestBearingDebt: number,
+): Promise<void> {
+  try {
+    await ensureTable();
+    await pool.query(`
+      INSERT INTO ticker_financials
+        (ticker, corp_code, bsns_year, reprt_code, period_label, fs_type,
+         net_debt, interest_bearing_debt)
+      VALUES ($1,$2,$3,'11011','FY',$4,$5,$6)
+      ON CONFLICT (ticker, bsns_year, reprt_code, fs_type) DO UPDATE SET
+        net_debt = EXCLUDED.net_debt,
+        interest_bearing_debt = EXCLUDED.interest_bearing_debt,
+        fetched_at = NOW()
+    `, [ticker, corpCode, bsnsYear, fsType, Math.round(netDebt), Math.round(interestBearingDebt)]);
+  } catch (e) {
+    console.warn(`[dart-store] ${ticker} 순차입금 저장 실패:`, (e as Error)?.message?.slice(0, 80));
+  }
 }
 
 // ─── 메인: 분기·연간 데이터 수집 및 저장 ──────────────────────────────────────
