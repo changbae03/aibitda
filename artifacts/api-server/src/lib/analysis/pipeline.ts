@@ -1457,7 +1457,7 @@ async function executeStep(
           console.log(`[QC] DART floor extracted: ${dartFloorAuk}억원 for ${analysis.ticker}`);
         }
       }
-      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker, dartFloorAuk);
+      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker, dartFloorAuk, analysis.industry);
       console.log(`[QC] ${stepKey} score=${qcResult.score} approved=${qcResult.approved}`);
 
       if (!qcResult.approved) {
@@ -1667,9 +1667,16 @@ async function executeStep(
               entryPrice = null;
             }
           }
-          if (stopLoss) {
+          // ⚠️ `if (stopLoss)`로만 걸러내면 **0이 그대로 저장된다** — 0은 거짓이라
+          // 아래 검사를 통째로 건너뛴다. 실제로 메디포스트(분석 1132)의 손절가가
+          // 0원으로 저장돼 있었다. 손절 0원은 "손실을 무한히 감수한다"는 뜻이라
+          // 손절선이 아예 없는 것보다 나쁘다. 값이 있으되 유효하지 않으면 null로 만든다.
+          if (stopLoss !== null) {
             const ratio = stopLoss / savedStartPrice;
-            if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
+            if (stopLoss <= 0) {
+              console.warn(`[analysis ${id}] stop_loss ${stopLoss} — 0 이하라 무효 처리`);
+              stopLoss = null;
+            } else if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
               console.warn(`[analysis ${id}] stop_loss ${stopLoss} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
               stopLoss = null;
             }

@@ -1,5 +1,5 @@
 import { renderModelBlock } from "./valuation/model-registry.js";
-import { selectValuationModel } from "./valuation/select-model.js";
+import { pickModel, setFlagDetector } from "./valuation/pick-model.js";
 import { renderReportFormat } from "./valuation/report-formats.js";
 import { isKoreanTicker } from "@workspace/shared";
 
@@ -2314,18 +2314,10 @@ export function buildPrompt(
   const korBiotechFlag      = needsKorBiotech(industry, companyName, ticker, metrics?.opm);
   const batteryMaterialFlag = needsBatteryMaterial(industry, companyName, ticker);
 
-  // 업종에 맞는 밸류에이션 모델 하나만 고른다.
-  // 예전에는 모델 지시 블록 17개(626줄)가 모든 종목 프롬프트에 전부 들어가,
-  // 삼성전자를 분석하면서 리츠 Cap Rate·은행 CCAR·광산 AISC 규칙을 함께 읽었다.
-  const valuationModel = selectValuationModel({
-    sotp: sotpFlag, reit: reitFlag, usReit: usReitFlag,
-    financial: financialFlag, usBank: usBankFlag,
-    korBiotech: korBiotechFlag, usBiotech: usBiotechFlag,
-    resources: resourcesFlag, construction: constructionFlag,
-    utility: utilityFlag, telecom: telecomFlag,
-    mlp: mlpFlag, bdc: bdcFlag, royalty: royaltyFlag,
-    bigTech: bigTechFlag, usDefense: usDefenseFlag,
-  });
+  // 업종에 맞는 밸류에이션 모델 하나만 고른다. 판정은 pickModel 하나만 쓴다 —
+  // QC의 조율 검산도 같은 모델의 가중치를 봐야 하는데, 두 곳에서 각자 판정하면
+  // 또 엇갈린다(예전에 pipeline과 ai-agents의 업종 판정이 어긋났던 것과 같은 함정).
+  const valuationModel = pickModel(industry, companyName, ticker, metrics?.opm);
   const valuationModelBlock = renderModelBlock(valuationModel);
 
   // 보고서 본문 서식도 같은 선택을 따른다.
@@ -5596,3 +5588,25 @@ Output rules:
 
   return { systemPrompt, userPrompt };
 }
+
+// ─── 밸류에이션 모델 판정기 등록 ──────────────────────────────────────────────
+// 업종 감지 규칙(needsXxx)은 이 파일이 소유한다. 모델 선택은 pick-model이 맡되,
+// 판정에 필요한 감지는 여기서 넘겨준다 — 그래야 판정이 한 벌만 존재한다.
+setFlagDetector((industry, companyName, ticker, opm) => ({
+  sotp:         needsSOTP(industry, companyName, ticker),
+  reit:         needsREIT(industry, companyName, ticker),
+  usReit:       needsUSREIT(industry, companyName, ticker),
+  financial:    needsFinancialSector(industry, companyName, ticker),
+  usBank:       needsUSBank(industry, companyName, ticker),
+  korBiotech:   needsKorBiotech(industry, companyName, ticker, opm),
+  usBiotech:    needsUSBiotech(industry, companyName, ticker),
+  resources:    needsResourcesMining(industry, companyName, ticker),
+  construction: needsConstruction(industry, companyName, ticker),
+  utility:      needsUtility(industry, companyName, ticker),
+  telecom:      needsTelecom(industry, companyName, ticker),
+  mlp:          needsMLP(industry, companyName, ticker),
+  bdc:          needsBDC(industry, companyName, ticker),
+  royalty:      needsRoyaltyCompany(industry, companyName, ticker),
+  bigTech:      needsBigTech(industry, companyName, ticker),
+  usDefense:    needsUSDefense(industry, companyName, ticker),
+}));

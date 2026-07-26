@@ -14,6 +14,9 @@ import { fetchKISStockQuotes, buildKISStockContext } from "../kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
 import { auditSotp, formatSotpIssues } from "./sotp-audit.js";
+import { auditReconciliation, formatReconcileIssues } from "../valuation/reconcile-audit.js";
+import { extractValuation } from "./valuation-extract.js";
+import { pickModel } from "../valuation/pick-model.js";
 import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
@@ -38,7 +41,9 @@ async function runQCCheck(
   content: string,
   companyName: string,
   ticker: string,
-  dartFloorAuk?: number | null
+  dartFloorAuk?: number | null,
+  /** 조율 검산에서 모델 가중치를 고르는 데 쓴다 — 모델 선택과 같은 판정을 써야 한다 */
+  industry?: string | null,
 ): Promise<{ approved: boolean; score: number; feedback: string }> {
   // SOTP 표의 산수는 서버가 직접 검산한다. LLM에게 물으면 자기가 쓴 숫자를
   // 그대로 옳다고 하는 경우가 있어, 어긋나면 판정을 기다리지 않고 즉시 불승인한다.
@@ -49,6 +54,26 @@ async function runQCCheck(
     if (issues) {
       console.warn(`[qc] ${ticker} SOTP 검산 실패 — ${audit.mismatches.length}행 불일치`);
       return { approved: false, score: 3, feedback: issues };
+    }
+
+    // 조율도 같은 이유로 서버가 검산한다.
+    // 메디포스트에서 rNPV 41,325원과 피어 9,000원이 359% 벌어졌는데,
+    // "rNPV에 더 큰 신뢰를 두어 조율합니다"라고 써놓고 base에 41,325를 그대로 넣었다.
+    // LLM은 조율을 **문장으로 서술**하고 숫자는 한쪽을 복사하는 경향이 있다.
+    const snapshot = extractValuation(content);
+    if (snapshot) {
+      const model = pickModel(industry ?? "", companyName, ticker);
+      const rIssues = auditReconciliation({
+        base: snapshot.base, absBase: snapshot.absBase,
+        absBear: snapshot.absBear, absBull: snapshot.absBull,
+        relBase: snapshot.relBase, relBear: snapshot.relBear, relBull: snapshot.relBull,
+        absWeight: model.absWeight,
+      });
+      const rText = formatReconcileIssues(rIssues);
+      if (rText) {
+        console.warn(`[qc] ${ticker} 조율 검산 실패 — ${rIssues.map(i => i.code).join(", ")}`);
+        return { approved: false, score: 3, feedback: rText };
+      }
     }
   }
 
