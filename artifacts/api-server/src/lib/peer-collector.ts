@@ -3,6 +3,8 @@ import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
 import { pool } from "@workspace/db";
+import { extractNetDebt, type NetDebtBreakdown } from "./dart-balance.js";
+import { lookupCorpCode } from "./dart-store.js";
 import { normalizeTicker } from "@workspace/shared";
 import { sanitizePathComponent, validateDateStr } from "./sanitize.js";
 
@@ -257,19 +259,19 @@ async function fetchYahooData(ticker: string): Promise<{
 
 // ─── DART API ─────────────────────────────────────────────────────────────────
 
+/**
+ * DART 회사코드 조회.
+ *
+ * 예전에는 company.json?stock_code=... 를 직접 불렀는데 DART가 규격을 바꿔
+ * 이제 corp_code를 필수로 요구한다 — 종목코드로는 조회가 불가능하다
+ * (status=100 "필수값(corp_code)이 누락되었습니다"). 그래서 이 함수는 항상 null을
+ * 돌려주었고, 그 결과 순차입금 수집이 통째로 동작하지 않았다.
+ *
+ * dart-store가 쓰는 경로(인메모리 맵 → system_cache → 저장된 재무 → 전체목록 ZIP)를
+ * 재사용한다. 그쪽은 정상 동작한다.
+ */
 async function fetchDartCorpCode(code: string): Promise<string | null> {
-  const key = process.env["DART_API_KEY"];
-  if (!key) return null;
-  try {
-    const url = `https://opendart.fss.or.kr/api/company.json?crtfc_key=${key}&stock_code=${code}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    if (data.status !== "000") return null;
-    return data.corp_code ?? null;
-  } catch {
-    return null;
-  }
+  return lookupCorpCode(code);
 }
 
 async function fetchDartFinancials(corpCode: string): Promise<{
@@ -345,6 +347,8 @@ export interface DartSubjectBalance {
   totalLiab: number | null;
   equity: number | null;
   totalDebt: number | null;
+  /** IFRS 코드로 집계한 순차입금 내역 — 밸류에이션에서 EV−순차입금에 쓴다 */
+  netDebt: NetDebtBreakdown | null;
   // 건설업 특화 계정
   unbilledWork: number | null;          // 미청구공사
   constructionReceivables: number | null; // 공사미수금
@@ -362,8 +366,10 @@ export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSu
   for (const year of [currentYear - 1, currentYear - 2]) {
     for (const sj of ["CFS", "OFS"] as const) {
       try {
-        const url = `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json?crtfc_key=${key}&corp_code=${corpCode}&bsns_year=${year}&reprt_code=11011&fs_div=${sj}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        // 축약본(fnlttSinglAcnt)은 30계정뿐이라 차입금·사채·현금이 아예 없다.
+        // 그 탓에 아래 금융부채 수집이 전부 null이 되어 AI가 순부채를 추정해왔다.
+        const url = `https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key=${key}&corp_code=${corpCode}&bsns_year=${year}&reprt_code=11011&fs_div=${sj}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
         if (!res.ok) continue;
         const data = await res.json() as any;
         if (data.status !== "000" || !data.list?.length) continue;
@@ -410,8 +416,12 @@ export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSu
         const unbilledWork             = findBS(["미청구공사"]);
         const constructionReceivables  = findBS(["공사미수금", "공사수입금"]);
 
-        if (cash !== null || totalAssets !== null) {
-          return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt, unbilledWork, constructionReceivables };
+        // 한글 계정명은 회사마다 달라 누락이 잦다(SK하이닉스는 유동·비유동 차입금이
+        // 둘 다 "차입금"이다). IFRS 표준 코드로 다시 집계한다.
+        const netDebt = extractNetDebt(list);
+
+        if (cash !== null || totalAssets !== null || netDebt !== null) {
+          return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt, netDebt, unbilledWork, constructionReceivables };
         }
       } catch {
         continue;
