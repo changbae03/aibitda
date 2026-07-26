@@ -126,6 +126,19 @@ cd artifacts/api-server && pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | grep -
 `krx_peer_data`(0행)를 조회하던 5곳은 `stocks` 뷰로 옮겼다. 표 정의와 일회성
 적재 스크립트만 남아 있으니 **새로 참조하지 말 것.**
 
+### 한국 종목명 — 법인명이 아니라 종목약명
+
+`kind.krx.co.kr` 상장법인 목록은 **법인 등록명**을 준다(005380 → "현대자동차",
+"케이티앤지"). 거래 화면·시세표의 정식 표기는 **종목약명**("현대차", "KT&G")이며
+KIS `search-stock-info`의 `prdt_abrv_name`이 그 값이다.
+
+`fetchKISStockNames()`(`lib/kis-client.ts`)가 종목약명·영문명과 함께
+**한국 표준산업분류·KRX 업종중분류**도 돌려준다. 야후 industry보다 한국 종목에
+정확할 수 있으니 업종 분류를 더 개선할 때 쓸 것.
+
+새 종목 이름을 어딘가에 저장할 때는 이 함수를 거칠 것 — KRX 목록을 그대로 쓰면
+표기가 다시 갈라진다.
+
 ### 업종 분류 — `lib/sector-taxonomy.ts`
 
 `industry`(야후의 영문 고정 명칭)를 업종 코드로 바꾼다. **순서가 의미를 갖는다** —
