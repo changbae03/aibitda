@@ -519,6 +519,48 @@ export async function runMigrations() {
       );
       CREATE INDEX IF NOT EXISTS idx_analysis_segment_forecasts_ticker
         ON analysis_segment_forecasts (ticker, fiscal_year);
+
+      -- 이 값을 믿어도 되는가. 저장 시점에 검산해 함께 남긴다.
+      --
+      -- 분석은 종목당 여러 번 쌓이고 결과가 크게 엇갈린다. 실제로 한화시스템은
+      -- 같은 날 5건이 저장됐는데 목표가가 1,590원 ~ 57,900원으로 36배 벌어져 있었다
+      -- (현재가 68,200원). 재사용하려면 **어느 것이 정본인지** 가릴 근거가 필요하다.
+      ALTER TABLE analysis_valuations ADD COLUMN IF NOT EXISTS audit_ok     BOOLEAN;
+      ALTER TABLE analysis_valuations ADD COLUMN IF NOT EXISTS audit_issues TEXT;
+    `);
+
+    // ── 종목별 정본 ─────────────────────────────────────────────────────────
+    //
+    // "이 종목의 현재 유효한 밸류에이션·실적전망"을 한 줄로 꺼내는 창구.
+    // 조회를 stocks 뷰 하나로 모은 것과 같은 원칙이다.
+    //
+    // 고르는 규칙: **검산을 통과한 가장 최근 분석**.
+    // audit_ok가 NULL인 과거 행은 검산 도입 전 것이라 배제하지 않되(데이터를 잃지 않는다),
+    // 명시적으로 실패(false)한 것만 제외한다. 목표가가 현재가의 10%에도 못 미치거나
+    // 20배를 넘는 것은 단위 오류가 거의 확실하므로 정본에서 뺀다.
+    await client.query(`
+      CREATE OR REPLACE VIEW stock_valuation_current AS
+        SELECT DISTINCT ON (v.ticker)
+               v.ticker, v.analysis_id, v.current_price,
+               v.bear, v.base, v.bull,
+               v.abs_model, v.abs_base, v.rel_base,
+               v.audit_ok, v.created_at
+          FROM analysis_valuations v
+         WHERE v.base IS NOT NULL AND v.base > 0
+           AND COALESCE(v.audit_ok, TRUE)
+           AND (v.current_price IS NULL OR v.current_price <= 0
+                OR (v.base >= v.current_price * 0.1 AND v.base <= v.current_price * 20))
+         ORDER BY v.ticker, v.created_at DESC, v.analysis_id DESC
+    `);
+
+    // 실적 전망도 같은 원칙 — 종목·연도·부문마다 가장 최근 분석의 값 하나.
+    await client.query(`
+      CREATE OR REPLACE VIEW stock_segment_forecast_current AS
+        SELECT DISTINCT ON (f.ticker, f.fiscal_year, f.segment_name)
+               f.ticker, f.fiscal_year, f.segment_name, f.currency,
+               f.revenue, f.operating_income, f.analysis_id, f.created_at
+          FROM analysis_segment_forecasts f
+         ORDER BY f.ticker, f.fiscal_year, f.segment_name, f.created_at DESC, f.analysis_id DESC
     `);
 
     // 한국 표준산업분류(KIS search-stock-info) 보관.

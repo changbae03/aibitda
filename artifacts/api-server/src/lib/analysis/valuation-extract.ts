@@ -86,6 +86,26 @@ function yearFromKey(key: string): number | null {
  * `{name, rev26, rev27, op26, op27}` → 부문×연도 조합마다 한 행.
  * 매출·영업이익이 둘 다 없는 조합은 버린다.
  */
+/**
+ * 부문 이름을 표준형으로 다듬는다.
+ *
+ * AI가 같은 사업부를 분석마다 다르게 적는다. 한화시스템에서 실제로 이렇게 갈렸다.
+ *   "ICT 서비스"  (4건)  vs  "ICT 서비스 사업부"  (1건)
+ *   "방산전자"    (4건)  vs  "방산전자 사업부"    (1건)
+ *
+ * 이러면 연도·부문별 정본을 고를 때 같은 부문이 둘로 남아, 저장된 전망을 그대로
+ * 갖다 쓸 수가 없다. 뜻이 같은 꼬리말만 떼어낸다 — 이름 자체를 바꾸지는 않는다.
+ */
+export function normalizeSegmentName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[()（）]\s*$/, "")
+    .replace(/\s*(사업\s*부문|사업부|사업\s*본부|부문|BU|Division|Segment)\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
 export function extractSegmentForecasts(content: string): SegmentForecastRow[] {
   const key = "SEGMENT_FORECAST_DATA";
   const idx = content.indexOf(key);
@@ -100,7 +120,7 @@ export function extractSegmentForecasts(content: string): SegmentForecastRow[] {
 
   for (const seg of segments) {
     if (!seg || typeof seg !== "object") continue;
-    const name = typeof seg.name === "string" ? seg.name.trim().slice(0, 200) : "";
+    const name = normalizeSegmentName(typeof seg.name === "string" ? seg.name : "");
     if (!name) continue;
 
     // 부문 하나에서 등장하는 연도를 모두 모은 뒤 조합별로 행을 만든다.

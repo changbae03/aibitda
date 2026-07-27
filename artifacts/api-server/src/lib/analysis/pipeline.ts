@@ -25,7 +25,8 @@ import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsi
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
 import { buildSectorBandBlock } from "../valuation/sector-bands.js";
-import { collectValuationInputs, renderInputGaps, describeInputs } from "../valuation/inputs.js";
+import { collectValuationInputs, renderInputGaps, describeInputs,
+         getPriorValuation, getPriorSegments, renderPriorBlock } from "../valuation/inputs.js";
 import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
@@ -1002,6 +1003,24 @@ async function executeStep(
           console.log(`[val-inputs] ${describeInputs(vInputs)}`);
           const gapBlock = renderInputGaps(vInputs);
           if (gapBlock) guideLines.push(gapBlock);
+
+          // 저장해둔 직전 결과를 되읽어 넣는다.
+          // 예전에는 analysis_valuations에 남기기만 하고 **되읽는 코드가 없었다.**
+          // 그래서 같은 종목을 다시 분석하면 목표가가 크게 튀어도 아무도 몰랐다 —
+          // 한화시스템은 같은 날 5건이 1,590원 ~ 57,900원으로 갈렸다.
+          const [prior, segs] = await Promise.all([
+            getPriorValuation(analysis.ticker),
+            getPriorSegments(analysis.ticker),
+          ]);
+          const priorBlock = renderPriorBlock(prior, segs);
+          if (priorBlock) {
+            guideLines.push(priorBlock);
+            console.log(
+              `[val-prior] ${analysis.ticker} 직전 정본 주입 — ` +
+              `${prior ? `Base ${Math.round(prior.base ?? 0).toLocaleString()}원(#${prior.analysisId})` : "밸류에이션 없음"}` +
+              `, 부문전망 ${segs.length}행`,
+            );
+          }
         } catch (e) {
           console.warn(`[val-inputs] 입력 점검 실패 — 생략하고 진행:`, (e as Error)?.message);
         }

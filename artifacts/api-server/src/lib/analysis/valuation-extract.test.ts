@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractValuation, extractSegmentForecasts } from "./valuation-extract";
+import { extractValuation, extractSegmentForecasts, normalizeSegmentName } from "./valuation-extract";
 
 // 아래 문자열은 2026-07-25 메디포스트(078160) 실제 분석 본문에서 그대로 가져온 것이다.
 // 형식이 바뀌면 이 테스트가 먼저 깨져야 한다 — 조용히 수치가 안 쌓이는 상황을 막는 게 목적.
@@ -86,5 +86,36 @@ describe("extractSegmentForecasts — 부문별 실적 전망", () => {
   it("통화 표기가 없으면 KRW로 둔다", () => {
     const rows = extractSegmentForecasts(`SEGMENT_FORECAST_DATA:{"segments":[{"name":"A","rev26":1}]}`);
     expect(rows[0].currency).toBe("KRW");
+  });
+});
+
+describe("부문 이름 표준화", () => {
+  /**
+   * AI가 같은 사업부를 분석마다 다르게 적는다. 한화시스템에서 실제로
+   * "ICT 서비스"(4건)와 "ICT 서비스 사업부"(1건)가 다른 부문으로 쌓였다.
+   * 이러면 연도·부문별 정본을 고를 때 같은 부문이 둘로 남아 재사용이 안 된다.
+   */
+  it("뜻이 같은 꼬리말을 떼어낸다", () => {
+    expect(normalizeSegmentName("ICT 서비스 사업부")).toBe("ICT 서비스");
+    expect(normalizeSegmentName("방산전자 사업부")).toBe("방산전자");
+    expect(normalizeSegmentName("반도체 부문")).toBe("반도체");
+    expect(normalizeSegmentName("Cloud Division")).toBe("Cloud");
+  });
+
+  it("같은 부문은 같은 이름이 된다", () => {
+    expect(normalizeSegmentName("ICT 서비스 사업부"))
+      .toBe(normalizeSegmentName("ICT 서비스"));
+  });
+
+  it("이름 자체는 바꾸지 않는다", () => {
+    expect(normalizeSegmentName("우주항공/뉴스페이스")).toBe("우주항공/뉴스페이스");
+    expect(normalizeSegmentName("카티스템")).toBe("카티스템");
+    // "사업"이 이름 가운데 있으면 건드리지 않는다
+    expect(normalizeSegmentName("신사업 투자")).toBe("신사업 투자");
+  });
+
+  it("공백·괄호를 정리한다", () => {
+    expect(normalizeSegmentName("  방산전자  ")).toBe("방산전자");
+    expect(normalizeSegmentName("ICT  서비스")).toBe("ICT 서비스");
   });
 });

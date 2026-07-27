@@ -196,6 +196,113 @@ export function renderInputGaps(inputs: ValuationInputs): string {
   return renderMissingBlock(inputs.missing);
 }
 
+/** 직전 밸류에이션 정본 — 검산을 통과한 가장 최근 값 */
+export interface PriorValuation {
+  analysisId: number;
+  currentPrice: number | null;
+  bear: number | null;
+  base: number | null;
+  bull: number | null;
+  absModel: string | null;
+  at: Date;
+}
+
+export interface PriorSegment {
+  fiscalYear: number;
+  segmentName: string;
+  revenue: number | null;
+  operatingIncome: number | null;
+}
+
+/**
+ * 이 종목을 예전에 평가한 결과를 가져온다.
+ *
+ * 예전에는 분석할 때마다 백지에서 시작했다. `analysis_valuations`에 결과를 남기고도
+ * **되읽는 코드가 한 줄도 없었다.** 그래서 같은 종목을 다시 분석하면 목표가가 크게
+ * 튀어도 아무도 몰랐다 — 한화시스템은 같은 날 5건이 1,590원 ~ 57,900원으로 갈렸다.
+ *
+ * 정본 뷰(stock_valuation_current)는 검산을 통과한 최신 값 하나만 준다.
+ * 이 값을 프롬프트에 넣으면 AI가 "지난번엔 얼마였고 무엇이 달라졌는가"를 답해야 한다.
+ */
+export async function getPriorValuation(rawTicker: string): Promise<PriorValuation | null> {
+  const ticker = normalizeTicker(rawTicker);
+  if (!ticker) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT analysis_id, current_price, bear, base, bull, abs_model, created_at
+         FROM stock_valuation_current WHERE ticker = $1`, [ticker],
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      analysisId: Number(r.analysis_id),
+      currentPrice: r.current_price, bear: r.bear, base: r.base, bull: r.bull,
+      absModel: r.abs_model, at: new Date(r.created_at),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 이 종목의 부문별 실적 전망 정본 (연도·부문마다 최신 분석 값) */
+export async function getPriorSegments(rawTicker: string): Promise<PriorSegment[]> {
+  const ticker = normalizeTicker(rawTicker);
+  if (!ticker) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT fiscal_year, segment_name, revenue, operating_income
+         FROM stock_segment_forecast_current
+        WHERE ticker = $1 ORDER BY fiscal_year, segment_name`, [ticker],
+    );
+    return rows.map(r => ({
+      fiscalYear: Number(r.fiscal_year),
+      segmentName: r.segment_name,
+      revenue: r.revenue,
+      operatingIncome: r.operating_income,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 정본을 프롬프트 블록으로. 없으면 빈 문자열.
+ *
+ * 목적은 **AI를 지난 결론에 묶는 것이 아니다.** 값이 크게 달라졌으면 그 이유를 쓰게 해서,
+ * 같은 회사가 분석할 때마다 다른 가격이 되는 것을 막는다.
+ */
+export function renderPriorBlock(prior: PriorValuation | null, segments: PriorSegment[]): string {
+  if (!prior && segments.length === 0) return "";
+
+  const lines = ["", "[📁 이 종목의 직전 분석 — 저장된 값]"];
+
+  if (prior) {
+    const d = prior.at.toISOString().slice(0, 10);
+    const fmt = (v: number | null) => (v == null ? "—" : Math.round(v).toLocaleString());
+    lines.push(
+      `· ${d} 목표가 Bear ${fmt(prior.bear)} / Base ${fmt(prior.base)} / Bull ${fmt(prior.bull)}` +
+      `${prior.absModel ? ` (절대가치 ${prior.absModel})` : ""}` +
+      `${prior.currentPrice ? ` · 당시 주가 ${fmt(prior.currentPrice)}` : ""}`,
+      `· 이번 Base가 위 값과 30% 이상 다르면, 무엇이 바뀌어서 그런지 한 줄로 밝히세요` +
+      ` (실적 변화·가정 수정·주가 이동 중 무엇인지).`,
+      `· 근거 없이 값만 달라지면 같은 회사가 볼 때마다 다른 가격이 됩니다.`,
+    );
+  }
+
+  if (segments.length) {
+    lines.push("", "· 직전 부문별 전망 (억원):");
+    for (const s of segments.slice(0, 12)) {
+      lines.push(
+        `  ${s.fiscalYear} ${s.segmentName} — 매출 ${s.revenue?.toLocaleString() ?? "—"}` +
+        ` / 영업이익 ${s.operatingIncome?.toLocaleString() ?? "—"}`,
+      );
+    }
+    lines.push(`· 부문 전망을 크게 바꿀 때도 사유를 적으세요.`);
+  }
+
+  return lines.join("\n");
+}
+
 /** 로그 한 줄 요약 — 어떤 분석이 무엇 없이 돌았는지 남긴다 */
 export function describeInputs(inputs: ValuationInputs): string {
   const pct = Math.round(inputs.completeness * 100);
