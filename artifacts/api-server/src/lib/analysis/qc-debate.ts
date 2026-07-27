@@ -15,6 +15,7 @@ import { fetchECOSMacro, buildECOSContext } from "../ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
 import { auditSotp, formatSotpIssues } from "./sotp-audit.js";
 import { auditReconciliation, formatReconcileIssues } from "../valuation/reconcile-audit.js";
+import { auditRnpv, formatRnpvIssues } from "../valuation/rnpv-audit.js";
 import { extractValuation } from "./valuation-extract.js";
 import { pickModel } from "../valuation/pick-model.js";
 import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
@@ -54,6 +55,16 @@ async function runQCCheck(
     if (issues) {
       console.warn(`[qc] ${ticker} SOTP 검산 실패 — ${audit.mismatches.length}행 불일치`);
       return { approved: false, score: 3, feedback: issues };
+    }
+
+    // rNPV의 자기검증은 프롬프트가 이미 지시하지만, AI가 빨간불을 계산하고 스스로 끈다.
+    // 메디포스트는 "일본 TAM이 글로벌 시장의 200% — 합리적", "Peak Sales가 유사약물의
+    // 750% — 합리적"으로 통과시켰고, 그 rNPV가 목표주가 41,325원(현재가 5.1배)의 근거였다.
+    const rnpvIssues = auditRnpv(content);
+    const rnpvText = formatRnpvIssues(rnpvIssues);
+    if (rnpvText) {
+      console.warn(`[qc] ${ticker} rNPV 자기검증 실패 — ${rnpvIssues.map(i => i.code).join(", ")}`);
+      return { approved: false, score: 3, feedback: rnpvText };
     }
 
     // 조율도 같은 이유로 서버가 검산한다.
