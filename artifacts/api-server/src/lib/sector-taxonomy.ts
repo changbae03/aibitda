@@ -285,6 +285,18 @@ const AMBIGUOUS_KIS: readonly string[] = [
 ];
 
 /**
+ * KIS 분류를 업종 근거로 써도 되는가.
+ *
+ * 야후가 업종을 비운 종목에서 KIS 값을 대신 쓸 때 반드시 통과시킬 것. 모호한 값을
+ * 그대로 넘기면 **야후용 규칙표에 잘못 걸린다** — "기타 금융업"이 배터리 소재 지주회사
+ * 에코프로를 KR_FINANCIAL로 보내는 식이다. 판정 규칙을 새로 만들지 말고 이 함수를 쓸 것.
+ */
+export function isUsableKisIndustry(kis: string | null | undefined): boolean {
+  const s = (kis ?? "").trim();
+  return s.length > 0 && !AMBIGUOUS_KIS.some((a) => s.includes(a));
+}
+
+/**
  * industry 문자열을 업종 코드로 바꾼다. 어디에도 안 걸리면 `{시장}_OTHER`.
  * industry가 비어 있으면 분류할 근거가 없으므로 그대로 OTHER를 돌려준다.
  *
