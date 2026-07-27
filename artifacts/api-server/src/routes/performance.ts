@@ -205,7 +205,12 @@ ${diagnosisNote || "(아직 없음)"}
 2. 방향 정확도 < 55%이면 biasRisk에 투자의견 보수화 지침 강화
 3. 진단 메모에서 반복 패턴 발견 시 specificLevers에 해당 교정 레버 추가
 4. 기존 지침이 여전히 유효하면 그대로 유지
-5. updateNotes: 무엇을 왜 바꿨는지 구체적으로 (아무것도 안 바꿨으면 "기존 지침이 유효하여 변경 없음")`;
+5. ⛔ peersNote에 PER·PBR·P/S 배수 범위를 숫자로 적지 마세요. 그 값은 매일 실제 시장에서
+   집계돼 별도로 주입됩니다. 여기에 적어두면 그날 시점에 얼어붙어 곧 틀린 값이 됩니다
+   (실제로 "한국 방산 PER 12~28x"로 적혀 있는 동안 시장 중앙값은 26.4x였고,
+   "EV/Sales 20~60x"로 적혀 있는 동안 실제는 2.1x였습니다).
+   peersNote에는 **비교할 기업의 이름**과 선정 기준만 쓰세요.
+6. updateNotes: 무엇을 왜 바꿨는지 구체적으로 (아무것도 안 바꿨으면 "기존 지침이 유효하여 변경 없음")`;
 
     const response = await genai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -615,6 +620,17 @@ router.get("/performance/calibration", async (req, res) => {
 
 // ── 섹터별 도메인 지식 사전 보정값 ─────────────────────────────────────────────
 // 실적 데이터 30건 누적 전에도 항상 적용되는 한국 시장 특성 기반 사전 보정
+//
+// ⚠️ 여기에 PER·PBR·P/S 범위를 새로 적어넣지 말 것.
+// 그 숫자들은 lib/valuation/sector-bands.ts가 stocks 뷰에서 매일 실측해 주입한다.
+// 손으로 적은 배수는 반드시 낡는다 — 실제로 한국 방산이 "PER 12~28x"로 적혀 있는
+// 동안 시장 중앙값은 26.4x였고, "EV/Sales 20~60x"로 적혀 있는 동안 실제는 2.1x였다.
+//
+// 이 표가 계속 맡는 것은 실측으로 대체할 수 없는 것들이다:
+//   · WACC·Terminal g 범위 (우리가 아직 베타를 직접 산출하지 못한다 — 과제 #38)
+//   · 피어 **이름** (누구와 비교할 것인가)
+//   · 실측 편향 기반 하드캡 (목표가가 실제 대비 몇 % 빗나갔는지 학습한 결과)
+//   · EV/EBITDA 범위 (EBITDA를 저장하지 않아 아직 실측 불가)
 export const SECTOR_PRIORS: Record<string, {
   waccRange: string;
   terminalG: string;
@@ -653,7 +669,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_FINANCIAL: {
     waccRange: "자기자본비용(CoE) 9.0~12.0% (금융주는 WACC 대신 Gordon Growth P/B 모델 사용)",
     terminalG: "g = 장기 GDP 성장률 수준 2.0~3.0%",
-    peersNote: "피어: KB금융·신한지주·하나금융·우리금융 (국내 4대 금융지주 기준). PBR 0.4~0.9x 범위 — 코스피 대비 할인 반영.",
+    peersNote: "피어: KB금융·신한지주·하나금융·우리금융 (국내 4대 금융지주 기준). 적정 PBR은 실측 밴드를 기준으로 하고, 코스피 대비 할인 사유를 서술할 것.",
     biasRisk: "주의: 금융주 DDM 시 배당 성장률 과대평가 경향. 한국 금융주는 배당 규제로 DDM 과소평가 → Gordon P/B 모델 우선.",
     specificLevers: [
       "적정 P/B = (ROE - g) / (CoE - g) 공식 적용",
@@ -664,7 +680,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_CONSTRUCTION: {
     waccRange: "WACC 9.0~12.0% (건설: 프로젝트 리스크 반영)",
     terminalG: "Terminal g ≤ 1.5%",
-    peersNote: "피어: 삼성물산 건설부문·현대건설·GS건설·대우건설. EV/EBITDA 4~8x, PBR 0.3~0.6x 범위.",
+    peersNote: "피어: 삼성물산 건설부문·현대건설·GS건설·대우건설. EV/EBITDA 4~8x 참고. PBR·PER은 실측 밴드를 쓸 것.",
     biasRisk: "주의: 삼성물산 등 복합기업은 SOTP 적용 필수. 건설부문 + 상사부문 + 투자부문 분리 평가. 단순 DCF 사용 시 지배구조 할인 미반영 오류.",
     specificLevers: [
       "SOTP 적용 시 각 사업부문 독립 멀티플 사용",
@@ -675,7 +691,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_AUTO: {
     waccRange: "WACC 10.5~13.5% (자동차 OEM: 10.5~12.0%, 부품사 티어1: 11.0~13.0%, 부품사 티어2: 12.0~13.5%)",
     terminalG: "Terminal g ≤ 1.5% (전기차 전환 리스크·경쟁 심화로 장기 성장 보수적 적용)",
-    peersNote: "OEM 피어: 현대차·기아·Toyota·Volkswagen·BMW. PER 6~14x, EV/EBITDA 3~8x. 부품사 피어: 현대모비스·만도·HL만도. PER 8~14x, EV/EBITDA 4~9x.",
+    peersNote: "OEM 피어: 현대차·기아·Toyota·Volkswagen·BMW (EV/EBITDA 3~8x). 부품사 피어: 현대모비스·만도·HL만도 (EV/EBITDA 4~9x). PER·PBR은 실측 밴드를 쓸 것.",
     biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 분석에서 부품사 목표가 300%+ 괴리 발생 확인. EV 전환 비용과 중국 경쟁사 진입 리스크를 과소평가하는 경향. 매출 성장 가정이 시장 컨센서스를 크게 벗어나면 즉시 재검토.",
     specificLevers: [
       "⛔ HARD CAP: 목표주가가 시작가의 180% 초과 금지 — 초과 시 WACC 1.5%p 상향 후 재계산",
@@ -690,7 +706,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_REIT: {
     waccRange: "Cap Rate 4.5~7.0% (리츠 유형별: 물류 4.5~5.5%, 리테일 6~7%, 오피스 5~6%)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "피어: 롯데리츠·ESR켄달스퀘어·SK리츠. FFO 기반 P/FFO 12~18x 우선.",
+    peersNote: "피어: 롯데리츠·ESR켄달스퀘어·SK리츠. P/FFO 배수 범위는 밸류에이션 모델 블록(REIT_KR)의 값을 따를 것 — 여기에 중복해 적지 않는다.",
     biasRisk: "NAV 계산 시 감정평가 기반 자산가치 사용 — 시장 거래 Cap Rate와의 차이 주의.",
     specificLevers: [
       "FFO = 순이익 + 감가상각 - 자산매각이익 (GAAP 순이익 사용 금지)",
@@ -700,7 +716,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_TELECOM: {
     waccRange: "WACC 7.5~9.5% (통신: 안정적 현금흐름 반영)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "피어: SK텔레콤·KT·LG유플러스. EV/EBITDA 4~7x, PER 10~18x 범위.",
+    peersNote: "피어: SK텔레콤·KT·LG유플러스. EV/EBITDA 4~7x 참고. PER은 실측 밴드를 쓸 것.",
     biasRisk: "5G 투자 부담으로 단기 FCF 압박 → FCFF 과대평가 주의.",
     specificLevers: [
       "5G Capex 피크(2024~2026) 이후 감소 경로 반영",
@@ -780,7 +796,7 @@ export const SECTOR_PRIORS: Record<string, {
   KR_DEFENSE: {
     waccRange: "WACC 8.0~11.0% (한화에어로스페이스·LIG넥스원 등 순수 방산: 8.0~9.5%, 조선·중장비: 9.0~11.0%)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "순수 방산 피어: 한화에어로스페이스·LIG넥스원·현대로템·한국항공우주. EV/EBITDA 10~22x (방산 프리미엄), PER 12~28x. 조선 피어: HD현대중공업·삼성중공업·한화오션. EV/EBITDA 6~14x.",
+    peersNote: "순수 방산 피어: 한화에어로스페이스·LIG넥스원·현대로템·한국항공우주. 조선 피어: HD현대중공업·삼성중공업·한화오션. EV/EBITDA는 방산 10~22x·조선 6~14x를 참고하되, PER·PBR·P/S는 위에 주입된 실측 밴드를 쓸 것.",
     biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 분석에서 산업기계 업체가 방산으로 오분류되어 목표가 316%+ 괴리 발생. 'Specialty Industrial Machinery' 업종은 방산이 아님. 방산으로 분류된 기업의 방위산업 매출 비중이 50% 미만이면 방산 멀티플 직접 적용 금지.",
     specificLevers: [
       "⛔ HARD CAP: 목표주가가 시작가의 170% 초과 금지",

@@ -550,6 +550,40 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_stock_peers_ticker ON stock_peers (ticker, rank);
     `);
 
+    // ── 업종별 배수 밴드(실측) ────────────────────────────────────────────────
+    // 프롬프트에 들어가는 "업종 PER/PBR 범위"가 여러 파일에 손으로 적혀 있었고,
+    // 적어둔 시점에 멈춰 있었다. 2026-07 실측과 대조하니 한국 방산이 코드상
+    // PER 12~28x인데 실제 중앙값은 50x였다 — 그대로 쓰면 목표가가 반토막 난다.
+    //
+    // 그래서 밴드를 stocks 뷰에서 직접 계산해 여기에 적재한다. 하드코딩 값은
+    // 표본이 모자랄 때의 폴백으로만 남는다.
+    // 이상치에 둔감하도록 평균이 아니라 사분위수(p25/p50/p75)를 쓴다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sector_multiple_bands (
+        sector      TEXT PRIMARY KEY,
+        market      TEXT NOT NULL,
+        stock_count INTEGER NOT NULL DEFAULT 0,
+        per_n       INTEGER NOT NULL DEFAULT 0,
+        per_p25     REAL,
+        per_p50     REAL,
+        per_p75     REAL,
+        pbr_n       INTEGER NOT NULL DEFAULT 0,
+        pbr_p25     REAL,
+        pbr_p50     REAL,
+        pbr_p75     REAL,
+        computed_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+
+      -- P/S(시가총액÷매출). PER·PBR보다 늦게 추가했다.
+      -- 한국 방산주가 야후 업종만 보고 "EV/Sales 20~60x(스페이스X 비교군)" 지시를
+      -- 받던 사고를 직접 막으려면 이 지표의 실측이 반드시 필요하다.
+      -- 순부채를 전 종목에 갖고 있지 않아 EV가 아닌 시가총액 기준이며, 이름도 그렇게 붙였다.
+      ALTER TABLE sector_multiple_bands ADD COLUMN IF NOT EXISTS psr_n   INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sector_multiple_bands ADD COLUMN IF NOT EXISTS psr_p25 REAL;
+      ALTER TABLE sector_multiple_bands ADD COLUMN IF NOT EXISTS psr_p50 REAL;
+      ALTER TABLE sector_multiple_bands ADD COLUMN IF NOT EXISTS psr_p75 REAL;
+    `);
+
     // ── 종목 통합 조회 창구 ──────────────────────────────────────────────────
     // 종목 마스터는 시장별로 krx_stocks / us_stocks로 나뉘어 있고 컬럼 구성은
     // 사실상 같다(공통 21개, 타입 전부 일치). 이름표만 code / ticker로 다르다.
@@ -571,7 +605,11 @@ export async function runMigrations() {
           k.market_cap, k.current_price, k.per, k.pbr, k.roe, k.opm,
           k.rev_growth, k.revenue, k.net_income, k.shares_out, k.beta,
           k.week52_high, k.week52_low,
-          k.data_fetched, k.fetch_error, k.last_updated
+          k.data_fetched, k.fetch_error, k.last_updated,
+          -- 한국 표준산업분류. 야후 industry가 틀릴 때 분류를 바로잡는 근거라
+          -- 창구에서 함께 꺼낼 수 있어야 한다(미국 종목에는 없는 개념이라 NULL).
+          -- CREATE OR REPLACE VIEW는 뒤에 컬럼을 더하는 것만 허용한다 — 맨 끝에 둘 것.
+          k.kis_industry
         FROM krx_stocks k
         UNION ALL
         SELECT
@@ -581,7 +619,8 @@ export async function runMigrations() {
           u.market_cap, u.current_price, u.per, u.pbr, u.roe, u.opm,
           u.rev_growth, u.revenue, u.net_income, u.shares_out, u.beta,
           u.week52_high, u.week52_low,
-          u.data_fetched, u.fetch_error, u.last_updated
+          u.data_fetched, u.fetch_error, u.last_updated,
+          NULL::text      AS kis_industry
         FROM us_stocks u
     `);
 

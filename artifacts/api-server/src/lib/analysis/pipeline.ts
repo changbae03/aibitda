@@ -13,7 +13,7 @@ import { validatePeers } from "../peer-validator.js";
 import { fetchKISStockQuotes, buildKISStockContext } from "../kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
-import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
+import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, needsSOTP, type AgentKey } from "../ai-agents.js";
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
@@ -24,7 +24,9 @@ import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../market-regime-updater.js";
 import { getSectorLearningNote } from "../sector-learning.js";
-import { normalizeTicker } from "@workspace/shared";
+import { buildSectorBandBlock } from "../valuation/sector-bands.js";
+import { collectValuationInputs, renderInputGaps, describeInputs } from "../valuation/inputs.js";
+import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
 import { Semaphore } from "./semaphore.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "./gemini.js";
 import { extractJsonSafe, extractFvdJson, repairInvestmentStrategyContent } from "./json-repair.js";
@@ -959,47 +961,57 @@ async function executeStep(
         }
       }
 
-      // ── 밸류에이션 모델 선택 가이드라인 주입 ──────────────────────────────────
-      // 재무 데이터 기반으로 부적절한 모델 사용을 사전 차단
+      // ── 업종 실측 배수 밴드 주입 ──────────────────────────────────────────────
+      // 예전에는 여기서 업종을 자체 정규식으로 다시 판정하고(ai-agents의 감지와
+      // 완전히 별개였다) 손으로 적어둔 배수 범위를 붙였다. 세 가지가 문제였다.
+      //
+      // ① 판정이 엇갈렸다 — 삼성바이오로직스·셀트리온은 여기서 "rNPV 필수"를
+      //    받는데 모델 선택기는 DCF를 배정했다.
+      // ② 숫자가 서로를 위반했다 — 바이오 할인율이 여기선 "8~12%, 15% 초과 금지"
+      //    인데 rNPV 모델은 "Phase 1 = 18% 고정"이었다.
+      // ③ 무엇보다 숫자가 낡고 틀렸다 — isNewSpace 정규식이 'aerospace'만 보고
+      //    한국 방산주에 "EV/Sales 20~60x(스페이스X 비교군)"를 지시했다. 한화시스템의
+      //    실제 EV/Sales는 3.4x다. 20x만 적용해도 시총이 76조(실제 12.8조)가 된다.
+      //    야후가 한국 방산을 스페이스X와 같은 칸에 넣은 것을 그대로 믿은 결과다.
+      //
+      // 이제 업종별 방법론은 lib/valuation의 모델 하나가 전담하고, 여기서는 그 모델이
+      // 쓸 **오늘의 실측 배수**만 넘긴다. 숫자는 stocks 뷰에서 매일 다시 집계되므로
+      // 낡지 않는다. 업종 판정도 KIS 분류를 함께 보는 classifySector 하나로 통일했다.
       {
         const guideLines: string[] = [];
-        const ind = (analysis.industry ?? "").toLowerCase();
-        const isBio = /바이오|제약|헬스케어|세포치료|줄기세포|biotech|pharma|healthcare/i.test(ind);
-        const isFinancial = /금융|은행|보험|증권|financ|bank|insur/i.test(ind) ||
-          /금융지주|은행지주|금융그룹|생명보험|손해보험|저축은행|신용금고/.test(analysis.companyName ?? "");
-        const isNewSpace = /우주|항공|aerospace|space|defense|방위/i.test(ind);
-        const isBattery = /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(ind) ||
-          /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(analysis.companyName ?? "");
 
-        guideLines.push(`\n[🎯 밸류에이션 모델 선택 필수 가이드라인]`);
-        guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);
+        const bandBlock = await buildSectorBandBlock(
+          tickerKrxCode,
+          analysis.industry ?? "",
+          isKoreanTicker ? "KR" : "US",
+        );
+        if (bandBlock) guideLines.push(bandBlock);
 
-        if (isBio) {
-          guideLines.push(`· 업종(${analysis.industry}): 바이오/제약 → rNPV(SOTP) 우선 사용. PBR 가중 30% 이상 금지.`);
-          guideLines.push(`· rNPV 할인율: 8~12% 범위 (PoS가 이미 임상 위험 반영 — 15% 초과 이중할인 금지)`);
-          guideLines.push(`· 피어: 동일 임상 단계의 세포치료/바이오텍 기업 기준. 수익성 있는 대형 제약사와 직접 배수 비교 금지.`);
-        } else if (isBattery) {
-          guideLines.push(`· 업종(${analysis.industry}): 2차전지/배터리 → EV/GWh + EV/EBITDA 피어 비교를 주 모델(70% 가중). DCF는 보조(30%)로만 사용.`);
-          guideLines.push(`· ⛔ STEP 0 Q1.5=YES(배터리 셀 제조사) 강제 적용 — EV/GWh 및 EV/EBITDA 피어 비교로 시작하세요. DCF 단독 사용은 치명적 오류.`);
-          guideLines.push(`· GWh 용량 데이터 없으면: EV/EBITDA 피어 배수(삼성SDI, SK이노베이션, CATL 기준)를 주 모델로 대체 사용.`);
-          guideLines.push(`· ⛔ 단위 오류 경고: 발행주식수 단위(주/천주)·기업가치 단위(원/억원/조원) 혼동 시 목표가가 1/10~1/1000 수준으로 오산됨. 주당가치 = 총기업가치(원) ÷ 발행주식수(주).`);
-          guideLines.push(`· 피어 비교 의무: 삼성SDI, SK이노베이션을 기준 피어로 항상 포함하고, 반도체 기업(삼성전자·SK하이닉스)은 피어 대상에서 완전 제외.`);
-        } else if (isFinancial) {
-          guideLines.push(`· 업종(${analysis.industry}): 금융/은행/보험/증권/금융지주 → P/B-ROE 모델 필수. DCF·EV/EBITDA 사용 금지.`);
-          guideLines.push(`· P/B-ROE 공식: Justified P/B = (ROE − g) / (CoE − g), 목표주가 = 적정 P/B × BPS`);
-          guideLines.push(`· CoE = 국고채10년(Rf) + β × ERP(한국 5~6%). ROE > CoE이면 P/B > 1x 정당화.`);
-          guideLines.push(`· 한국 금융지주·은행 P/B 벤치마크: 0.35~0.75x (KB·신한·하나·우리 평균 기준). 1.0x 초과 시 근거 필수.`);
-          guideLines.push(`· ⛔ 단위 오류 경고: BPS 계산 시 자본총계(원) ÷ 발행주식수(주) = BPS(원/주). 자본총계 단위가 백만원이면 × 1,000,000 변환 필수.`);
-          guideLines.push(`· ⛔ BPS 앵커: 서버 계산 BPS를 반드시 확인하고, AI 계산 BPS가 서버계산 BPS 대비 50% 이상 차이나면 단위 오류 의심 후 재계산.`);
-          guideLines.push(`· 목표주가가 현재가의 10% 미만이면 BPS 단위 오류(억원↔원 혼용) 가능성 — 즉시 재검토.`);
-        } else if (isNewSpace) {
-          guideLines.push(`· 업종(${analysis.industry}): 우주/항공/방위 → EV/Sales 우선. 발사체·플랫폼 옵션가치 별도 반영.`);
-          guideLines.push(`· 뉴스페이스 섹터 EV/Sales: 시장 컨센서스 20~60x 범위 (SpaceX 비교군). 15x 미만 적용 시 근거 필수.`);
-          guideLines.push(`· PBR 가중 30% 이상 금지 (자산 기반 평가 부적합).`);
-        } else {
-          guideLines.push(`· FCF 음수 + 고성장 기업: EV/Sales 우선, PBR 30% 이상 가중 금지.`);
-          guideLines.push(`· FCF 양수 + 안정 성장: DCF 또는 PER 기반 모델 적합.`);
+        // ── 확보하지 못한 입력을 명시한다 ────────────────────────────────────
+        // 예전에는 데이터가 비어도 프롬프트가 아무 말을 하지 않아, AI가 조용히 추정으로
+        // 메웠다. 순부채를 추정한 분석에서 목표주가가 실제의 6배로 나온 적이 있다.
+        // 무엇이 없는지 알려주고 "지어내지 말라"고 못박는다. 로그에도 남겨,
+        // 어떤 분석이 무엇 없이 돌았는지 나중에 되짚을 수 있게 한다.
+        try {
+          const vInputs = await collectValuationInputs(
+            analysis.ticker,
+            analysis.companyName,
+            analysis.industry ?? "",
+            needsSOTP(analysis.industry ?? "", analysis.companyName ?? "", analysis.ticker),
+          );
+          console.log(`[val-inputs] ${describeInputs(vInputs)}`);
+          const gapBlock = renderInputGaps(vInputs);
+          if (gapBlock) guideLines.push(gapBlock);
+        } catch (e) {
+          console.warn(`[val-inputs] 입력 점검 실패 — 생략하고 진행:`, (e as Error)?.message);
         }
+
+        guideLines.push(`\n[🎯 밸류에이션 공통 규칙]`);
+        guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);
+        guideLines.push(`· ⛔ 단위 오류 경고: 주당가치 = 총기업가치(원) ÷ 발행주식수(주). 발행주식수(주/천주)나 기업가치(원/억원/조원) 단위를 섞으면 목표가가 1/10~1/1000으로 오산됩니다.`);
+        guideLines.push(`· ⛔ BPS 단위: 자본총계(원) ÷ 발행주식수(주) = BPS(원/주). 자본총계가 백만원 단위면 ×1,000,000 변환 후 계산하세요.`);
+        guideLines.push(`· ⛔ 서버가 계산해 컨텍스트에 넣어준 BPS·순부채가 있으면 그 값을 우선 사용하세요. 직접 계산값이 서버값과 50% 이상 다르면 단위 오류를 의심하고 재계산하세요.`);
+        guideLines.push(`· 목표주가가 현재가의 10% 미만으로 나오면 단위 오류(억원↔원 혼용) 가능성 — 즉시 재검토.`);
         guideLines.push(`· 피어 배수 선택 시 현재 시장 내재 멀티플(위 컨텍스트 참조)의 25% 미만 배수 사용 금지.`);
         guideLines.push(`· 최종 목표주가(Base)는 현재가의 30% 미만 산출 시 QC 불승인 — 가정 재검토 필수.`);
         guideLines.push(`\n⛔ 수치 일관성 필수 (위반 시 QC 불승인):`);
@@ -1008,7 +1020,7 @@ async function executeStep(
 
         const guideBlock = guideLines.join("\n");
         enrichedContext = enrichedContext ? enrichedContext + "\n" + guideBlock : guideBlock;
-        console.log(`[model-guide] 밸류에이션 모델 가이드라인 주입 (isBio=${isBio}, isBattery=${isBattery}, isNewSpace=${isNewSpace})`);
+        console.log(`[model-guide] 공통 규칙 주입 (실측 밴드 ${bandBlock ? "포함" : "없음"})`);
       }
 
       // ── 테마 프리미엄 보정 (이전 스텝 텍스트에서 핫 테마 감지 → 멀티플 상향) ───────
@@ -1039,11 +1051,14 @@ async function executeStep(
           const avgPremium = Math.round(hotThemes.reduce((s, t) => s + t.premiumPct, 0) / hotThemes.length);
           const themeLabels = hotThemes.map(t => t.label).join(", ");
 
-          let themeBlock = `\n\n[🚀 테마 프리미엄 보정 — 핫 테마 노출 감지: ${themeLabels}]\n`;
-          themeBlock += `이 종목은 시장에서 고배수를 받는 핫 테마에 노출됩니다. 상대가치 평가 시 아래를 적용하세요:\n`;
-          themeBlock += `① 전통 업종 피어 배수에 +${avgPremium}% 테마 프리미엄 가산\n`;
-          themeBlock += `   - 근거: 해당 테마 사업부의 매출 기여도·공시된 성장 모멘텀을 정량적으로 제시할 것\n`;
-          themeBlock += `   - 테마 가시성이 높을수록(계약·양산·고객사 발표 등) 프리미엄 범위 상향 가능\n`;
+          let themeBlock = `\n\n[🚀 테마 노출 감지: ${themeLabels}]\n`;
+          themeBlock += `이 종목은 시장에서 고배수를 받는 테마에 노출됩니다. 상대가치 평가 시 아래를 적용하세요:\n`;
+          themeBlock += `① ⛔ 업종 배수에 테마 프리미엄을 일괄 가산하지 마세요 — 이중 계상입니다.\n`;
+          themeBlock += `   위에 제시된 '업종 실측 배수'는 오늘 시장 가격에서 뽑은 값이라, 업종 전체가\n`;
+          themeBlock += `   이미 재평가됐다면 그 재평가가 밴드에 반영돼 있습니다(예: 한국 방산 PER 중앙값).\n`;
+          themeBlock += `   여기에 다시 +${avgPremium}%를 얹으면 같은 프리미엄을 두 번 세는 셈입니다.\n`;
+          themeBlock += `   이 종목이 **업종 평균보다 더** 테마에 노출됐다는 근거(매출 기여도·수주·고객사\n`;
+          themeBlock += `   발표)를 정량으로 제시할 수 있을 때만, 밴드 중앙값 대신 상위25% 쪽을 쓰세요.\n`;
           if (needsSotp) {
             themeBlock += `② SOTP(Sum-of-the-Parts) 분석 권장:\n`;
             themeBlock += `   · [전통 사업부] 동종 피어 배수로 평가\n`;
@@ -1158,8 +1173,26 @@ async function executeStep(
       content: s.content,
     }));
 
-  const tickerMarket: "KR" | "US" = /^\d{6}$/.test(analysis.ticker) ? "KR" : "US";
-  const sectorKey = classifySector(analysis.industry ?? "", tickerMarket);
+  const tickerMarket: "KR" | "US" = isKoreanTicker(analysis.ticker) ? "KR" : "US";
+
+  // 종목 마스터에서 분류 근거와 수익성을 한 번에 꺼낸다.
+  // · kis_industry: 야후 industry 단독 분류는 한국 종목에서 자주 틀린다(한화시스템 사례).
+  // · opm: 바이오를 rNPV로 볼지 DCF로 볼지 가르는 기준. 파이프라인 가치가 전부인
+  //   적자 임상기업이라야 rNPV가 맞는다 — 삼성바이오로직스(CDMO)·셀트리온(바이오시밀러)
+  //   처럼 이미 이익을 내는 회사에 rNPV를 쓰면 현재 사업가치를 통째로 놓친다.
+  const masterRow = await pool
+    .query<{ industry: string | null; kis_industry: string | null; opm: number | null }>(
+      `SELECT industry, kis_industry, opm FROM stocks WHERE ticker = $1 LIMIT 1`,
+      [analysis.ticker],
+    )
+    .then(r => r.rows[0] ?? null)
+    .catch(() => null);
+
+  const sectorKey = classifySector(
+    masterRow?.industry ?? analysis.industry ?? "",
+    tickerMarket,
+    masterRow?.kis_industry,
+  );
   const sectorCalibration = await getCalibrationContext(sectorKey);
 
   const { systemPrompt, userPrompt } = buildPrompt(
@@ -1171,7 +1204,8 @@ async function executeStep(
     previousStepsForContext,
     sectorCalibration,
     ((analysis as any).language ?? "ko") as "ko" | "en",
-    analysis.startPrice ?? null
+    analysis.startPrice ?? null,
+    { opm: masterRow?.opm ?? null }
   );
 
   /**
@@ -1423,7 +1457,7 @@ async function executeStep(
           console.log(`[QC] DART floor extracted: ${dartFloorAuk}억원 for ${analysis.ticker}`);
         }
       }
-      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker, dartFloorAuk);
+      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker, dartFloorAuk, analysis.industry);
       console.log(`[QC] ${stepKey} score=${qcResult.score} approved=${qcResult.approved}`);
 
       if (!qcResult.approved) {
@@ -1633,9 +1667,16 @@ async function executeStep(
               entryPrice = null;
             }
           }
-          if (stopLoss) {
+          // ⚠️ `if (stopLoss)`로만 걸러내면 **0이 그대로 저장된다** — 0은 거짓이라
+          // 아래 검사를 통째로 건너뛴다. 실제로 메디포스트(분석 1132)의 손절가가
+          // 0원으로 저장돼 있었다. 손절 0원은 "손실을 무한히 감수한다"는 뜻이라
+          // 손절선이 아예 없는 것보다 나쁘다. 값이 있으되 유효하지 않으면 null로 만든다.
+          if (stopLoss !== null) {
             const ratio = stopLoss / savedStartPrice;
-            if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
+            if (stopLoss <= 0) {
+              console.warn(`[analysis ${id}] stop_loss ${stopLoss} — 0 이하라 무효 처리`);
+              stopLoss = null;
+            } else if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
               console.warn(`[analysis ${id}] stop_loss ${stopLoss} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
               stopLoss = null;
             }

@@ -1,3 +1,8 @@
+import { renderModelBlock } from "./valuation/model-registry.js";
+import { pickModel, setFlagDetector } from "./valuation/pick-model.js";
+import { renderReportFormat } from "./valuation/report-formats.js";
+import { isKoreanTicker } from "@workspace/shared";
+
 export type AgentKey =
   | "company_intro"
   | "industry_analysis"
@@ -1634,6 +1639,10 @@ function needsUSREIT(industry: string, companyName: string, ticker?: string): bo
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
+  // 한국 종목(6자리 숫자 티커)은 미국 전용 모델 대상이 아니다.
+  // 야후 업종명은 시장 구분이 없어 키워드만 보면 한국 종목이 새어 들어온다.
+  if (/^\d{6}$/.test(bare)) return false;
+
   if (/us reit|american reit|data center reit|cell tower reit|healthcare reit|industrial reit|logistics reit|residential reit|retail reit|office reit|self.?storage reit/.test(ind)) return true;
   if (/equinix|digital realty|prologis|american tower|crown castle|sba communications|welltower|ventas|healthpeak|simon property|realty income|vici properties|avalonbay|equity residential|essex property|boston properties|public storage|extra space|iron mountain|rexford|eastgroup|camden property|mid-america apartment|stag industrial|agree realty|national retail/.test(name)) return true;
 
@@ -1667,6 +1676,10 @@ function needsUSBiotech(industry: string, companyName: string, ticker?: string):
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
   // 미국 바이오 전용 (한국 바이오와 겹치지 않도록 US 한정)
+  // 한국 종목(6자리 숫자 티커)은 미국 전용 모델 대상이 아니다.
+  // 야후 업종명은 시장 구분이 없어 키워드만 보면 한국 종목이 새어 들어온다.
+  if (/^\d{6}$/.test(bare)) return false;
+
   if (/us biotech|american biotech|us pharma|american pharma|biopharmaceutical|clinical.?stage biotech|fda approval/.test(ind)) return true;
   if (/moderna|biontech|regeneron|vertex pharmaceuticals|alnylam|biomarin|ionis pharmaceuticals|neurocrine|argenx|sarepta|arvinas|beam therapeutics|karuna|kymera|relay therapeutics|revolution medicines|blueprint medicine|recursion|denali|iovance|crinetics|day one biopharmaceuticals|praxis precision|keros therapeutics/.test(name)) return true;
 
@@ -1690,17 +1703,36 @@ function needsUSBiotech(industry: string, companyName: string, ticker?: string):
   return false;
 }
 
-function needsKorBiotech(industry: string, companyName: string, ticker?: string): boolean {
+function needsKorBiotech(
+  industry: string,
+  companyName: string,
+  ticker?: string,
+  opm?: number | null,
+): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
-  // 반드시 한국 주식
-  const isKoreanTicker = (ticker ?? "").includes(".KS") || (ticker ?? "").includes(".KQ");
-  if (!isKoreanTicker) return false;
+  // rNPV는 **가치의 대부분이 아직 팔지 않은 파이프라인에 있는** 회사를 위한 방법이다.
+  // 이미 이익을 내고 있으면 현재 사업 자체가 가치의 본체이므로 DCF가 맞다.
+  // 삼성바이오로직스(CDMO 영업이익률 46%)·셀트리온(바이오시밀러)이 rNPV로 가면
+  // 벌고 있는 돈을 통째로 빼고 임상 성공확률만 세게 된다.
+  // 지표가 없으면(수집 전 종목) 예전대로 업종만 보고 판단한다.
+  if (typeof opm === "number" && opm > 5) return false;
 
-  // 바이오·제약 관련 업종이면 감지
+  // 반드시 한국 주식.
+  //
+  // ⚠️ 예전에는 `ticker.includes(".KS")`로 판정했다. 티커를 접미사 없는 표준형(217730)으로
+  // 통일한 뒤로 이 조건이 **어떤 한국 종목에도 참이 되지 않았고**, 그 결과 한국 바이오텍이
+  // 하나도 rNPV를 받지 못했다(강스템바이오텍·코오롱티슈진이 DCF·SOTP로 갔다).
+  // 판정은 공용 관문 하나만 쓴다 — lib/shared/ticker.ts.
+  if (!isKoreanTicker(ticker)) return false;
+
+  // 바이오·제약 관련 업종이면 감지.
+  // 야후 industry는 영문("Biotechnology")이라 한글 키워드만으로는 걸리지 않는다 —
+  // 영문 표기도 함께 본다.
   if (/바이오|생명과학|헬스케어|유전체|신약|세포치료|줄기세포|유전자치료|제약/.test(ind)) return true;
+  if (/biotechnology|pharmaceutical|drug manufacturer/.test(ind)) return true;
 
   // 알려진 한국 파이프라인 바이오텍 이름 키워드
   const KOR_BIOTECH_NAMES = [
@@ -1759,6 +1791,11 @@ function needsUSDefense(industry: string, companyName: string, ticker?: string):
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
+  // 야후는 한국 조선사(한화오션·HD현대중공업)의 업종도 "Aerospace & Defense"로 준다.
+  // 시장 구분 없이 키워드만 보면 한국 종목이 미국 방산 모델(CCAR·EAC 정상화)로 새므로
+  // 6자리 숫자 티커(한국)는 이 판정에서 제외한다.
+  if (/^\d{6}$/.test(bare)) return false;
+
   if (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind)) return true;
   if (/lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdigm|heico|bwxt|leonardo drs|curtiss-wright/.test(name)) return true;
 
@@ -1791,6 +1828,10 @@ function needsUSBank(industry: string, companyName: string, ticker?: string): bo
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  // 한국 종목(6자리 숫자 티커)은 미국 전용 모델 대상이 아니다.
+  // 야후 업종명은 시장 구분이 없어 키워드만 보면 한국 종목이 새어 들어온다.
+  if (/^\d{6}$/.test(bare)) return false;
 
   if (/commercial banking|investment banking|retail banking|us bank|american bank|regional bank|money center bank/.test(ind)) return true;
   if (/jpmorgan|bank of america|wells fargo|citigroup|goldman sachs|morgan stanley|us bancorp|truist|pnc financial|keycorp|regions financial|citizens financial|huntington|fifth third|m&t bank/.test(name)) return true;
@@ -1864,6 +1905,10 @@ function needsBigTech(industry: string, companyName: string, ticker?: string): b
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  // 한국 종목(6자리 숫자 티커)은 미국 전용 모델 대상이 아니다.
+  // 야후 업종명은 시장 구분이 없어 키워드만 보면 한국 종목이 새어 들어온다.
+  if (/^\d{6}$/.test(bare)) return false;
 
   if (/mega.?cap tech|bigtech|faang|m7|magnificent seven/.test(ind)) return true;
   if (/apple inc|alphabet inc|amazon\.com|meta platforms|microsoft corp|nvidia corp|netflix inc|tesla inc/.test(name)) return true;
@@ -2175,20 +2220,25 @@ function needsCBDilutionCheck(industry: string, companyName: string, ticker?: st
   const ind  = (industry ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
-  // 한국 주식(.KS/.KQ)에서 CB/BW 발행이 빈번한 섹터
-  const isKoreanTicker = (ticker ?? "").includes(".KS") || (ticker ?? "").includes(".KQ");
-  if (!isKoreanTicker) return false; // 미국 주식은 해당 없음
+  // 한국 주식에서 CB/BW 발행이 빈번한 섹터.
+  // needsKorBiotech와 같은 접미사 판정 버그가 있었다 — 표준형 티커에는 .KS/.KQ가 없어
+  // 이 함수도 항상 false를 돌려주고 있었다.
+  if (!isKoreanTicker(ticker)) return false; // 미국 주식은 해당 없음
 
   // CB/BW 발행이 특히 빈번한 섹터: 바이오·IT·소재·게임
   if (/바이오|biotech|bio|pharma|제약|it|소프트웨어|게임|game|소재|material|2차전지|battery|전기차/.test(ind)) return true;
 
-  // 코스닥(KQ) 소형주는 일괄 체크 대상
-  if ((ticker ?? "").includes(".KQ")) return true;
-
+  // 예전에는 여기서 코스닥(.KQ) 소형주를 일괄 대상으로 삼았다. 표준형 티커에는 거래소
+  // 구분이 없으므로(그 정보는 stocks 뷰의 exchange 컬럼에 있다) 그 갈래는 뺐다.
+  // 업종 조건만으로도 CB/BW가 잦은 곳은 대부분 걸린다.
   return false;
 }
 
-function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
+/**
+ * SOTP(사업부 합산) 대상인가. 밸류에이션 모델 선택과 입력 점검이 같은 판정을 써야 하므로
+ * 여기 하나만 둔다 — 파이프라인이 자체 정규식으로 다시 판정하면 또 엇갈린다.
+ */
+export function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
@@ -2232,7 +2282,12 @@ export function buildPrompt(
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>,
   sectorCalibration?: string | null,
   language?: "ko" | "en",
-  startPrice?: number | null
+  startPrice?: number | null,
+  /**
+   * 종목 마스터에서 가져온 지표. 업종만으로는 가를 수 없는 판단에 쓴다.
+   * 지금은 바이오의 rNPV/DCF 갈림에만 쓰이며, 없으면 예전처럼 업종으로만 판단한다.
+   */
+  metrics?: { opm?: number | null }
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate    = getSectorTemplate(industry, companyName);
   const sotpFlag         = needsSOTP(industry, companyName, ticker);
@@ -2256,8 +2311,20 @@ export function buildPrompt(
   const gamingFlag          = needsGaming(industry, companyName, ticker);
   const shippingFlag        = needsShipping(industry, companyName, ticker);
   const cbDilutionFlag      = needsCBDilutionCheck(industry, companyName, ticker);
-  const korBiotechFlag      = needsKorBiotech(industry, companyName, ticker);
+  const korBiotechFlag      = needsKorBiotech(industry, companyName, ticker, metrics?.opm);
   const batteryMaterialFlag = needsBatteryMaterial(industry, companyName, ticker);
+
+  // 업종에 맞는 밸류에이션 모델 하나만 고른다. 판정은 pickModel 하나만 쓴다 —
+  // QC의 조율 검산도 같은 모델의 가중치를 봐야 하는데, 두 곳에서 각자 판정하면
+  // 또 엇갈린다(예전에 pipeline과 ai-agents의 업종 판정이 어긋났던 것과 같은 함정).
+  const valuationModel = pickModel(industry, companyName, ticker, metrics?.opm);
+  const valuationModelBlock = renderModelBlock(valuationModel);
+
+  // 보고서 본문 서식도 같은 선택을 따른다.
+  // 예전에는 DCF·rNPV·EV/Sales·Gordon P/B 네 벌(640줄)이 전부 들어가고 "모델이 X인
+  // 경우 이 섹션만 작성"이라는 문장으로 AI가 고르게 했다. 삼성전자 프롬프트에
+  // 임상 파이프라인 rNPV 작성법 21k자가 실려 있었다 — userPrompt의 54%였다.
+  const valuationReportFormat = renderReportFormat(valuationModel);
 
   const _now = new Date();
   const _currentYear = _now.getFullYear();
@@ -4480,646 +4547,7 @@ ${COMMON_RULES}`,
 
 ---
 
-### [모델이 DCF (NOPAT/FCFF)인 경우 — 가정 표 → 계산 표 순서로 작성]
-
-**핵심 가정 — DCF (NOPAT/FCFF 기반)**
-
-ROIC 분석: 최근 실적 기준 ROIC __%, Forward ROIC __%로 WACC 대비 스프레드 __%p (양수 = 가치 창출, 음수 = 가치 소멸).
-
-| 가정 항목 | Base | 정상범위/근거 |
-|-----------|------|------------|
-| 매출 CAGR 1–3년 (실적 전망 역산) | | 실적 전망 인계값 |
-| 매출 CAGR 4–10년 (장기 추정) | | 업종 성장률 근거 |
-| 영업이익률 안정기 | | 과거 평균·피어 근거 |
-| 유효세율 | | 25%(기본) 또는 실적 데이터 |
-| Sales-to-Capital Ratio | | 업종 평균 근거 |
-| WACC | | 8~14% 정상범위 |
-| Terminal Growth Rate (g) | | ≤2.0% 한국 GDP 상한 (2.0% 초과 시 즉시 하향 조정) |
-
-#### DCF 밸류에이션 모델 (NOPAT/FCFF 기반)
-
-단위: 인계 요약의 단위를 그대로 사용. 발행주식수는 인계 요약에서 직접 인용.
-
-| 연도 | 매출(단위) | 영업이익률 | NOPAT(단위) | 재투자(단위) | FCFF(단위) | PV(FCFF, 단위) |
-|------|-----------|-----------|------------|------------|-----------|--------------|
-| 1 | | | | | | |
-| 2 | | | | | | |
-| 3 | | | | | | |
-| 4 | | | | | | |
-| 5 | | | | | | |
-| 6~10 합계 | | | | | | |
-| Terminal Value PV | | | | | | |
-| **PV(FCFF 1~10) 합계** | | | | | | |
-| **기업가치 합계** | | | | | | |
-
-⚠️ Terminal Value 비중 확인: TV PV ÷ 기업가치 합계 = __%  (80% 초과 시 "TV 비중 과대" 경고)
-
-⚠️ 주당가치 환산 (단위 변환 명시) — 아래 두 줄을 각각 별도 단락으로 작성하세요:
-
-주주가치 = 기업가치 + 순현금(__단위) = __단위
-
-주당 내재가치 = __단위 × [단위→현지통화 환산계수] ÷ __주(발행주식수) = **__현지통화/주**
-
-- KRW 기업 예: 8조원 × 1,000,000,000,000 ÷ 400,000,000주 = 25,000원/주
-- USD 기업 예: $50,000M × 1,000,000 ÷ 2,450,000,000주 = $20.41/주
-
-#### 🔄 Reverse DCF
-현재 주가(실적 전망 인계값)를 기준으로 WACC를 고정한 뒤, 현재 주가를 정당화하려면 매출 CAGR과 영업이익률이 각각 얼마여야 하는지 역산하세요. "시장은 현재 이 기업에 대해 ___을 기대하고 있으며, 이는 Base 가정(CAGR __%/OPM __%) 대비 [달성 가능/도전적/비현실적]이다" 형식으로 결론하세요.
-
-> 💬 **[절대가치 해설 — 필수 작성]** DCF 표와 Reverse DCF를 작성한 뒤, 아래 두 문장을 반드시 포함하세요:
-> 1. "DCF 모델이 산출한 주당 내재가치 __원은, 이 회사가 앞으로 __년간 벌어들일 현금을 오늘 기준으로 환산했을 때 한 주의 가치가 이 정도라는 의미입니다."
-> 2. "현재 주가(__)와 비교하면 [X% 저평가/고평가] 수준이며, Reverse DCF 기준 시장은 [현재 주가를 정당화하는 성장 시나리오]를 기대하고 있습니다. 이는 당사 Base 가정 대비 [달성 가능/도전적/비현실적]으로 판단합니다."
-
----
-
-### [모델이 Pipeline rNPV인 경우 — 이 섹션만 작성]
-
-**핵심 가정 — rNPV**
-
-⚠️ **rNPV 할인율 원칙 — 이중 할인 금지**:
-rNPV는 PoS(임상 성공 확률)로 임상 위험을 이미 제거합니다. 따라서 할인율에 임상 위험 프리미엄을 추가로 얹으면 위험을 **이중으로 차감**하는 오류가 발생합니다.
-- ✅ 올바른 할인율 = 무위험수익률(Rf) + 시장 위험 프리미엄 × β(사업위험만) = 통상 **8~12%**
-- ❌ 잘못된 할인율 = WACC에 바이오 리스크 프리미엄까지 추가 → 12~15% → 이 경우 임상 위험이 PoS + 할인율에서 2번 빠짐
-- 적용 기준: 한국 바이오 8~11% (성숙 자산), 순수 임상단계 10~12% (개발 불확실성 반영), 전임상·초기 Phase 1: 12% 상한
-
-할인율(rNPV 기준): __% | 파이프라인 검토 기준: 임상 단계 × 치료 영역 × 모달리티 기반 PoS 적용
-
-📋 **PoS 참조표 — 치료 영역 × 임상 단계 (Citeline/IQVIA 기준, 반드시 이 기준 적용)**
-| 임상 단계 | 일반 평균 | 항암제 | 자가면역·염증 | 중추신경계(CNS) | 희귀질환 | 세포·유전자치료 | 바이오시밀러 |
-|---------|---------|------|------------|--------------|--------|--------------|-----------|
-| 전임상 | 7% | 4% | 8% | 6% | 12% | 5% | 60% |
-| Phase 1 | 12% | 6% | 15% | 8% | 20% | 8% | 70% |
-| Phase 2 | 28% | 15% | 35% | 22% | 45% | 20% | 80% |
-| Phase 3 (IND 승인·착수) | 45% | 35% | 50% | 42% | 55% | 40% | 85% |
-| Phase 3 (진행 중·중간 데이터 없음) | 60% | 40% | 65% | 55% | 70% | 50% | 88% |
-| Phase 3 완료 (결과 발표 대기) | 82% | 75% | 85% | 80% | 88% | 72% | 93% |
-| BLA/NDA 신청 | 87% | 83% | 90% | 85% | 92% | 80% | 95% |
-| 허가 완료 | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
-
-⚠️ **Phase 3 세부 단계 판정 규칙 (필수 적용)**:
-- **"Phase 3 (IND 승인·착수)"**: 해당 국가·적응증에서 IND(임상시험계획) 승인을 받았거나 첫 환자 투약(FPI) 직전 단계.
-- **"Phase 3 (진행 중)"**: 3상 환자 등록·투약 중이나 탑라인 데이터 미발표.
-- **"Phase 3 완료 (결과 대기)"**: 임상 투약·추적 관찰 종료, 탑라인(Topline) 데이터 발표만 남은 상태 — **80~90% 범위**.
-- ⛔ **동일 약물이 복수 국가에서 서로 다른 단계에 있을 경우, 각 국가·적응증별로 별도 rNPV를 계산하고 PoS를 달리 적용해야 함.**
-
-📐 **PoS 추가 보정 규칙 — 기본 테이블값에 아래 항목을 누적 적용 (단, 총 합계 ±20%p 상한)**
-
-① **임상 데이터 품질 보정**:
-| 조건 | 보정 |
-|------|------|
-| OS(전체생존기간) 주 평가변수 충족 + 통계적 유의 | +5~8%p |
-| ORR/PFS만 충족 (OS 미성숙·보조 평가변수) | 기본값 유지 |
-| 바이오마커 선택(Biomarker-selected) 환자군 임상 | +3~5%p |
-| Phase 2 소규모(<100명) 단일군 비무작위 시험 | -5~10%p |
-| 오픈라벨(위약 대조군 없음) | -3~5%p |
-| 중간 분석(Interim analysis) 결과만 발표, 최종 미확정 | -3~5%p |
-
-② **규제 환경 보정**:
-| 조건 | 보정 |
-|------|------|
-| FDA RMAT(Regenerative Medicine Advanced Therapy) 지정 | +10~15%p |
-| FDA Breakthrough Therapy Designation(BTD) | +5~10%p |
-| FDA Priority Review | +3~5%p |
-| FDA Fast Track | +2~3%p |
-| EMA PRIME 지정 | +3~5%p |
-| MFDS 신속심사 지정 (한국) | +3%p |
-| FDA Advisory Committee(AdCom) 긍정 다수의견 | +8~12%p |
-| FDA AdCom 부정 다수의견 | -20~30%p |
-| FDA CRL(Complete Response Letter) 수령 이력 | -10~20%p |
-
-③ **경쟁·임상 환경 보정**:
-| 조건 | 보정 |
-|------|------|
-| First-in-class (동일 기전·모달리티 허가 약물 전무) | +3~5%p |
-| 동일 기전·적응증에서 이미 허가된 경쟁 약물 존재 | -5~10%p |
-| 같은 약물이 동일 국가 다른 적응증에서 이미 허가됨 | +5%p |
-| 이미 타국(한국·일본 등)에서 허가·판매 중인 약물의 해외 확장 임상 | +5~10%p |
-| 병용요법(3가지 이상 약물 조합) 복잡성 | -3~5%p |
-| 임상 실패 이력 있는 적응증(같은 기전, 다른 회사) | -5~10%p |
-
-⚠️ **PoS 최종 확정 절차 (반드시 수행)**:
-1. 기본 테이블값(임상단계 × 치료영역) 확인
-2. 위 3가지 카테고리에서 해당 조건 합산 보정
-3. 최종 PoS = 기본값 + 보정합계 (단, 0~95% 범위로 제한)
-4. **보정 내역을 파이프라인 표에 별도 행으로 명시**: "기본 PoS __% + 보정 __% = 최종 PoS __%"
-
-🇯🇵 **일본 시장 세포치료제·줄기세포 치료제 특별 규칙 (카티스템·줄기세포 OA 등)**:
-- **일본 OA(골관절염) 환자 규모**: 약 2,500~3,000만명 (일본정형외과학회 기준). 중등도~중증 치료 대상: 약 300~500만명.
-- **일본 세포치료제 약가 수준**: 한국 허가 가격의 2~3배 수준 (일본 약가 산정 체계 특성 + PMDA 심사 비용 반영). 예: 한국 700만원/회 → 일본 1,500~2,000만원/회 추정.
-- **일본 시장 TAM 최소 기준**: Phase 3 완료 세포치료제 OA 적응증의 경우, 일본 단독 TAM = 환자 수 × 가격 기준 최소 5,000억원 이상으로 추정. 이보다 낮으면 제한 근거 명시 필수.
-- **이미 한국에서 허가·판매 중인 약물의 일본 확장 임상**: PoS를 기본값보다 +5~10%p 상향 가능 (한국 허가 데이터·안전성 데이터가 일본 PMDA 심사의 중요 참고자료로 활용됨).
-- **라이선스아웃(L/O) 구조 일본**: 파트너사(일본 제약사) 판매 Peak Sales를 먼저 산출한 후 로열티율 적용. 일본 세포치료제 통상 로열티율: 8~15% (계약서 공시 없을 경우 10% 기본 적용). **파트너사 Peak Sales 계산 없이 당사 귀속분을 직접 추정하는 것은 오류**.
-
-⛔ **Phase 3 완료 일본 자산 Peak Sales 하한선**:
-- 일본 Phase 3 완료 + 한국 이미 허가·판매 중인 세포치료제 OA 자산의 경우:
-  * 직접 판매 구조: 당사 귀속 Peak Sales **최소 800억원 이상**
-  * 라이선스아웃 구조(로열티 10% 기준): 파트너사 Peak Sales **최소 5,000억원 이상** → 당사 귀속 최소 500억원
-  * 이보다 낮게 설정하려면 근거(극히 낮은 로열티율·적응증 범위 제한·경쟁약물 허가 등)를 반드시 명시
-- rNPV(PoS 반영 후) = Peak Sales × PoS × 할인계수 → **Phase 3 완료 일본 OA 세포치료제의 rNPV는 최소 300억원 이상이 합리적. 이보다 낮으면 계산 오류 가능성 점검.**
-
-🇺🇸 **미국 시장 세포치료제·줄기세포 치료제 특별 규칙 (FDA 임상 자산)**:
-- **미국 OA(골관절염) 환자 규모**: 약 3,200만명 (CDC 기준). 중등도~중증 치료 대상: 약 500~800만명.
-- **미국 세포치료제 약가 수준**: 한국 허가 가격의 5~10배 (미국 고가 세포치료제 약가 체계·보험 청구 구조). 예: 한국 700만원/회 → 미국 $25,000~$50,000/회 (3,500~7,000만원) 추정.
-- **미국 시장 TAM 최소 기준**: Phase 2 이상 세포치료제 OA 적응증의 경우, 미국 단독 TAM = 최소 1조원 이상으로 추정. Phase 3 완료 자산은 최소 2조원 이상. 이보다 낮으면 제한 근거 명시 필수.
-- **이미 한국에서 허가·판매 중인 약물의 FDA 임상**: 한국 허가 안전성·유효성 데이터가 FDA 심사의 보조 자료로 활용됨. PoS를 기본값보다 +3~7%p 상향 가능.
-- **FDA 특별 지정 여부 반드시 확인**:
-  * RMAT(Regenerative Medicine Advanced Therapy) 지정: PoS +10~15%p 상향, 심사 기간 단축 (6~12개월 절약)
-  * Breakthrough Therapy Designation(BTD): PoS +5~10%p 상향
-  * Fast Track: PoS +2~3%p 상향
-  * 줄기세포·세포치료제는 RMAT 지정 대상 — **반드시 지정 여부 컨텍스트 확인 또는 "RMAT 지정 여부 미확인"으로 명시**
-- **라이선스아웃(L/O) 구조 미국**: 글로벌 빅파마 파트너사 판매 Peak Sales 먼저 산출 후 로열티율 적용. 미국 세포치료제 통상 로열티율: 10~20% (계약서 공시 없을 경우 12% 기본 적용). 파트너사 Peak Sales 없이 당사 귀속분 직접 추정하는 것은 오류.
-
-⛔ **Phase 2/3 미국 자산 Peak Sales 하한선 (OA 세포치료제)**:
-- 미국 Phase 2 완료 OA 세포치료제(한국 허가 기준):
-  * 라이선스아웃 구조(로열티 12% 기준): 파트너사 Peak Sales **최소 1조원** → 당사 귀속 최소 1,200억원
-  * rNPV(PoS ~30% 기준): **최소 360억원 이상**
-- 미국 Phase 3 완료 OA 세포치료제(한국 허가 기준):
-  * 라이선스아웃 구조(로열티 12% 기준): 파트너사 Peak Sales **최소 2조원** → 당사 귀속 최소 2,400억원
-  * rNPV(PoS ~85% 기준): **최소 1,500억원 이상**
-  * 직접 판매 구조: 당사 귀속 Peak Sales **최소 3,000억원 이상**
-- 이보다 낮게 설정하려면 근거(RMAT 미지정 + BTD 미지정 + 경쟁약물 다수 허가 등)를 반드시 명시
-
-📋 **모달리티별 COGS·마진 기준값 (Peak 시)**
-| 모달리티 | 매출원가(COGS) | 영업이익률 | 비고 |
-|--------|-------------|---------|-----|
-| 합성의약품(소분자) | 15~25% | 35~55% | 제조 효율 높음 |
-| 단백질 의약품(항체·단백질) | 25~35% | 30~45% | BLA 필요 |
-| 세포치료제 (CAR-T·줄기세포 등) | 50~70% | 10~30% | 제조원가 극히 높음 |
-| 유전자치료제 | 40~60% | 15~35% | 초고가 1회 투여 |
-| 바이오시밀러 | 35~50% | 15~30% | 가격 경쟁 심함 |
-
-📋 **한국 규제 타임라인 가이드 (MFDS 기준)**
-- MFDS 허가 심사 기간: NDA 제출 후 통상 12~18개월 (신속심사 6~9개월)
-- 건강보험 급여 등재 (일반 신약): 허가 후 추가 12~24개월 (급여 전 매출은 극히 제한적)
-- ⚠️ **세포치료제·줄기세포 급여 등재는 일반 신약과 근본적으로 다름**: MFDS 허가 후에도 5~10년 이상 비급여 상태 유지 사례 다수. 건강보험심사평가원(HIRA) 급여 기준 자체가 세포치료제에 미비하여 협상 기간 극히 장기화. 예시: 카티스템(메디포스트) — 2012년 MFDS 허가 후 10년 이상 비급여 유지. 비급여 기간 연 매출 100~300억원 수준으로 제한됨. 급여 등재 시 접근성 확대로 매출 3~5배 확대 잠재력.
-- ⚠️ 한국 허가 후 글로벌(FDA·EMA) 진출까지 추가 2~4년 소요 가정
-- 한국 단독 시장: 글로벌 제약 시장의 약 1.5~2% (TAM 계산 시 적용)
-
-🏥 **한국 허가 완료 비급여 세포치료제 밸류에이션 (카티스템 유형 적용)**
-- ⚠️ 허가 완료 한국 제품에 임상 PoS 적용 절대 금지 (PoS=100% — 이중할인 오류). 급여 등재 PoS만 별도 확률(30~50%)로 적용.
-- **비급여 Base 시나리오 (DCF 또는 EV/Sales)**: 현행 비급여 상태 유지. 시장 규모 = 연간 시술 건수 × 비급여 단가(700만~900만원/회). COGS 50~70%, 영업이익률 10~30% 상한 적용.
-- **급여 등재 Bull 시나리오**: 급여 등재 성공 가정(PoS 30~50% 가중) → 급여 단가(비급여 대비 50~60% 수준) × 급여 후 시술 건수 급증(3~5배) 가정.
-- ⛔ 동일 약물의 글로벌(FDA) 임상 자산은 별도 rNPV로 독립 평가. 한국 DCF와 이중계산 금지.
-- ⛔ 세포치료제 영업이익률 30% 초과 가정 금지 (COGS 구조상 물리적 상한).
-
-| 가정 항목 | 수치 |
-|-----------|------|
-| WACC (할인율, 바이오 기준 8~12% — PoS가 이미 임상위험 반영, 이중할인 금지) | |
-| 순현금(현금-부채, 단위) | |
-| 발행주식수 | |
-| 기존 사업(영업 중) 가치 산정 방법 | EV/Sales 또는 소규모 DCF (해당 시) |
-
-각 파이프라인 자산의 위험 조정 NPV(rNPV)를 산출하여 Sum of Parts로 합산합니다.
-**계산 방법**: TAM 산출 → Peak Sales 추정 및 유사약물 검증 → S-커브 램프업 → WACC 할인 → NPV(성공 시) → × PoS = rNPV
-
----
-
-#### 📊 파이프라인 자산별 상세 계산
-
-**(아래 블록을 파이프라인 자산 개수만큼 반복. 컨텍스트에서 확인된 모든 임상·전임상 자산 포함)**
-
-**[파이프라인 자산 N: 자산명(제품코드) — 적응증]**
-
-**① 기본 분류 및 PoS**
-
-| 항목 | 내용 |
-|------|------|
-| 치료 영역 | [항암/자가면역/CNS/희귀질환/세포치료/기타] |
-| 모달리티 | [소분자/단백질/세포치료제/유전자치료/바이오시밀러] |
-| 현재 임상 단계 | Phase __ |
-| 적용 PoS | __% (가정 섹션 참조표 [치료영역] × [Phase] 교차값 적용) |
-| 허가 권역 | [한국 단독 / 미국(FDA) / 글로벌] |
-| 파트너십 구조 | [자체 개발·판매 / 라이선스 아웃: 로열티율 __%] |
-
-**② TAM 및 Peak Sales 산출**
-
-📄 **[DART 사업보고서 TAM 데이터 우선 활용 규칙]**
-- 컨텍스트에 "[⭐ DART 사업보고서 사업내용]" 섹션이 있으면, 해당 섹션의 **시장 규모·타겟 환자 수·글로벌/국내 시장 전망 수치**를 TAM 추정의 **1순위 근거**로 사용하세요.
-- DART 원문에 구체적 수치(예: "국내 골관절염 환자 약 X만 명", "글로벌 시장 X억 달러" 등)가 있으면 해당 수치를 그대로 인용하고, 출처를 "DART 사업보고서 기준"으로 명시하세요.
-- DART 수치가 없는 경우에만 훈련 데이터 기반 TAM 추정을 사용하고, "업계 추정 기준" 표현으로 구분하세요.
-- IR 자료·사업계획·파이프라인 현황이 DART 원문에 포함된 경우, 회사 자체 발표 TAM(회사 추정 기준)으로 인용 가능 — 단, 독립 검증 수치와 병기 권장.
-
-⚠️ **DMOAD(Disease-Modifying OsteoArthritis Drug) 지정 약물 프리미엄 규칙**:
-- 분석 대상이 **연골 재생(DMOAD)** 효과를 목표로 임상을 진행 중이거나, DMOAD 지정을 목적으로 FDA·식약처에 신청한 경우 아래 모든 규칙을 반드시 적용:
-
-  **[TAM 산정 — DMOAD 특별 기준]**
-  - ⛔ **기존 OA 진통·소염제 시장($10~15B)을 그대로 TAM으로 쓰는 것 금지**. DMOAD는 "질병 구조 변형" 카테고리로, 현재 승인된 대체제가 없는 **신규 시장** 창출 약물.
-  - 글로벌 무릎 골관절염 환자: 약 2억 5천만 명(WHO 기준). 이 중 구조적 개선이 필요한 중등도~중증 환자는 약 8,000만~1억 명.
-  - **DMOAD TAM 산정 방식**: 타겟 환자 수 × 1회 치료 기준 가격(세포치료제 특성상 $10,000~50,000/치료, 시장별 상이).
-  - ⛔ **국내 시장(한국)만으로 TAM을 산정하면 DMOAD 가치의 1~2%만 반영한 것** — 미국·일본·EU 병행 임상이 있거나 기술수출 구조라면 글로벌 TAM 적용 필수.
-
-  **[Peak Sales 하한 기준 — DMOAD 글로벌 자산]**
-  - 미국(FDA) + 일본 + 유럽(EMA) 중 2개 이상 시장에서 3상을 진행 중인 DMOAD 세포치료제의 경우:
-    → **글로벌 Peak Sales 기준 최소 5,000억원(~$4억) 이상**으로 설정. 이보다 낮으면 반드시 명시적 제한 근거 제시.
-  - 한국 단독(국내 시장만) 시나리오라도 DMOAD First-in-class이면 연간 500억~1,500억원이 합리적 범위.
-  - ⛔ **"글로벌 임상 진행 중 + DMOAD First-in-class" 조건에서 Peak Sales를 3,000억원 이하로 설정하려면**, 그 이유(한국 전용 판매, 파트너 로열티율 극히 낮음 등)를 별도 문단으로 반드시 설명. 이유 없이 3,000억원 이하 설정은 과소 추정으로 간주.
-
-  **[가격·프리미엄 근거 서술 필수]**
-  - **단순 통증 완화(진통제·소염제) 대비 가격 프리미엄 3~10배 적용 가능** — 근거: 기존 치료제는 증상만 완화, DMOAD는 연골 구조 자체를 재생시키는 차별점. 인공관절 치환술($15,000~30,000 수준) 대비 비용 효과성도 근거로 활용 가능.
-  - 가격 가정 서술 형식: "DMOAD 검증 시 1회 치료비 __원/달러 (인공관절 수술비 $__대비 __, OA 진통제 연간 비용 $__대비 __ 프리미엄)"
-  - **밸류에이션 프리미엄 섹션에서 반드시 1~2문장으로 DMOAD 시장 공백과 해당 자산의 글로벌 위상을 명시**.
-  - ⛔ DMOAD 임상을 "단순 관절염 치료제"로 축소 서술 금지. 반드시 "First-in-class DMOAD (FDA 승인 전례 없음)" 표현 포함.
-
-📊 **주요 치료 영역별 글로벌 TAM 벤치마크 (2024년 기준, TAM 계산 후 Sanity Check 필수)**
-
-*아래 수치는 해당 적응증의 글로벌 전체 치료 시장(허가된 모든 약물 합산). 단일 약물의 Peak Sales는 이보다 훨씬 작음.*
-
-| 치료 영역 | 글로벌 TAM | 미국 비중 | 한국 비중 | 주요 비고 |
-|----------|----------|---------|---------|---------|
-| **항암 — 고형암** | | | | |
-| NSCLC (비소세포폐암, 전체) | $25~35B | 45~50% | 1~2% | 1선 PD-L1 경쟁 극심 |
-| 대장암(CRC) | $12~18B | 45% | 1~2% | — |
-| 간암(HCC, 1차) | $5~8B | 40~45% | 2~3% | 소라페닙 $1B 기준 |
-| 위암(GC) | $3~5B | 30~35% | 5~7% | 한국·아시아 비중 높음 |
-| 췌장암(PDAC) | $2~4B | 50% | 1% | 표준요법 저항성 높음 |
-| 유방암 (HER2+) | $10~14B | 45% | 1~2% | 허셉틴·퍼제타 기준 |
-| 전립선암(mCRPC) | $6~10B | 50% | 1% | — |
-| 방광암(UC) | $4~6B | 50% | 1~2% | ADC·PD-1 시장 성장 중 |
-| **항암 — 혈액암** | | | | |
-| 다발골수종(MM) | $18~25B | 50% | 1~2% | CAR-T 급성장 |
-| NHL(비호지킨 림프종) | $10~15B | 45% | 1~2% | CAR-T·이중항체 |
-| AML(급성 골수성 백혈병) | $4~7B | 45% | 1~2% | — |
-| ALL(급성 림프구성 백혈병) | $3~5B | 45% | 1~2% | — |
-| **면역·염증** | | | | |
-| 류마티스 관절염(RA) | $28~35B | 40% | 1~2% | 바이오시밀러로 잠식 중 |
-| 건선(Psoriasis, 중등~중증) | $18~25B | 45% | 1~2% | IL-17/23 주도 |
-| 아토피 피부염(AD) | $12~18B | 45% | 1~2% | 두필루맙 기준 |
-| 궤양성 대장염(UC) | $8~13B | 45% | 1% | JAK·IL 병용 확대 |
-| 크론병(CD) | $8~12B | 45% | 1% | — |
-| 루푸스(SLE) | $3~5B | 45% | 1% | 희귀 지정 가능 수준 |
-| **골격·근골격** | | | | |
-| 골관절염(OA) 전체 시장 | $15~22B | 45% | 1~2% | 대부분 소염·진통제 |
-| DMOAD (연골재생·질환조절) | 미개척 ($0B, 허가 약 없음) | — | — | First-in-class 신규 시장 창출 |
-| 골다공증 | $10~14B | 40% | 2% | — |
-| **CNS** | | | | |
-| 알츠하이머(AD) | $10~18B | 50% | 1% | 레카네맙·도나네맙 시장 형성 중 |
-| 파킨슨(PD) | $5~8B | 45% | 1% | — |
-| 척수성 근위축증(SMA) | $4~7B | 45% | 1% | Spinraza·Zolgensma 기준 |
-| **희귀질환** | | | | |
-| 혈우병 A | $9~13B | 45% | 1% | 유전자치료 진입 중 |
-| 뒤센 근이영양증(DMD) | $3~6B | 50% | 1% | — |
-| **대사·내분비** | | | | |
-| T2DM (GLP-1 포함) | $40~60B | 45% | 1~2% | 급성장 중 |
-| MASH/NASH | $5~15B | 50% | 1% | 시장 초기 형성 중 |
-
-⚠️ **TAM 계산 자가검증 필수 (3단계)**:
-1. 위 벤치마크와 산출한 TAM 비교 → 10배 이상 차이면 계산 오류 점검
-2. TAM × 침투율 = Peak Sales → 벤치마크 대비 합리적 범위인지 확인
-3. 한국 단독 시장: 글로벌 TAM의 1~2% 이상 설정 시 별도 근거 필요
-
-- 글로벌 대상 환자 수: __(명) — 근거: __(역학 데이터 출처 또는 추정 근거 명시)
-- 타겟 시장(한국/글로벌): __(명) × 침투 시장 규모 비율
-- 연 치료 비용(가격 가정): __(원/달러) — 근거: 유사 승인약물 [약물명] 가격 __원 기준
-- **TAM = 환자 수 × 연 치료 비용 = __억원/달러**
-- **TAM Sanity Check**: 위 벤치마크 테이블 기준 ___ 적응증 글로벌 TAM $___ 대비 [__% 수준 — 합리적/과대/과소]
-- 당사 최대 시장침투율: __% — 아래 5가지 분석을 모두 수행한 후 결정:
-  ① **치료 라인**: 이 약물이 1선/2선/3선 중 어느 라인을 타겟하는가? (1선 타겟 시 최대 20%, 2선 10~15%, 3선 5~10% 상한 적용)
-  ② **경쟁 약물 수**: 동일 적응증에 허가된 약물이 몇 개인가? (5개 이상이면 단독 침투율 10% 이하 권장)
-  ③ **모달리티 신규성**: First-in-class RNA/유전자/세포치료제 → 초기 침투율 5~10% 권장 (임상적 우월성 증명 전까지 보수적 설정)
-  ④ **임상 효능 비교**: ORR·PFS·OS를 표준치료 대비 수치로 비교. "높다"는 서술 금지 — 반드시 "표준치료 ORR __% vs 본 약물 ORR __%" 형식으로 명시
-  ⑤ **치료 영역별 최대 침투율 상한 테이블 적용**:
-
-  | 치료 영역 × 경쟁 환경 | 침투율 상한 | 비고 |
-  |-------------------|---------|-----|
-  | 희귀질환 First-in-class (대안 전무) | 40~65% | 환자 수 제한, 대안 없음 |
-  | 희귀질환 경쟁 시장 (2개 이상 허가) | 15~35% | — |
-  | 유전자치료(One-time cure) | 65~85% | 연간 유병 환자 대부분 치료 대상 |
-  | 암종 1선 First-in-class | 15~25% | 표준요법 부재 시 상한 상향 가능 |
-  | 암종 1선 경쟁 (표준요법 있음) | 10~20% | 병용요법 포함 시 공유 |
-  | 암종 2선 | 8~15% | — |
-  | 암종 3선 이상 | 3~10% | — |
-  | 만성질환 1선 (RA·IBD·당뇨 등) | 5~15% | 장기 처방 → 점진 누적 |
-  | 만성질환 2선 이상 | 3~8% | — |
-  | 세포·줄기세포 치료제 (제조 제한) | 3~10% | 제조 Capacity 병목 반영 |
-  | 바이오시밀러 | 20~45% | 가격 경쟁, 교체 처방 |
-  | 골관절염(OA) 세포치료제 | 1~5% | 비급여·고가격 제약 |
-
-  → ⛔ 위 상한 초과 설정 시 반드시 명시적 근거 제시. 근거 없이 상한 초과 설정은 과대 추정으로 간주.
-  → ⛔ 특히 세포치료제·유전자치료제는 제조 Capacity 제약을 침투율에 반영 필수 (Year 1~3은 상한의 30~50% 이하로 설정)
-
-⚠️ **임상 데이터 시의성(Timeliness) 규칙 — 학회 발표 업데이트 반영**:
-- 동일 학회(ASCO, AACR, ESMO, ASH 등)에서 **초록(Abstract) → 구두 발표(Oral Presentation) / 포스터 발표(Late-Breaking)** 순서로 데이터가 업데이트된 경우, **반드시 가장 최신 발표 데이터를 우선 사용**.
-- 초록은 "예비 데이터(Preliminary data)", 구두/포스터 발표는 "업데이트된 데이터(Updated data)"로 간주. 구두 발표가 초록보다 환자 수 증가, 추적 기간 연장, 또는 평가 기준 성숙(Maturation)으로 인해 수치가 달라지는 경우가 흔함.
-- 데이터 인용 시 출처와 발표 형태를 함께 명시:
-  - 올바른 예: "ORR 53.8% (AACR 2026 구두 발표, 초록 대비 업데이트)"
-  - 금지 예: 초록 수치(38.5%)를 최종 데이터인 것처럼 단독 인용
-- 동일 학회 내에서 수치가 변경된 경우, 리포트에 다음과 같이 변화를 명시:
-  "[학회명] 초록 __% → 구두 발표 업데이트 __%: [환자 수 증가 / 추적 기간 연장 / 평가 기준 변경] 등에 의한 것으로 추정"
-- ORR, DCR, PFS, OS, DOR 등 모든 효능 지표에 동일하게 적용.
-
-- **Peak Sales (당사 귀속분) = TAM × 침투율 [× 로열티율 __% (라이선스 아웃 시)] = __억원**
-  ※ 라이선스아웃 구조 재확인: TAM × 침투율 = [파트너사 전체 해당약물 매출], 여기에 로열티율을 곱한 값이 당사 귀속 로열티 수입
-
-📌 **Peak Sales 유사약물 Sanity Check** (반드시 수행):
-- 비교 약물 선정 원칙:
-  ① **단일 적응증 매출만 사용** — 동일 적응증(간암, 폐암 등) 전용 매출 수치 사용. 다적응증 약물(렌바티닙·렌비마, 펨브롤리주맙·키트루다, 니볼루맙 등)의 **전체 매출을 비교 대상으로 쓰는 것은 금지**
-  ② 렌바티닙을 간암 Sanity Check에 사용할 경우: 글로벌 연 매출 ~$2B이지만 간암 적응증 비중은 약 20~30% → **간암 단독 추정 매출 ~$400~600M만 비교 대상으로 사용**
-  ③ **간암 1차 치료제 권장 비교 약물**: 소라페닙(넥사바, Bayer) — 간암 단독 Peak Sales 약 $1.0~1.2B. 아테졸리주맙+베바시주맙 병용 약 $500~700M(간암분)
-  ④ 비교 약물명·회사·Peak Sales 출처(연도, 적응증 명시) 반드시 기재
-- 동일 적응증 승인 유사약물: [약물명 / 회사] — **적응증 단독** Peak Sales 실적: __억원/달러 (출처: __년 기준)
-- 당사 Peak Sales 가정이 유사약물 대비 [__% 수준] → [합리적 / 과대 / 과소] 판단
-
-**③ 상업화 타임라인**
-
-| 이벤트 | 예상 시점 | 현재로부터(년) |
-|-------|---------|-------------|
-| 임상 완료 / 데이터 발표 | | |
-| 허가 신청 (BLA/NDA/MFDS) | | |
-| 허가 완료 | | |
-| 보험 급여 등재 (한국 시장 시) | | 허가 후 +1~2년 |
-| Peak Sales 도달 | | |
-| 특허 만료 / 독점기간 종료 | | |
-
-**④ S-커브 매출 램프업 및 연도별 현금흐름 (허가 완료 기준 Year 1~)**
-
-⚠️ 매출 램프업 기준 (S-커브 적용 필수):
-- 세포·유전자치료제: Year1=10%, Year2=25%, Year3=50%, Year4=75%, Year5=90%, Year6=100% of Peak
-- 일반 바이오의약품: Year1=20%, Year2=45%, Year3=70%, Year4=90%, Year5=100% of Peak
-- 소분자·바이오시밀러: Year1=30%, Year2=60%, Year3=85%, Year4=100% of Peak
-⚠️ 특허 만료 후: 바이오시밀러 진입으로 매출 연 20~40% 감소 가정
-
-⚠️ **영업이익률 — 모달리티별 상한 엄격 적용 (반드시 아래 범위 내에서만 사용할 것)**
-- 합성의약품(소분자): **35~55%** (COGS 15~25%)
-- 단백질·항체 의약품: **30~45%** (COGS 25~35%)
-- 세포치료제(CAR-T·줄기세포): **10~30%** (COGS 50~70%; 제조원가 극히 높음)
-- 유전자치료제: **15~35%** (COGS 40~60%)
-- 바이오시밀러: **15~30%** (COGS 35~50%; 가격경쟁 심함)
-- 라이선스아웃(로열티 수익 전용 모델): **70~85%** — 이 경우 '매출'은 로열티 수입이며, 반드시 "라이선스아웃 로열티 기준" 명시
-- ⛔ **80% 이상 사용은 라이선스아웃 로열티 모델에만 허용. 자체 판매(Own-Sales) 모델에 80%+ 적용 시 분석 거부**
-- ⛔ 컨텍스트에 분석 대상의 실제 영업이익률 데이터가 있으면 그 값 ± 5%p 범위 내에서 가정할 것
-
-| 연도 | Peak Sales比(%) | 매출(억원) | 영업이익률(%) | 영업CF(억원) | 할인계수(WACC __%) | PV(억원) |
-|------|--------------|-----------|------------|-----------|-----------------|---------|
-| 허가 후 Year 1 | | | | | | |
-| Year 2 | | | | | | |
-| Year 3 | | | | | | |
-| Year 4 | | | | | | |
-| Year 5(Peak) | 100% | | | | | |
-| Year 6~10 합계 | | | | | | |
-| Year 11~(특허만료 후, 있을 경우) | | | | | | |
-| **NPV(허가 성공 시) 합계** | | | | | | |
-
-⚠️ 허가 전 기간 R&D 비용: 현재부터 허가까지 매년 __(억원) 지출 → PV(R&D) = __(억원) 차감
-(단, 회사 전체 R&D가 이미 재무제표에 반영된 경우 중복 차감 금지 — 이 경우 "별도 차감 불필요" 명시)
-
-- **NPV(성공 시, R&D PV 차감 후): __억원**
-- **rNPV = NPV × PoS __% = __억원**
-
----
-
-*(파이프라인 자산 2, 3, ... 위와 동일한 형식으로 반복)*
-
----
-
-#### 🧮 Sum of Parts 합산
-
-⚠️ **플랫폼 기술 가치(Platform Technology Value) 평가 규칙**:
-- 분석 대상이 단순 단일 약물 개발사가 아닌 **독자적 플랫폼 기술(RNA 편집, CRISPR, 염기편집, 세포치료 플랫폼 등)을 보유한 경우**, Sum of Parts에 "플랫폼 기술 가치" 항목을 **의무적으로 추가**하세요.
-- 플랫폼 기술이란: 동일한 기술 메커니즘으로 다수의 신약 후보를 창출할 수 있는 원천 기술. 파이프라인 개별 약물의 rNPV에는 포함되지 않는 "기술 자체의 옵션 가치".
-
-**[플랫폼 가치 산정 방법 — 3가지 중 적용 가능한 것 사용, 결과 범위로 제시]**
-
-*방법 1 — 비교 플랫폼 M&A 거래*:
-- RNA 편집: Korro Bio (2024, Novo Nordisk $1.1B 인수, 전임상 단계), Shape Therapeutics (Roche 인수), ProQR
-- CRISPR/Base Editing: Intellia Therapeutics, Beam Therapeutics, Prime Medicine 상장 가치 참조
-- 동일 모달리티·개발 단계의 플랫폼 거래가 있으면: "비교 거래 [건명] 기준 플랫폼 단독 가치 $__B → 환율 반영 __억원"
-
-*방법 2 — 파이프라인 rNPV 대비 프리미엄 배수*:
-- First-in-class RNA/유전자 편집 플랫폼: 파이프라인 rNPV 합산의 **30~80% 추가** (플랫폼 옵션 가치)
-- 기존 플랫폼(검증된 항체·단백질 플랫폼): 파이프라인 rNPV의 **10~30% 추가**
-- 근거: 시장은 알려진 파이프라인 외에 동일 기술로 개발 가능한 미래 파이프라인의 옵션 가치를 프리미엄으로 반영함.
-
-*방법 3 — 상장 피어 플랫폼 프리미엄*:
-- 유사 플랫폼 기술 상장사의 (시가총액 − 파이프라인 rNPV 합산) = "플랫폼 프리미엄"
-- 해당 비율을 분석 대상에 적용.
-
-⚠️ **플랫폼 가치 서술 의무 사항**:
-- ⛔ 플랫폼 기술 보유사에서 "파이프라인 rNPV만으로 적정주가를 도출"하는 것은 **시장 기대를 과소반영**한 것 — 반드시 플랫폼 가치 항목 포함.
-- 플랫폼 가치는 Bear/Base/Bull 시나리오로 범위 제시 필수 (단일 수치 금지).
-- 결론 문장 예시: "RNA 편집 플랫폼 자체의 옵션 가치(방법1 기준 X억원~Y억원)를 포함하면, 시장 기대치를 반영한 주당 내재가치는 A~B원으로 확대됨."
-
-⚠️ **Sum of Parts 행 구성 원칙**:
-- 허가 완료 제품과 파이프라인은 반드시 분리: 허가 → "DCF 가치", 파이프라인 → "rNPV"
-- 동일 약물이라도 시장(국가)별로 별도 행 작성 (예: [약물명] 한국 DCF / [약물명] 일본 rNPV / [약물명] 미국 rNPV)
-
-| 구성 요소 | 가치(억원) | 비중(%) | 비고 |
-|---------|---------|--------|-----|
-| [자산명] 한국 DCF (허가·판매 중) | | | PoS 100%, DCF 기반 |
-| [자산명] 일본 rNPV (해당 시) | | | Phase __, PoS __% |
-| [자산명] 미국(FDA) rNPV (해당 시) | | | Phase __, PoS __% |
-| [기타 파이프라인] rNPV | | | Phase __, PoS __% |
-| 🔬 플랫폼 기술 가치 (해당 시) | | | 방법1~3 범위: __억~__억원 |
-| 💰 L/O 마일스톤 NPV (기계약, 해당 시) | | | 수령조건별 PoS 반영 |
-| 💰 L/O 로열티 NPV (해당 시) | | | 파트너사 판매예측×로열티율 |
-| **파이프라인·사업 가치 소계** | | 100% | |
-| (+) 순현금 (현금 − 금융부채) | | | 인계 요약 직접 인용 |
-| **주주가치 합계** | | | |
-
-⚠️ **[바이오텍 희석 주식수 반영 — 의무]**
-한국 바이오텍은 CB·BW·유상증자로 인한 희석이 주당가치를 30~60% 훼손할 수 있습니다. 반드시 완전희석 기준으로 계산하세요.
-
-| 구분 | 주식수 | 비고 |
-|------|-------|------|
-| 현재 발행주식수 | | KIS 컨텍스트 인용 |
-| CB 전환 가능 주식수 | | 전환가 __원 기준 |
-| BW 행사 가능 주식수 | | 행사가 __원 기준 |
-| 스톡옵션 미행사 잔량 | | |
-| 추가 자금조달 예정 (Cash Runway < 2년 시) | | 조달액 __억 ÷ 가정 발행가 __원 |
-| **완전희석 주식수 합계** | | Base 시나리오 적용 |
-
-⚠️ 주당가치 환산 (단위 변환 명시):
-- **기본 주식수 기준**: 주주가치 __억원 ÷ __주 = **__원/주** (희석 전 상단)
-- **완전희석 기준 (Base)**: 주주가치 __억원 ÷ __주(완전희석) = **__원/주** ← **이 값을 목표주가로 사용**
-- CB·BW 미발행 또는 잔액 없는 기업: "완전희석 항목 해당 없음 — 기본 주식수 사용"으로 명시
-(KRW 예: 1,200억원 × 100,000,000 ÷ 60,000,000주 = 200,000원/주 | USD 예: $12B × 1,000,000,000 ÷ 600,000,000주 = $20.00/주)
-
----
-
-#### 🔍 팀장 검수 — rNPV 결과 적합성 체크 (의무 실행)
-
-산출된 rNPV 주당 내재가치와 현재 주가를 비교합니다.
-
-| 항목 | 값 |
-|------|-----|
-| rNPV 주당가치 (산출값) | __원 |
-| 현재 주가 | __원 |
-| rNPV / 현재가 비율 | __% |
-
-**조건 분기**:
-
-→ rNPV ≥ 현재가 × 50%: 정상 범위. 피어 조율 후 목표가 확정.
-
-→ rNPV < 현재가 × 50% (심각 과소평가 감지):
-  아래 항목을 순서대로 재검토하고, **발견된 오류를 모두 명시한 뒤 수정된 값으로 재계산**하세요.
-
-  **[체크리스트 — 계산 오류]**
-  □ 1. **할인율 이중 적용 여부**: PoS로 임상위험 반영 후 WACC ≥ 13% 사용? → 8~12%로 하향 조정 필수
-  □ 2. **TAM 범위**: 글로벌 임상 진행 중인데 한국 국내 시장(글로벌의 1~2%)만 사용? → 글로벌 TAM 적용
-  □ 3. **Peak Sales 기간**: 매출 테이블이 5~7년에서 종료? → 특허 만료까지 최소 10년으로 연장
-  □ 4. **파이프라인 누락**: 컨텍스트에 있는 모든 임상·전임상 자산이 Sum of Parts에 포함? → 누락 자산 추가
-  □ 5. **플랫폼 가치 누락**: 독자 기술 플랫폼 보유사인데 Sum of Parts에 플랫폼 가치 항목 없음? → 방법1~3으로 추가
-  □ 6. **PoS 과소 적용**: 임상 단계 대비 PoS 참조표보다 낮은 값 사용? → 표준값으로 재조정
-  □ 7. **L/O 마일스톤 누락**: 기계약 마일스톤·로열티 NPV가 Sum of Parts에 미포함? → 계약금·마일스톤·로열티 3단 분리 계산 후 추가
-  □ 8. **희석주식수 미반영**: 발행주식수만으로 나눔? → CB·BW·스톡옵션 완전희석 주식수로 재계산 (분모 증가 → 주당가치 하락이 정상)
-  □ 9. **Cash Runway 위험 미반영**: Runway < 8분기 시 추가 유상증자 가정(주가 할인 10~20%)이 빠졌는지 확인
-
-  **[체크리스트 — 과대평가 감지 (rNPV가 현재가 × 300% 초과 시)]**
-  □ A. **침투율 과대**: 경쟁 약물 5개 이상인데 침투율 20%+ 설정? → 1선 치료 기준 최대 20%, 2선 최대 15%, 3선 최대 10%
-  □ B. **영업이익률 과대**: 세포치료제인데 마진 60%+ 사용? → 모달리티별 상한표 재확인 (세포치료 10~30%)
-  □ C. **중복 계산**: L/O 계약금을 재무제표에서도 반영하고 rNPV에서도 또 계산? → 이미 수령한 계약금 제거
-  □ D. **복수 적응증 TAM 합산**: 동일 약물의 여러 적응증 TAM을 단순 합산 후 동일 침투율 적용? → 적응증별 독립 시나리오로 분리
-
-  재계산 후 결과를 아래 수정값 테이블로 표기:
-  | 항목 | 수정 전 | 수정 후 | 변경 이유 |
-  |------|--------|--------|---------|
-  | 할인율 | | | |
-  | TAM / 적용 시장 | | | |
-  | Peak Sales 기간 | | | |
-  | 플랫폼·L/O 마일스톤 포함 | | | |
-  | 주식수 (기본 → 완전희석) | | | |
-  | rNPV 주당가치 (최종) | | | |
-
----
-
-#### 🔄 Reverse rNPV (현재 주가 역산)
-
-현재 시가총액 = __ | 순현금 = __ | 기존 허가제품 DCF = __ | 내포된 파이프라인 가치 = __억원
-※ 내포 파이프라인 가치 = 시가총액 − 순현금 − 기존 허가제품 DCF가치 (허가제품 없으면 0)
-⛔ 허가제품이 있는 회사에서 "내포 파이프라인 가치 = 시가총액 − 순현금"으로만 계산하면 기존 사업 가치를 파이프라인으로 오인하는 과대 추정 오류 발생
-
-핵심 파이프라인 [자산명] 기준 암묵적 PoS 역산:
-- 역산값(raw) = 내포 파이프라인 가치 ÷ NPV(성공 시) = __%
-
-⚠️ **역산 PoS 해석 규칙 (반드시 준수)**:
-- PoS는 0~100% 사이의 확률값. **100% 초과 수치를 "암묵적 PoS __%" 형식으로 표기하는 것은 금지**.
-- 역산값 < 100%인 경우: 정상 표기 가능.
-  → "현재 주가는 [자산명]의 PoS를 __%로 반영 중. 업계 평균(Phase __ × [치료영역] 기준 __%) 대비 [과소평가/적정/과대평가]"
-- 역산값 ≥ 100%인 경우: PoS 표기 금지. 아래 두 가지 해석 중 해당하는 것 사용:
-  **해석 A — 모델 가정이 시장보다 보수적**: "현재 주가(__원)는 모델 rNPV(__억원)의 __배 수준. 시장은 이 모델보다 Peak Sales 또는 침투율을 더 높게 가정하는 것으로 해석됨. 모델 가정(침투율 __%·Peak __억원) 재검토 권장."
-  **해석 B — 주가에 비파이프라인 프리미엄 내포**: "파이프라인 외 플랫폼 기술·M&A 프리미엄 등이 주가에 추가 반영된 것으로 해석될 수 있음."
-  → 두 해석 모두 적용 후 어느 쪽이 더 설득력 있는지 판단 명시.
-
----
-
-#### 🎯 민감도 분석 (PoS × Peak Sales)
-
-Bear = PoS −10%p·Peak −30% / Base = 현재 가정 / Bull = PoS +10%p·Peak +30%
-
-| | Peak Sales −30% | Peak Sales Base | Peak Sales +30% |
-|---|---:|---:|---:|
-| PoS −10%p | __원 | __원 | __원 |
-| PoS Base | __원 | **__원(기준)** | __원 |
-| PoS +10%p | __원 | __원 | __원 |
-
-→ 민감도 범위: 하단 __원 ~ 상단 __원 (현재가 대비 __% ~ __%)
-
----
-
-### [모델이 EV/Sales인 경우 — 가정 표 → 계산 표 순서로 작성]
-
-**핵심 가정 — EV/Sales**
-
-| 가정 항목 | Base | 근거 |
-|-----------|------|------|
-| Forward EV/Sales 적용 배수 | | 업종 정상범위 + 성장 프리미엄/할인 |
-| 피어 평균 EV/Sales | | 컨텍스트 피어 데이터 인용 |
-| 프리미엄/디스카운트 이유 | | |
-| 적용 매출 (내년E, 단위) | | 실적 전망 인계값 |
-
-**EV/Sales 계산**
-
-| 구분 | 수치 | 비고 |
-|------|------|------|
-| 피어 평균 EV/Sales | | 컨텍스트 피어 데이터 인용 |
-| 적용 EV/Sales (프리미엄/디스카운트 반영) | | 업종 정상범위 근거 명시 |
-| 적용 매출 (내년E, 단위) | | 실적 전망 인계값 |
-| 산출 EV (적용배수 × 매출, 단위) | | |
-| 순현금 (단위) | | |
-| 주주가치 (EV + 순현금, 단위) | | |
-| **주당 내재가치** | | 환산식 명시 |
-
-⚠️ 주당가치 환산 명시: __단위 × [환산계수] ÷ __주 = **__현지통화/주** (KRW: __원, USD: $__)
-
-#### 🔄 현재 주가 역산
-현재 시가총액 기준 암묵적 EV/Sales를 역산하고, 피어 대비 프리미엄/디스카운트 타당성을 판단하세요.
-
----
-
-### [모델이 Gordon Growth P/B 또는 DDM인 경우 — 가정 표 → 계산 표 순서로 작성]
-
-**핵심 가정 — DDM (Gordon Growth)**
-
-| 가정 항목 | Base |
-|-----------|------|
-| 기준 DPS (최근 연간 배당, 원) | |
-| 배당 성장률 g | |
-| CoE (자기자본비용) | |
-
----
-
-#### 🏦 한국 금융주 — Gordon Growth P/B 모델 (은행·증권·보험·카드 기본 적용)
-
-⚠️ **왜 DDM이 아닌 Gordon P/B인가**:
-- 한국 금융주는 BIS 비율·K-ICS 등 건전성 규제로 배당이 인위적으로 억제됨 → 배당만 보는 DDM은 실제 이익창출력을 과소평가
-- Gordon P/B는 ROE–CoE 스프레드로 내재 가치를 직접 포착 — KB·한국투자·NH증권 등 국내 증권사 리포트 표준 방법론
-
-**핵심 공식**:
-
-적정 P/B = (Sustainable ROE − g) / (CoE − g)
-목표주가 = 적정 P/B × 수정 BPS (12M Fwd BVPS)
-
-**파라미터 산출**:
-
-- CoE = Rf __% + β __ × ERP __%  = __%
-  - Rf: 국고채 10년물 (2.5% 내외, 컨텍스트 최신값 인용)
-  - ERP: 한국 7.0–7.5% (MSCI Korea 장기 리스크 프리미엄)
-  - β: 52주 Historical Beta 사용. R-squared ≥ 30% 시 신뢰; R² < 30%이면 β_adj = β_hist × R² + 1.0 × (1 − R²) 보정
-  - 금융업 참조 Unlevered β: 0.5–0.8 (업종 테이블 적용)
-- Sustainable ROE = 10년 Fwd 평균 ROE = __%
-  (ROE = 연결순이익 / 회계적 자본, 전환사채 포함. 컨텍스트 데이터 직접 인용 — AI 추정 금지)
-- g (영구성장률) = Min(ROE × 내부유보율, 국고채 3M 수익률) = __%
-  상한: 한국 명목 GDP 성장률 ≈ 3–4%. 현실적 범위: 2–4%
-- 수정 BPS (12M Fwd BVPS) = __원 (컨텍스트 BPS 컨센서스 직접 인용)
-
-**적정 P/B 및 목표주가 산출**:
-
-| 항목 | 수치 | 비고 |
-|------|------|------|
-| Sustainable ROE | __% | 10년 Fwd 평균 |
-| 영구성장률 (g) | __% | Min(ROE×유보율, 국고채3M), 상한 4% |
-| CoE | __% | Rf + β × ERP |
-| 분자 (ROE − g) | __%p | |
-| 분모 (CoE − g) | __%p | |
-| 적정 P/B | __배 | 분자 ÷ 분모 |
-| 수정 BPS (12M Fwd) | __원 | 컨텍스트 인용 |
-| **목표주가 = 적정P/B × 수정BPS** | **__원** | |
-
-⚠️ **적정 P/B 합리성 체크**:
-- P/B < 1.0: ROE < CoE → 구조적 저평가 또는 수익성 위기 여부 구분 서술 필수
-- P/B 1.0–2.0: 정상 범위 (한국 주요 금융주 역사적 밴드)
-- P/B > 2.5: ROE가 CoE를 대폭 상회 → 강한 성장·독과점 근거 없으면 보수적 해석 명시
-- 목표주가 > 현재가 × 2.0: ROE 또는 g 가정 재검토 후 수정값 사용
-
-**🔄 현재 주가 역산 — 시장 암묵적 ROE 역산**:
-
-현재 PBR = 시장가 ÷ BPS = __배
-→ 시장 암묵적 ROE = CoE + (PBR − 1) × (CoE − g) = __%
-→ 당사 추정 Sustainable ROE __% 대비 [과소/과대/적정] 반영 — 괴리 원인 1줄 서술
-
----
-
-#### 🇺🇸 미국 금융주 — DDM 우선 적용
-
-공식: P = D₁ / (CoE − g)
-
-| 항목 | 수치 |
-|------|------|
-| D₀ (최근 연간 DPS, USD) | |
-| g (배당 성장률, ≤3%) | |
-| D₁ = D₀ × (1+g) | |
-| CoE | |
-| **DDM 내재가치 = D₁ / (CoE − g)** | |
-
+${valuationReportFormat}
 ---
 
 ## 🌐 Part B — 상대가치 (피어 멀티플)
@@ -5270,615 +4698,11 @@ Bear = PoS −10%p·Peak −30% / Base = 현재 가정 / Bull = PoS +10%p·Peak 
 
 ## ⚖️ 최종 조율 → 12개월 적정주가 + 밴드
 
-⚠️ 사용 모델에 따라 아래 두 형식 중 하나를 선택하세요:
+⚠️ 이 종목의 업종에 맞는 모델이 아래에 지정되어 있습니다. **다른 모델을 임의로 쓰지 마세요.**
 
 ⚠️ **통화 단위 필수 확인**: currency="USD"이면 아래 모든 __ 자리에 $ 단위(예: $135.00, $200B)를 사용하세요. currency="KRW"이면 원화(예: 135,000원) 사용.
 
-**[DCF/EV/Sales 모델 사용 시]**
-- DCF(절대가치) 내재가치: __(현지통화/주)
-- 피어 목표가: __(현지통화/주)
-- 괴리율: __%
-
-괴리율 20% 이내: 가중평균 (DCF 60% + 피어 40%) = __ × 0.6 + __ × 0.4 = **__(현지통화)**
-
-괴리율 20% 초과: 아래 형식으로 **한 번만** 작성하세요 (별도 섹션 추가 금지 — 중복 작성 금지):
-1. 괴리 원인 진단: DCF 입장 1~2문장 + 피어 입장 1~2문장 (어느 방법론에 더 신뢰를 두는지 포함)
-2. 가중치 조정 및 최종 조율가: (DCF × a% + 피어 × b%) = **최종 목표가 __(현지통화)**
-
-> 💬 **[최종 결론 — 필수 작성]** 최종 목표주가를 산출한 뒤, 아래 1문장을 반드시 작성하세요:
-> "이를 통해 산출한 **12개월 목표주가 __원**은 현재 주가(__)보다 __% [상승여력/하락위험]을 내포하며, 상단 밴드 __원(Bull)·하단 밴드 __원(Bear)은 각각 핵심 촉매 실현 시와 위험 시나리오를 반영합니다."
-
-**[Pipeline rNPV 모델 사용 시 — 바이오 전용]**
-- rNPV Sum of Parts 주당가치: __(현지통화/주)  ← 팀장 검수 체크리스트 수정 후 값 사용
-- 피어 멀티플(EV/Sales 또는 PBR) 목표가: __(현지통화/주)
-- 괴리율: __%
-
-괴리율 20% 이내: 가중평균 (rNPV 70% + 피어 30%) = __ × 0.7 + __ × 0.3 = **(현지통화)**
-괴리율 20% 초과: rNPV 입장: [한 줄] | 피어 입장: [한 줄] → 최종 조율가: **(현지통화)** (rNPV Lead)
-⚠️ **괴리율 30% 초과 시**: 어느 방법론에 더 신뢰를 두는지, 그 논리적 근거를 2~3문장으로 명시 의무.
-
-**[SOTP 모델 사용 시 — 복합기업·지주사 전용]**
-
-⛔ SOTP 기업은 DCF/피어 목표가를 최종 적정주가로 사용하는 것을 금지합니다.
-   DCF·피어는 보조 참고치로 언급할 수 있으나, 최종 목표주가 결정권은 반드시 SOTP에 있습니다.
-
-- SOTP 주당 NAV(할인 전): __(현지통화/주)
-- 지주할인율 적용: NAV × (1 − __%할인) = __(현지통화/주) ← 이것이 최종 목표주가
-- [참고] DCF 내재가치: __(현지통화/주) | 피어 목표가: __(현지통화/주)  ← 참고용 표기만 허용
-
-최종 목표주가(Base): **SOTP 기준 __(현지통화)**
-Bear: SOTP NAV × (1 − 할인율 상단) ÷ 발행주식수 = __(현지통화)
-Bull: SOTP NAV × (1 − 할인율 하단) ÷ 발행주식수 = __(현지통화)
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = SOTP Bear/Base/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = SOTP 목표주가 (DCF 미적용이므로 SOTP값으로 채움)
-  - rel_base/rel_bear/rel_bull = SOTP 목표주가 (피어도 보조이므로 SOTP값으로 채움)
-  - current = 현재 주가
-  ❌ abs_base·rel_base에 DCF/피어 값을 넣는 것을 금지 — SOTP값으로 통일
-
-**[NAV + FFO 모델 사용 시 — 리츠(REIT) 전용]**
-
-⛔ 리츠는 일반 DCF 단독 목표주가 사용 금지 (D&A가 비현금 → 순이익·EBITDA 왜곡).
-   NAV + P/FFO 복합 방식이 Lead입니다.
-
-[NAV 방법론 — 단위 변환 필수]
-① NOI(억원) = 임대수익 − 운영비 (이자·세금 제외)
-② 부동산 공정가치(억원) = NOI ÷ 적용 Cap Rate
-   Cap Rate 기준: 물류 3~5%, 오피스 4~6%, 리테일 5~8%, 주거 3~5%
-③ NAV(억원) = 부동산 공정가치 합계 − 총차입금 + 현금
-④ 주당 NAV(원) = NAV(억원) × 100,000,000 ÷ 발행주식수
-⑤ P/NAV = 현재주가 / 주당NAV (할인/프리미엄 % 명시)
-
-[P/FFO 방법론 — 단위 변환 필수]
-① FFO(억원) = 순이익 + 감가상각 + 부동산 처분손실 − 부동산 처분이익
-② AFFO(억원) = FFO − 유지보수 CapEx
-③ 주당 FFO(원) = FFO(억원) × 100,000,000 ÷ 발행주식수
-④ 적용 P/FFO 배수: __x (한국 리츠 피어 중앙값 8~12x, 이유 1줄)
-⑤ P/FFO 기반 목표주가(원) = 주당FFO × 적용배수
-
-[배당 지속성 검증]
-- FFO Payout Ratio = 주당배당 / 주당FFO × 100 (%)
-  90% 이하: 배당 지속 안정 | 91~100%: 주의 | 100% 초과: 지급 불가 리스크 경고
-
-[조율]
-- NAV 기반 목표주가: __원 | P/FFO 기반 목표주가: __원
-- 최종 목표주가(Base): NAV 60% + P/FFO 40% = __ × 0.6 + __ × 0.4 = **__원**
-  (괴리 20% 초과 시 이유 설명 후 NAV Lead)
-Bear: Cap Rate +1%p 적용 NAV × (1 − 보수적 P/NAV할인) = __원
-Bull: Cap Rate −0.5%p 적용 NAV × (1 + 적정 P/NAV프리미엄) = __원
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = NAV+FFO 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = NAV 방법론 Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = P/FFO 방법론 Base/Bear/Bull
-  - current = 현재 주가
-  ❌ abs_base에 일반 DCF값 사용 금지 — NAV 기반값으로 통일
-
-**[P/B-ROE 모델 사용 시 — 금융지주/은행/보험/증권 전용]**
-
-⛔ EV/EBITDA 사용 금지 (이자비용이 영업비용 → EBITDA 개념 무의미).
-   P/B × BPS = 목표주가가 Lead입니다.
-
-[Justified P/B 산출]
-① rf = 국고채 10년물 수익률: __%
-② β (업종 평균): __  |  ERP (한국 5~6% 적용): __%
-③ CoE = rf + β × ERP = __%
-④ ROE (Forward 추정): __%  |  g (장기 성장률): __%
-⑤ Justified P/B = (ROE − g) / (CoE − g) = __x
-   (또는 단순 P/B = ROE / CoE = __x)
-⑥ 피어 P/B 중앙값: __x → 비교 후 할인/프리미엄 이유 명시
-
-[목표주가 산출 — 단위 변환 필수]
-- BPS(주당순자산): __원 (최신 분기 자본총계 ÷ 발행주식수)
-- 목표주가(Base) = Justified P/B × BPS = __x × __원 = **__원**
-Bear: (ROE 하락 시나리오 P/B __x) × BPS = __원
-Bull: (ROE 개선 시나리오 P/B __x) × BPS = __원
-
-[ROE-CoE 스프레드 해석]
-- 스프레드 양수(ROE > CoE): 초과수익 창출 → P/B > 1x 정당화
-- 스프레드 음수(ROE < CoE): 자본 훼손 → P/B < 1x 합리적
-- 스프레드 변화 방향이 멀티플 재평가의 핵심 트리거
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = P/B × BPS Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = P/B 방법론 Base/Bear/Bull (DCF 미적용)
-  - rel_base/rel_bear/rel_bull = 피어 P/B 비교 Base/Bear/Bull
-  - current = 현재 주가
-  ❌ abs_base에 일반 DCF값 사용 금지 — P/B × BPS값으로 통일
-
-**[자산 NAV + Mid-cycle EV/EBITDA 모델 사용 시 — 자원/광산 전용]**
-
-⛔ 스팟 원자재 가격 기반 단순 EV/EBITDA 사용 금지 (사이클 왜곡).
-   장기 평균 가격 기반 NAV가 Lead입니다.
-
-[자산 NAV 산출]
-① 핵심 가격 가정: [원자재명] 장기 균형가격 = $__/톤 (컨센서스 or AISC + 적정마진 근거)
-② AISC = $__/톤 (현금비용 + 유지CapEx + G&A + 탐사비 포함)
-③ 연간 생산량: __만톤 × 광산 수명 __년
-④ NAV = Σ (연간 (장기가격 − AISC) × 생산량) / WACC(__%)) − 개발비 − 순부채
-⑤ 주당 NAV(원) = NAV(억원) × 100,000,000 ÷ 발행주식수 = __원
-⑥ P/NAV 배수: __x (탐사 upside 프리미엄 근거 or 운영 리스크 할인 이유 1줄)
-⑦ NAV 기반 목표주가 = 주당NAV × 적용 P/NAV = __원
-
-[Mid-cycle EV/EBITDA 보조]
-① 정상화 EBITDA = 장기 균형가격 적용 시 예상 EBITDA (스팟가 EBITDA 아님)
-② 피어 Mid-cycle EV/EBITDA 배수: __x
-③ EV/EBITDA 기반 목표주가 = (정상화 EBITDA × 배수 − 순부채) ÷ 주식수 = __원
-
-[조율]
-- NAV 기반 목표주가: __원  |  Mid-cycle EV/EBITDA 목표주가: __원
-- 최종 목표주가(Base): NAV 70% + EV/EBITDA 30% = **__원**
-Bear: 장기가격 −20% 가정 NAV = __원
-Bull: 장기가격 +15% + P/NAV 프리미엄 확대 = __원
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = NAV+EV/EBITDA 조율 Base/Bear/Bull
-  - abs_base/abs_bear/abs_bull = NAV 방법론 Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = Mid-cycle EV/EBITDA Base/Bear/Bull
-  - current = 현재 주가
-
-**[RNAV 기반 P/BV 모델 사용 시 — 건설/주택개발 전용]**
-
-⛔ **이 섹션은 컨텍스트에 분양 예정 사업의 현장명·세대수·분양가가 명시된 경우에만 작성합니다.**
-   해당 데이터가 없으면 이 섹션 전체를 건너뛰고 P/BV + EV/EBITDA 방법론으로 진행하세요.
-   "RNAV 산출 불가"라는 문장을 쓰는 것도 금지합니다 — 그냥 P/BV 섹션으로 시작하세요.
-
-[RNAV(주택자산재평가) 산출 — 단위 변환 필수]
-① 분양 예정 사업 목록 (컨텍스트에 명시된 현장만 — 추정 불가 사업 제외):
-   | 현장명 | 세대수 | 분양가(3.3m²당) | 수익률 가정 | 성적률 가정 | 할인율 | PV 기여(억원) |
-② RNAV 합계(억원) = Σ 각 현장 PV 기여값
-③ 보유 토지 공정가치(억원) (장부가를 감정평가 배수로 조정 — 데이터 없으면 장부가 사용)
-④ 조정 NAV(억원) = RNAV + 토지 공정가치 − 순부채 − PF 보증 예상 손실 충당금
-⑤ 주당 RNAV(원) = 조정 NAV × 100,000,000 ÷ 발행주식수
-⑥ 적정 P/RNAV 배수: __x (대형 우량 건설사 0.8~1.3x, 중소 0.4~0.8x, 이유 1줄)
-⑦ RNAV 기반 목표주가 = 주당RNAV × P/RNAV 배수 = **__원**
-
-[수주잔고 점검]
-- 수주잔고 Coverage = 수주잔고 ÷ 연간매출 (2.0배 이상: 안정, 1.5배 이하: 수주 부진)
-- 미청구공사 ÷ 매출 = __% (10% 초과 시 대손 가능성 → RNAV 보정)
-
-Bear: 분양 성적률 −20%p 시나리오 RNAV = __원
-Bull: 분양 성적률 정상 + 토지가치 추가 상승 = __원
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = RNAV Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = RNAV 방법론 Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = 피어 P/BV 비교 Base/Bear/Bull
-  - current = 현재 주가
-
-**[EV/EBITDA + 배당수익률 + RAB 모델 사용 시 — 유틸리티/공기업 전용]**
-
-⛔ 단기 PER 사용 금지 (연료비 급등 시 일시 대규모 손실로 왜곡).
-
-[RAB(규제자산기반) 점검]
-① RAB = 정부 인가 규제자산 규모 (공기업 공시 또는 재무제표 유형자산 기준)
-② 규제 허용 ROE = __ % (정부 고시 허용 수익률)
-③ 요금 단가: __원/kWh(or MJ) vs 원가 단가: __원 → 갭 = __(원가초과/이익) 상황
-④ 연료비 민감도: LNG $10/MMBtu 변화 시 영업이익 ±__억원
-
-[목표주가 조율 — 3방법 가중]
-① EV/EBITDA 방법론 (정상화 EBITDA 사용, 연료비 급등 제거):
-   - 정상화 EBITDA = 연료비 정상화 적용 EBITDA = __억원
-   - 피어 EV/EBITDA 배수: __x (한국 유틸리티 6~10x)
-   - EV/EBITDA 목표주가 = __원
-② 배당수익률 역산 방법:
-   - 기대 DPS = __원 (배당성향·FCF 기반)
-   - 목표 배당수익률 = 국고채 10년(__%) + 유틸리티 리스크 프리미엄(__%) = __%
-   - 배당 역산 목표주가 = DPS ÷ 목표 배당수익률 = __원
-③ RAB 배수 방법 (보조):
-   - EV/RAB 피어 배수: __x → 목표주가 = __원
-④ 조율: EV/EBITDA 50% + 배당역산 40% + RAB 10% = **__원**
-Bear: 요금 동결 + 연료비 추가 상승 시나리오 = __원
-Bull: 요금 인상 승인 + 연료비 정상화 = __원
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = EV/EBITDA(정상화) Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = 배당수익률 역산 Base/Bear/Bull
-  - current = 현재 주가
-
-**[EV/EBITDA + EV/OpFCF 모델 사용 시 — 통신(Telecom) 전용]**
-
-[OpFCF(영업잉여현금) 산출]
-① EBITDA = 영업이익 + 감가상각(D&A) = __억원
-② CapEx = __억원 (5G 인프라 투자 포함)
-③ OpFCF = EBITDA − CapEx = __억원
-④ OpFCF 수익률(OpFCF Yield) = OpFCF ÷ EV × 100 = __%
-
-[목표주가 조율]
-① EV/EBITDA 방법: 피어 배수 __x → EV 추정 → 순부채 차감 → 주가 = __원
-② EV/OpFCF 방법: 피어 배수 __x (한국 통신 기준 8~14x) → 주가 = __원
-③ 배당수익률 역산: DPS __원 ÷ 목표 배당수익률 __% = __원
-④ 조율: EV/EBITDA 40% + EV/OpFCF 40% + 배당역산 20% = **__원**
-
-ARPU 추이: __원 (YoY ±__%)  |  해지율: __% (전년 __%대비 __bp 변동)
-Bear: ARPU 하락 + CapEx 증가 = __원
-Bull: 신사업 ARPU 기여 + CapEx 절감 = __원
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = EV/EBITDA Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = EV/OpFCF Base/Bear/Bull
-  - current = 현재 주가
-
-**[EV/EBITDA + DCF per Unit + Distribution Yield 모델 — MLP(Master Limited Partnership) 전용]**
-
-⛔ EPS/PER 기반 분석 완전 금지 (법인세 없는 패스스루, 순이익 왜곡).
-⛔ 단순 순이익 배당성향 계산 금지 (MLP 배분금은 DCF per Unit으로만 계산).
-
-[Coverage & Leverage 점검]
-① DCF per Unit = EBITDA − 이자비용 − 유지보수CapEx = __$/unit
-② Distribution per Unit(DPU) = __$/unit (연간)
-③ Distribution Coverage Ratio = DCF ÷ DPU = __x (1.0x 이상: 안정 / 1.1x+ 권장)
-④ Debt/EBITDA = __x (4.0x 이하: 안정 / 5.0x 초과: 배당컷 경고)
-⑤ Fee-based Revenue 비중 = __% (70%+ 방어적 구조)
-
-[목표주가 조율 — 3방법 가중]
-① EV/EBITDA 방법: 피어 배수 __x (Midstream MLP: 8~14x) → EV = __ → 순부채 차감 → 목표주가 = __$
-② Distribution Yield 역산: Forward DPU __$ ÷ 목표 Distribution Yield __% = __$
-   · 목표 Yield = 동종 MLP 평균 Yield or 국채10년 + 리스크 프리미엄
-③ P/DCF 방법: DCF per Unit __$ × P/DCF 배수 __x = __$
-④ 조율: EV/EBITDA 50% + Distribution Yield 역산 40% + P/DCF 10% = **__$**
-
-Bear: 원자재 하락 + Fee-based 비중 감소 + Coverage 1.0x 붕괴 시 = __$
-Bull: Fee-based 계약 확장 + EBITDA 성장 + Leverage 개선 시 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = EV/EBITDA Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = Distribution Yield 역산 Base/Bear/Bull
-  - current = 현재 주가
-
-**[P/NAV + NII Coverage 모델 — BDC(Business Development Company) 전용]**
-
-⛔ EV/EBITDA 적용 금지 (대출 포트폴리오 기업에 부적합).
-⛔ 순이익/PER 단독 사용 금지 (NII Coverage가 핵심 지속가능성 지표).
-
-[NAV & NII 점검]
-① NAV per Share = 총 포트폴리오 공정가치 − 부채 = __$/share (전분기 대비 ±__%)
-② NII per Share = 이자수익 − 이자비용 − 운용수수료 = __$/share (분기)
-③ 배당금 per Share = __$/share → Coverage Ratio = NII ÷ 배당 = __x (1.0x+ 유지 필수)
-④ Non-accrual Rate = __% (2% 초과 시 신용 악화 경고)
-⑤ Debt/Equity = __x (1.0~1.5x 레버리지가 일반적, 2.0x 초과 위험)
-⑥ 포트폴리오 구성: Senior Secured __%, 2nd Lien __%, Equity/Warrant __%
-
-[목표주가 조율]
-① P/NAV 방법: 적정 P/NAV __x (우량 BDC: 1.0~1.4x, 부실 우려: 0.7~0.9x) × NAV per Share __$ = __$
-② P/NII 방법: 적정 P/NII __x × NII per Share __$ = __$
-③ 배당수익률 역산: 연간 DPS __$ ÷ 목표 배당수익률 __% = __$
-④ 조율: P/NAV 60% + P/NII 30% + 배당역산 10% = **__$**
-
-Bear: Non-accrual 급등 + NAV 훼손 + Coverage < 1.0x = __$
-Bull: NAV 회복 + 금리 상승 수혜(변동금리) + 신규 대출 확장 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = P/NII Base/Bear/Bull
-  - current = 현재 주가
-
-**[스트림별 NPV 합산 + P/NAV 모델 — 로열티/스트리밍 컴퍼니 전용]**
-
-⛔ 일반 광산사 EV/EBITDA 배수 직접 적용 금지 (로열티 구조는 2~3배 프리미엄).
-⛔ CapEx·광산 운영비 가정 불필요 (Operator 귀속).
-
-[로열티 자산 점검]
-| 자산명 | 광종 | 계약유형(NSR/Stream) | 생산량/yr | 잔여기간 | Operator |
-|--------|------|---------------------|----------|---------|---------|
-| 자산1  | 금   | NSR X%              | __oz     | __년    | (Operator명) |
-| 자산2  | 은   | Stream X%           | __oz     | __년    | (Operator명) |
-(추가 자산 기입)
-
-[스트림별 NPV 산출]
-각 자산 NPV = Σ(연간 로열티 수익 × 생산 확률) / WACC
-- WACC = __%  (일반 광산사 대비 1~2%p 낮게 적용, 운영 리스크 없음)
-- 현물가 가정: 금 $__/oz, 은 $__/oz, 구리 $__/t (장기 컨센서스 사용)
-- 로열티 스트림 NAV 합계 = __억원(또는 $__)
-
-[목표주가 조율]
-① P/NAV 방법: 적정 P/NAV __x (로열티 피어: 1.2~2.0x) × NAV per Share = __$
-② EV/EBITDA 방법: 피어 배수 __x (로열티 피어: 20~35x) → 목표주가 = __$
-③ FCF Yield 역산: Forward FCF __$ × (1 ÷ 목표 FCF Yield __%) → 시총 → 주가 = __$
-④ 조율: P/NAV 50% + EV/EBITDA 35% + FCF Yield 15% = **__$**
-
-Bear: 주요 Operator 생산 차질 + 원자재 가격 약세 = __$
-Bull: 신규 로열티 자산 취득 + 원자재 가격 강세 + NAV 확장 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = EV/EBITDA Base/Bear/Bull
-  - current = 현재 주가
-
-**[Segment SOTP + FCF Yield + 자사주 EPS Accretion 모델 — 빅테크/M7 전용]**
-
-⛔ GAAP PER 단독 사용 금지 (주식보상비용(SBC)으로 왜곡됨).
-⛔ 단일 EV/EBITDA 배수 전체 적용 금지 (사업부별 구조가 완전히 다름).
-
-[SBC(주식보상비용) 조정]
-- GAAP 영업이익: __억원  |  SBC: __억원  |  Non-GAAP 영업이익: __억원
-- Non-GAAP FCF = GAAP FCF + SBC 세후 조정 = __억원
-
-[Segment SOTP 테이블]
-| 사업부 | 매출 | 영업이익률 | EBITDA/Revenue | 적용배수 | EV기여 |
-|--------|------|-----------|---------------|---------|-------|
-| (예: AWS)   | __억$ | __%  | EV/Revenue Xx | $__ |
-| (예: 광고) | __억$ | __%  | EV/EBITDA Xx  | $__ |
-| (예: 하드웨어) | __억$ | __% | EV/EBITDA Xx | $__ |
-| Other/초기   | —  | —  | 옵션가치 or 0    | $__ |
-| **SOTP 합계 EV** | — | — | — | **$__** |
-- 순현금(또는 순부채): ±$__  →  Equity Value = $__  →  주당 SOTP = $__
-
-[FCF Yield 분석]
-- Forward FCF = __억$  |  시가총액 = __억$
-- FCF Yield = __%  (M7 피어 중앙값 __%: 저평가/적정/고평가 판단)
-
-[자사주 매입 EPS Accretion]
-- 연간 자사주 매입액: $__억  |  시가총액: $__억
-- 매입률: __%  |  현재 EPS: $__
-- 연간 EPS Accretion: 매입률 × EPS = +$__/주 (__%↑)
-- 3년 누적 EPS Accretion: +$__/주 (복리 효과 포함)
-- ⚠️ Forward EPS 목표치에 자사주 매입 효과 반드시 반영
-
-[목표주가 조율]
-① Segment SOTP: 주당 SOTP = __$
-② FCF 기반 DCF: 5~10년 FCF 예측 + 터미널 = __$
-③ FCF Yield 역산: Forward FCF / 목표 FCF Yield __% → 목표 시총 → 주당 = __$
-④ 조율: SOTP 50% + DCF 35% + FCF Yield 15% = **__$**
-
-Bear: AI 수익화 지연 + 규제 압박 + 광고 경기 하락 = __$
-Bull: AI 신사업 개화 + 자사주 누적 효과 + 세그먼트 마진 확장 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = Segment SOTP Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = FCF Yield 역산 Base/Bear/Bull
-  - current = 현재 주가
-
-**[P/TBVPS + ROTCE + NIM 사이클 모델 — 미국 은행(US Bank) 전용]**
-
-⛔ EV/EBITDA 금지 (이자비용이 영업비용 → EV 개념 부적합).
-⛔ P/B(총장부가) 단독 사용 금지 → 굿윌·무형자산 제거 후 P/TBVPS 사용.
-⛔ 충당금 정상화 없이 PER 직접 사용 금지 (사이클 왜곡).
-
-[CCAR 자본 배분 점검 — 필수]
-① CET1 Ratio: __% | SCB(연준 부과 버퍼): __% | 총 요구 자본: __%
-② 초과 자본(Excess CET1) = 현재 CET1 − 운용 목표(__%) = __ bp
-③ CCAR 통과 여부: [통과 / 조건부 / 미통과]
-④ 승인된 자본 환원: 자사주 매입 $__억 + 배당 $__억 = Total Shareholder Return $__억
-⑤ ⚠️ SCB 상향 or CCAR 미통과 시 → 배당 동결·자사주 중단 리스크 명시 필수
-
-[NIM + 금리 민감도 점검]
-① 현재 NIM: __% (전분기 대비 ±__bp / YoY ±__bp)
-② 금리 민감도: 연준 25bp 인하 시 NII 연간 영향 = −$__억 (Asset-sensitive / Liability-sensitive 구분)
-③ Deposit Beta: 연준 인하분 중 예금금리 인하 전가율 = __% (낮을수록 NIM 방어)
-④ 재가격 일정: Fixed-rate 대출 만기 도래 → NIM 영향 시점 (__%가 __분기 내 재가격)
-
-[신용 사이클 점검]
-① NCO Rate: __% (전년 __% vs 피어 중앙값 __%: 우열 판단)
-② PCL/Average Loans: __% → Coverage Ratio = 대손충당금 / NPL = __x
-③ NPL Ratio: __% (1.0% 초과 시 경고, 피어 대비 +/-__bp)
-④ CRE Office 비중: __% (오피스 공실률 상승 → 대손 리스크 경고)
-⑤ CECL 충분성: 현재 충당금 스택 $__ / 예상 손실 $__ = __x
-
-[TBVPS 산출]
-TBVPS = (총자본 $__ − 굿윌 $__ − 무형자산 $__) / 발행주식수 __ = $__
-
-[Justified P/TBVPS 산출]
-Justified P/TBVPS = (ROTCE − g) / (CoE − g)
-- ROTCE: __% | CoE(CAPM): __% | g(장기성장률): __%
-- Justified P/TBVPS = (__% − __%)/(__% − __%) = __x
-- 피어 P/TBVPS 범위: [JPM 2.0~2.5x / 대형 상업은행 1.2~1.8x / 지역은행 0.8~1.2x]
-
-[목표주가 조율 — 3방법 가중]
-① P/TBVPS: 적정 P/TBVPS __x × TBVPS $__ = __$
-② 정상화 P/E: 충당금 정상화 EPS $__ × 적정 PER __x = __$
-   · 정상화 EPS = GAAP EPS ± (실제 PCL − Mid-cycle PCL) 세후
-③ Total Shareholder Yield 역산: (DPS + 자사주환원 per share) / 목표 TSY __% = __$
-④ 조율: P/TBVPS 55% + 정상화 P/E 35% + TSY 역산 10% = **__$**
-
-Bear: CCAR SCB 상향 + NIM 압축(연준 인하 가속) + PCL 사이클 악화 = __$
-Bull: CCAR 초과자본 활용 대규모 자사주 + NIM 회복 + PCL 사이클 완화 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = P/TBVPS Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
-  - current = 현재 주가
-
-**[EV/EBITDA + P/E(정상화) + FCF Yield 모델 — 미국 방산(US Defense) 전용]**
-
-⛔ P/Book 의미 없음 (경쟁우위는 자산이 아닌 기술·인력·분류프로그램).
-⛔ EAC 손실이 포함된 분기 EBITDA/EPS 그대로 배수 적용 금지 → 정상화 필수.
-
-[Backlog 가시성 점검 — 필수]
-| 구분 | 금액($억) | Backlog/Revenue 배수 |
-|------|---------|-------------------|
-| Funded Backlog | $__ | __x |
-| Unfunded Backlog | $__ | __x |
-| Total Backlog | $__ | __x (목표: 4x 이상 = 우수) |
-
-[Book-to-Bill 추이]
-| Q | 신규수주($억) | 매출($억) | Book-to-Bill |
-|---|------------|---------|------------|
-| Q1 | $__ | $__ | __x |
-| Q2 | $__ | $__ | __x |
-| Q3 | $__ | $__ | __x |
-| Q4(최근) | $__ | $__ | __x |
-3분기 연속 < 1.0x이면 수주 모멘텀 약화 경고 명시.
-
-[계약유형 Mix & EAC 리스크]
-계약 Mix: FFP __% / CPFF+CPIF __% / T&M __%
-진행 중인 대형 FFP 개발 계약:
-① [프로그램명]: 계약금액 $__ / 완료율 __% / 최근 EAC 조정 이력 [있음/없음]
-② 원가초과 누적 EAC 조정액: $__ (당기 일괄 손실 계상분)
-Adj. EBITDA = GAAP EBITDA + EAC 손실 일회성 제거 = $__억
-Adj. EPS = GAAP EPS + EAC 세후 정상화 = $__
-
-[FCF Conversion]
-FCF: $__억  |  Net Income: $__억
-FCF Conversion = FCF / Net Income = __% (100~120%: 우수 / 80% 미만: 운전자본 이슈)
-선급금(Advance Payments) 잔액: $__ (매출 선인식 여부 확인)
-
-[목표주가 조율 — 3방법 가중]
-① EV/EBITDA (Adj.): 피어 배수 __x (대형 프라임 13~18x / IT방산 10~14x)
-   · Adj. EBITDA $__억 × __x → EV $__ → 순부채 차감 → 목표주가 = __$
-② 정상화 P/E: Adj. EPS $__ × 적정 PER __x = __$
-   · 적정 PER = 피어 중앙값 (방산 대형 18~25x) / Backlog 가시성 조정
-③ FCF Yield 역산: Forward FCF $__ / 목표 FCF Yield __% → 시총 → 주당 = __$
-④ 조율: EV/EBITDA 50% + 정상화 P/E 35% + FCF Yield 15% = **__$**
-
-Bear: 국방예산 CR 연장 + 대형 FFP EAC 손실 발생 + Book-to-Bill 악화 = __$
-Bull: 예산 증액(지정학 리스크 상승) + Backlog 신기록 + EAC 정상화 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = EV/EBITDA(Adj.) Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
-  - current = 현재 주가
-
-**[NAV(서브섹터별 Cap Rate 차등) + P/AFFO 모델 — 미국 리츠(US REIT) 전용]**
-
-⛔ EPS/EV/EBITDA 기반 분석 금지 (D&A로 왜곡).
-⛔ FFO 단독 사용 금지 — 반드시 AFFO(Adjusted FFO) 기준으로 산출.
-⛔ 서브섹터 구분 없이 단일 Cap Rate 적용 금지 — 반드시 서브섹터·지역별 차등.
-
-[AFFO 산출 (FFO → AFFO 조정)]
-① FFO = 순이익 + D&A − 자산 매각 이익 = $__/share
-② 유지보수CapEx(Recurring CapEx) = $__/share (FFO에서 차감)
-③ 직선임대료(Straight-line rent) 조정 = $__/share (비현금 수익 제거)
-④ 기타 비현금 조정 = $__/share
-⑤ AFFO = FFO − ② − ③ − ④ = $__/share
-
-AFFO Payout Ratio = 주당 배당 $__ / AFFO $__ = __%
-→ 85% 이하: 배당 지속 가능 / 90% 초과: 배당컷 리스크 경고
-
-[서브섹터별 NAV 산출 — Cap Rate 차등 적용표]
-| 서브섹터 | NOI($억) | 적용 Cap Rate | 자산가치($억) | 지역 |
-|--------|---------|------------|-----------|-----|
-| 데이터센터 | $__ | 4.5~5.5% → __% | $__ | (지역명) |
-| 셀타워 | $__ | 3.5~5% → __% | $__ | (미국/해외 구분) |
-| 산업/물류 | $__ | 4~6% → __% | $__ | (코스탈/내륙) |
-| 헬스케어 | $__ | 5~6.5% → __% | $__ | (시설유형별) |
-| 주거 | $__ | 4~5.5% → __% | $__ | (코스탈/선벨트) |
-| 리테일 | $__ | 5.5~7% → __% | $__ | (클래스A/B 구분) |
-| 오피스 | $__ | 6~9% → __% | $__ | ⚠️위기 섹터 주의 |
-| 기타 | $__ | __% | $__ | — |
-| **합계 자산가치** | — | — | **$__** | — |
-
-NAV = 합계 자산가치 $__ − 총 부채 $__ − 우선주 $__ = $__
-주당 NAV = NAV / 발행주식수 __ = $__
-
-[서브섹터 전용 추가 분석]
-(데이터센터 해당 시) MW 가동률 __% / 하이퍼스케일 비중 __% / MRR $__억 / 신규 MW 파이프라인 __MW
-(셀타워 해당 시) 타워 수 __개 / Tenancy Ratio __x / 에스컬레이터 __% / 5G 전환율 __%
-(헬스케어 해당 시) EBITDARM Coverage __x / NNN vs RIDEA 비중 __% / 상위임차인 Coverage __x
-(산업물류 해당 시) Lease Mark-to-Market +__% / Same-Store NOI 성장 __% / e커머스 비중 __%
-(주거 해당 시) Blended Rent Growth __% / 점유율 __% / 선벨트 신규 공급 압박 [있음/없음]
-
-[목표주가 조율 — 2방법 가중]
-① P/NAV 방법: 적정 P/NAV __x × 주당 NAV $__ = __$
-   · 프리미엄 서브섹터(DC/셀타워/산업): 1.0~1.3x 프리미엄 정당화 가능
-   · 오피스/압박 섹터: 0.6~0.9x 디스카운트 적용
-② P/AFFO 방법: 서브섹터 피어 P/AFFO __x × AFFO $__/share = __$
-   · 데이터센터 25~40x / 셀타워 20~30x / 산업 20~28x / 주거 18~25x / 리테일 12~18x
-③ 배당수익률 역산: 연간 DPS $__ / 목표 배당수익률 __% = __$
-   (AFFO Payout Ratio 85% 이하 전제, 초과 시 배당컷 가능성 명시)
-④ 조율: P/NAV 50% + P/AFFO 40% + 배당수익률 역산 10% = **__$**
-
-Bear: 금리 상승 → Cap Rate 확대 → NAV 하락 + AFFO 성장 둔화 = __$
-Bull: 금리 인하 + 서브섹터 수요 호조(AI 데이터센터 수요 등) + NAV 확장 = __$
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
-  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
-  - rel_base/rel_bear/rel_bull = P/AFFO Base/Bear/Bull
-  - current = 현재 주가
-
-**[rNPV + FDA 이벤트 드리븐 모델 — 미국 바이오(US Biotech) 전용]**
-
-rNPV 기본 구조는 한국 바이오와 동일. 미국 바이오 추가 의무 분석:
-
-[PDUFA 이벤트 캘린더]
-| 약물명(적응증) | 단계 | FDA 지정 | PDUFA/결과 날짜 | AdCom | 당사 PoS |
-|-------------|------|---------|--------------|-------|---------|
-| Drug A (질환명) | NDA제출 | BTD+PR | 2026.XX.XX | 완료(XX찬/XX반) | __%  |
-| Drug B (질환명) | BLA제출 | FastTrack | 2026.XX 예정 | 미예정 | __%  |
-| Drug C (질환명) | Ph3 진행 | ODD | 2027년 예상 | — | __%  |
-
-[FDA 지정별 PoS 보정 적용표]
-기준 PoS (문헌 기반 Phase별 역사적 성공률):
-- Ph1→승인: ~10% | Ph2→승인: ~15% | Ph3→승인: ~50% | NDA/BLA→승인: ~85%
-
-FDA 지정 보정 (누적 가능):
-| FDA 지정 | PoS 보정 | 적용 근거 |
-|---------|---------|---------|
-| Breakthrough Therapy(BTD) | +5~10%p | FDA 조기 관여, CRL 가능성 낮음 |
-| Priority Review | +3~5%p | 임상 우월성 인정 |
-| Fast Track | +2~3%p | Rolling Review, FDA 소통 강화 |
-| Accelerated Approval | 별도 시나리오 | 확증 Ph3 결과 별도 반영 필수 |
-| Orphan Drug(ODD) | +0~2%p | TAM 소규모 but 독점 기간 보호 |
-| REMS 요구 가능성 있음 | -3~5%p | 처방 제한 → 시장 침투율 하락 |
-
-각 자산 최종 적용 PoS: 기준 PoS ± 지정 보정 합산 = __%
-
-[AdCom 결과 반영]
-- AdCom 실시: [예/아니오]
-- AdCom 표결: 찬성 __표 / 반대 __표 / 기권 __표
-- AdCom 이후 PoS 재조정: (찬성 다수: +5~10%p / 반대 다수: -15~25%p)
-- ⚠️ AdCom 결과와 최종 FDA 결정이 다른 사례 존재 → 단독 근거 금지
-
-[임상 데이터 정교 분석]
-| 지표 | 결과값 | 95% CI | vs SoC(대조군) | 임상 의미 |
-|-----|-------|--------|--------------|---------|
-| ORR | __% | (__ ~ __%) | SoC __% | 절대차 +__%p |
-| PFS(중앙값) | __ mo | (__ ~ __ mo) | SoC __ mo | HR=__, p=__ |
-| OS(중앙값) | __ mo | (__ ~ __ mo) | SoC __ mo | HR=__, p=__ |
-| DoR(중앙값) | __ mo | (__ ~ __ mo) | — | — |
-| SAE 비율 | __% | — | SoC __% | 우열 판단 |
-| 투여 중단율 | __% | — | SoC __% | 내약성 |
-
-바이오마커 서브그룹: [양성군] ORR __% vs [전체군] ORR __%
-→ 바이오마커 선택 처방 전략 여부, 라벨 제한 가능성 명시
-
-[CRL 리스크 체크리스트]
-다음 항목 하나라도 해당 시 CRL 리스크 경고 표시:
-- [ ] 주요 2차 평가지표(Key Secondary Endpoint) 미달
-- [ ] 대조군 선택 FDA 이의 제기 이력
-- [ ] CMC(Chemistry, Manufacturing, Controls) 이슈 또는 제조시설 483 경고문
-- [ ] REMS 필요성 신호 (안전성 우려)
-- [ ] AdCom 반대표 다수
-- [ ] 경쟁 약물 이미 승인으로 차별화 근거 약화
-→ 해당 항목 수: __개 → CRL 리스크 [낮음/중간/높음]
-
-[승인 시나리오별 rNPV]
-① 승인 (PoS: __%):
-  · Peak Sales = $__억 (TAM $__억 × 침투율 __% × 가격 $__/년)
-  · rNPV 기여 = Peak Sales × 이익마진 __% / WACC × PoS = $__
-② CRL — 재제출 (PoS: __%):
-  · 지연 기간 6~12개월, 추가 임상 요구 가능성 __% 가정
-  · 재제출 후 승인 PoS: __% → rNPV 기여 = $__
-③ 철수/임상중단 (PoS: __%):
-  · 해당 파이프라인 가치 = $0
-
-[최종 목표주가 조율]
-rNPV 합계 = Σ(자산별 시나리오 가중 rNPV) + 현금 − 순부채 + 플랫폼 옵션가치
-주당 rNPV = rNPV 합계 / 발행주식수 = $__
-
-PDUFA 이벤트 전후 시나리오:
-- PDUFA 승인 시 주가: $__ (현재가 대비 +__%  upside)
-- CRL 발생 시 주가: $__ (현재가 대비 -__% downside)
-- 기대값(EV) 목표주가 = 승인 $ × PoS + CRL $ × (1-PoS) = **$__**
-
-⚠️ FINAL_VALUATION_DATA JSON 작성 시:
-  - base = 기대값(EV) 목표주가
-  - bull = 승인 시나리오 목표주가
-  - bear = CRL/임상중단 시나리오 목표주가
-  - abs_base/abs_bear/abs_bull = 각 시나리오 rNPV
-  - rel_base/rel_bear/rel_bull = 피어 P/Sales or EV/Revenue(상업화 약물 있는 경우)
-  - current = 현재 주가
-
+${valuationModelBlock}
 ⚠️ 극단값 최종 점검:
 - 목표가 ÷ 현재가 = __ 배 → [정상범위 내 / 극단값 감지: 재조율 필요]
 
@@ -6009,15 +4833,26 @@ ${sotpFlag ? `
 
   → 적용 할인율과 이유를 **한 문장**으로 반드시 명시: 예) "자회사 배당 유입 안정적이나 비상장 11번가 가치 불확실성으로 28% 할인 적용"
 
-- SOTP 주당 가치가 최종 목표주가. DCF/피어는 참고 표기만 허용. 3-way average 금지.
+- SOTP는 **절대가치 Lead**입니다. 여기서 나온 값을 상대가치(피어 멀티플 또는 P/NAV)와
+  조율해 최종 목표주가를 산출하세요 — 조율 절차는 "최종 조율" 섹션의 SOTP 규칙을 따릅니다.
+  ❌ 3-way average(SOTP·DCF·피어 단순 평균) 금지 — 절대가치는 SOTP 하나로 확정한 뒤
+     상대가치와 2자 조율하세요. DCF는 참고 표기만 허용합니다.
 - 컨텍스트에 사업부별 재무 데이터가 없으면 "공시 미확인 — DART 사업보고서 기준 추정" 명시
 
 **[순수 투자지주(Pure HoldCo) 특화 규칙]** — SK스퀘어·삼성물산 등 보유지분이 가치 전체인 경우:
 - DCF는 적용 불가 (본체 영업현금흐름이 배당 수입뿐이라 DCF 신뢰도 극히 낮음)
-- Lead 방법론: SOTP NAV 기준. DCF/피어 멀티플은 보조 참고치로만 사용
+- 절대가치 Lead: SOTP NAV 기준 (DCF는 위 사유로 제외)
 - **NAV Discount 계산 필수**: 현재 주가 / SOTP 합산 주당 NAV × 100 = P/NAV(%)
   → P/NAV < 100%: 할인 거래 중(숫자로 몇 % 할인인지 명시) / P/NAV > 100%: 프리미엄 거래 중
-- 최종 목표주가 = SOTP NAV × (1 − 지주할인율) ÷ KIS 상장주식수
+- **상대가치는 동종 지주회사의 P/NAV로 산출합니다.**
+  순수 지주는 사업 멀티플(EV/EBITDA·PER) 비교가 무의미하므로, 국내 상장 지주회사
+  피어군의 P/NAV 중앙값을 적용하세요: 상대가치 = SOTP 합산 주당 NAV × 피어 P/NAV 중앙값
+  ※ 한국 지주회사 P/NAV 통상 범위 40~70%. 피어 데이터가 없으면 이 범위 중앙값(55%) 사용 후 근거 명시.
+- 최종 목표주가 = 위 두 값을 "최종 조율" 섹션의 SOTP 규칙으로 조율한 값
+  (절대가치 = SOTP NAV × (1 − 지주할인율), 상대가치 = NAV × 피어 P/NAV)
+  ※ 지주할인율과 피어 P/NAV가 사실상 같은 현상을 다르게 표현한 것이므로,
+    두 값이 20% 이내로 수렴하는 것이 정상입니다. 크게 벌어지면 할인율 가정을 재검토하세요.
+- 발행주식수는 KIS 상장주식수 기준
 
 ` : ""}
 마지막 두 줄에 아래 형식의 JSON을 각각 정확히 한 줄씩 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요.
@@ -6753,3 +5588,25 @@ Output rules:
 
   return { systemPrompt, userPrompt };
 }
+
+// ─── 밸류에이션 모델 판정기 등록 ──────────────────────────────────────────────
+// 업종 감지 규칙(needsXxx)은 이 파일이 소유한다. 모델 선택은 pick-model이 맡되,
+// 판정에 필요한 감지는 여기서 넘겨준다 — 그래야 판정이 한 벌만 존재한다.
+setFlagDetector((industry, companyName, ticker, opm) => ({
+  sotp:         needsSOTP(industry, companyName, ticker),
+  reit:         needsREIT(industry, companyName, ticker),
+  usReit:       needsUSREIT(industry, companyName, ticker),
+  financial:    needsFinancialSector(industry, companyName, ticker),
+  usBank:       needsUSBank(industry, companyName, ticker),
+  korBiotech:   needsKorBiotech(industry, companyName, ticker, opm),
+  usBiotech:    needsUSBiotech(industry, companyName, ticker),
+  resources:    needsResourcesMining(industry, companyName, ticker),
+  construction: needsConstruction(industry, companyName, ticker),
+  utility:      needsUtility(industry, companyName, ticker),
+  telecom:      needsTelecom(industry, companyName, ticker),
+  mlp:          needsMLP(industry, companyName, ticker),
+  bdc:          needsBDC(industry, companyName, ticker),
+  royalty:      needsRoyaltyCompany(industry, companyName, ticker),
+  bigTech:      needsBigTech(industry, companyName, ticker),
+  usDefense:    needsUSDefense(industry, companyName, ticker),
+}));

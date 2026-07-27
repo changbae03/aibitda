@@ -42,3 +42,22 @@ export const db = drizzle(pool, { schema });
 
 export * from "./schema";
 export { runMigrations } from "./migrate";
+
+/**
+ * jsonb 컬럼 값을 읽는다.
+ *
+ * **jsonb 컬럼에 JSON.parse를 걸지 말 것.** pg 드라이버는 jsonb를 이미 객체로 돌려주고,
+ * 거기에 JSON.parse를 걸면 `"[object Object]" is not valid JSON` 예외가 난다.
+ * 그 예외가 try/catch에 삼켜지면 캐시가 통째로 죽는데 아무도 모른다 — 실제로
+ * corp_code 맵 3,977건이 system_cache에 멀쩡히 있는데도 조회가 **항상 실패**했고,
+ * 그 탓에 DART 사업보고서가 한 건도 수집되지 않았다.
+ *
+ * 문자열로 저장된 과거 행이 섞여 있을 수 있어 두 경우를 모두 받는다.
+ */
+export function readJsonb<T>(value: unknown): T | null {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    try { return JSON.parse(value) as T; } catch { return null; }
+  }
+  return value as T;
+}

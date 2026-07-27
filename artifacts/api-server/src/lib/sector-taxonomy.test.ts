@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifySector, isComparableSector } from "./sector-taxonomy";
+import { classifySector, isComparableSector, isUsableKisIndustry } from "./sector-taxonomy";
 
 // 아래 industry 값은 모두 운영 DB(krx_stocks)에 실제로 들어 있는 문자열이다.
 // 야후 파이낸스가 주는 영문 고정 명칭이라 임의로 바꾸면 안 된다.
@@ -142,5 +142,40 @@ describe("대소문자·공백에 흔들리지 않는다", () => {
   it("야후가 표기를 바꿔도 견딘다", () => {
     expect(classifySector("  AUTO MANUFACTURERS  ", "KR")).toBe("KR_AUTO");
     expect(classifySector("electronic components", "KR")).toBe("KR_ELECTRONICS");
+  });
+});
+
+describe("야후가 업종을 비웠을 때 KIS 값을 써도 되는가", () => {
+  /**
+   * 야후는 한국 종목의 industry를 자주 비운다. 그때 `"일반"`을 넣으면 KR_OTHER로 떨어져
+   * 목표가 150% 상한·WACC 12~13% 같은 미분류 취급을 받는다. 메디포스트가 그 사례였고,
+   * 사람이 종목 메모에 "실제는 바이오텍"이라고 손수 적어 메우고 있었다.
+   * KIS 분류를 대신 쓰면 되지만, **모호한 값은 걸러야 한다.**
+   */
+  it("실체가 담긴 KIS 분류는 쓴다", () => {
+    expect(isUsableKisIndustry("기초 의약물질 및 생물학적 제제 제조업")).toBe(true);
+    expect(isUsableKisIndustry("반도체 제조업")).toBe(true);
+    expect(isUsableKisIndustry("선박 및 보트 건조업")).toBe(true);
+  });
+
+  it("실체를 못 담는 KIS 분류는 쓰지 않는다", () => {
+    // "기타 금융업"을 industry 자리에 넣으면 야후용 규칙표의 "금융"에 걸려
+    // 배터리 소재 지주회사 에코프로가 KR_FINANCIAL로 분류된다.
+    expect(isUsableKisIndustry("기타 금융업")).toBe(false);
+    expect(isUsableKisIndustry("특수 목적용 기계 제조업")).toBe(false);
+    expect(isUsableKisIndustry("기타 전문 도매업")).toBe(false);
+    expect(isUsableKisIndustry("그외 기타 운송장비 제조업")).toBe(false);
+  });
+
+  it("비어 있으면 쓰지 않는다", () => {
+    expect(isUsableKisIndustry(null)).toBe(false);
+    expect(isUsableKisIndustry("")).toBe(false);
+    expect(isUsableKisIndustry("   ")).toBe(false);
+  });
+
+  it("메디포스트가 KR_OTHER가 아니라 KR_BIOTECH로 간다", () => {
+    const kis = "기초 의약물질 및 생물학적 제제 제조업";
+    expect(classifySector("일반", "KR")).toBe("KR_OTHER");            // 예전
+    expect(classifySector(kis, "KR", kis)).toBe("KR_BIOTECH");        // 지금
   });
 });

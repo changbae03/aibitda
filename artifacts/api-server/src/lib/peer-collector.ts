@@ -4,7 +4,7 @@ import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
 import { pool } from "@workspace/db";
 import { extractNetDebt, type NetDebtBreakdown } from "./dart-balance.js";
-import { lookupCorpCode } from "./dart-store.js";
+import { lookupCorpCode, saveNetDebt } from "./dart-store.js";
 import { normalizeTicker } from "@workspace/shared";
 import { sanitizePathComponent, validateDateStr } from "./sanitize.js";
 
@@ -421,6 +421,12 @@ export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSu
         const netDebt = extractNetDebt(list);
 
         if (cash !== null || totalAssets !== null || netDebt !== null) {
+          // 계산한 순차입금을 남긴다. 예전에는 프롬프트에 넣고 버려서, 같은 종목을
+          // 다시 분석할 때마다 다시 받았고 다른 코드는 이 값을 볼 수 없었다.
+          if (netDebt) {
+            await saveNetDebt(stockCode, corpCode, year, sj, netDebt.netDebt, netDebt.interestBearingDebt)
+              .catch(() => {});
+          }
           return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt, netDebt, unbilledWork, constructionReceivables };
         }
       } catch {

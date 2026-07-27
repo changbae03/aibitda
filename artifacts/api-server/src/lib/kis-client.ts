@@ -3,6 +3,7 @@
  * 실전투자 환경 기반 — 실시간 주식 현재가·PER·PBR·EPS·BPS 조회
  */
 
+import { isKoreanTicker } from "@workspace/shared";
 import { pool } from "@workspace/db";
 
 const BASE_URL = "https://openapi.koreainvestment.com:9443";
@@ -298,7 +299,7 @@ const _namesCache = new Map<string, KISStockNames | null>();
  */
 export async function fetchKISStockNames(code: string): Promise<KISStockNames | null> {
   const normalized = code.replace(/\.(KS|KQ)$/i, "");
-  if (!/^\d{6}$/.test(normalized)) return null;
+  if (!isKoreanTicker(normalized)) return null;
   if (_namesCache.has(normalized)) return _namesCache.get(normalized) ?? null;
 
   try {
@@ -318,8 +319,14 @@ export async function fetchKISStockNames(code: string): Promise<KISStockNames | 
       },
     });
 
-    if (!res.ok) { _namesCache.set(normalized, null); return null; }
+    // ⚠️ 실패를 캐시할 때는 "KIS가 없다고 답한 것"과 "물어보지도 못한 것"을 구분한다.
+    // 예전에는 둘 다 null로 캐시해서, 순간적인 네트워크 오류·429 한 번이 그 종목을
+    // 프로세스가 끝날 때까지 "분류 없음"으로 못박았다. 실제로 같은 종목(에스앤에스텍)이
+    // 드라이런에서는 분류를 받고 본 수집에서는 비어 있는 일이 있었다.
+    // HTTP 실패는 캐시하지 않는다 — 다음 시도에 다시 물어봐야 한다.
+    if (!res.ok) return null;
     const json = await res.json();
+    // rt_cd != 0 은 KIS가 정상 응답으로 "해당 없음"을 알린 것이므로 캐시해도 된다.
     if (json.rt_cd !== "0") { _namesCache.set(normalized, null); return null; }
 
     const o = json.output ?? {};
@@ -340,7 +347,7 @@ export async function fetchKISStockNames(code: string): Promise<KISStockNames | 
     _namesCache.set(normalized, names);
     return names;
   } catch {
-    _namesCache.set(normalized, null);
+    // 네트워크·타임아웃 등 물어보지 못한 경우 — 캐시하지 않고 다음 시도에 맡긴다.
     return null;
   }
 }
@@ -351,7 +358,7 @@ export async function fetchKISStockNames(code: string): Promise<KISStockNames | 
  */
 export async function fetchKISEngName(code: string): Promise<string | null> {
   const normalized = code.replace(/\.(KS|KQ)$/i, "");
-  if (!/^\d{6}$/.test(normalized)) return null;
+  if (!isKoreanTicker(normalized)) return null;
   if (_engNameCache.has(normalized)) return _engNameCache.get(normalized) ?? null;
 
   try {
@@ -382,7 +389,7 @@ export async function fetchKISInvestorFlow(
   stockCode: string
 ): Promise<KISInvestorFlow | null> {
   const clean = stockCode.replace(/\.(KS|KQ)$/i, "");
-  if (!/^\d{6}$/.test(clean)) return null;
+  if (!isKoreanTicker(clean)) return null;
 
   try {
     const token = await getAccessToken();
@@ -524,7 +531,7 @@ export async function fetchKISLiveGainers(limit = 30): Promise<KISGainerItem[]> 
         volume:       parseInt_(d.acml_vol),
         tradingValue: Math.round(parseInt_(d.acml_tr_pbmn) / 1e8), // 원 → 억원
       }))
-      .filter(d => /^\d{6}$/.test(d.ticker));
+      .filter(d => isKoreanTicker(d.ticker));
   } catch (err) {
     console.error("[kis] fetchKISLiveGainers 예외:", err);
     return [];

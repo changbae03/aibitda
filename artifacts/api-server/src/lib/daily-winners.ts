@@ -10,7 +10,7 @@
  * 이 데이터가 2~3주 쌓이면 winner-pattern.ts가 자동으로 가중치 인사이트를 도출한다.
  */
 
-import { pool } from "@workspace/db";
+import { pool, readJsonb } from "@workspace/db";
 import { fetchBothMarketsOHLCV } from "./pykrx-client.js";
 import { fetchInvestorByStocks } from "./pykrx-client.js";
 
@@ -153,9 +153,8 @@ export async function collectTodayWinners(dateStr?: string): Promise<{
   const { rows: cacheRows } = await pool.query<{ data: string }>(
     `SELECT data FROM system_cache WHERE key = 'tomorrow_picks_v2' ORDER BY expires_at DESC LIMIT 1`,
   ).catch(() => ({ rows: [] as { data: string }[] }));
-  const cachedPicks: { ticker: string }[] = cacheRows[0]?.data
-    ? JSON.parse(cacheRows[0].data)
-    : [];
+  // system_cache.data는 jsonb다 — JSON.parse를 직접 걸면 예외가 나고 조용히 빈 배열이 된다
+  const cachedPicks = readJsonb<{ ticker: string }[]>(cacheRows[0]?.data) ?? [];
   const tomorrowSet = new Set(cachedPicks.map(p => p.ticker));
 
   // DB 저장

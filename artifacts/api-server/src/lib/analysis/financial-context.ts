@@ -1,6 +1,7 @@
 // 재무 컨텍스트 빌더 — 티커 해석, Naver/Yahoo 재무 데이터, 뉴스 수집
 import { db, pool } from "@workspace/db";
-import { normalizeTicker } from "@workspace/shared";
+import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
+import { isUsableKisIndustry } from "../sector-taxonomy.js";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { refreshBriefForTicker } from "../../routes/portfolio.js";
@@ -62,42 +63,90 @@ async function tryQuoteSummary(symbol: string) {
  * 표기(종목약명)로 고쳐 두었는데도 분석 기록에는 옛 이름이 남는 원인이었다.
  * 이름의 단일 출처는 종목 마스터다.
  */
-async function lookupMasterName(ticker: string): Promise<string | null> {
+interface MasterRow {
+  name: string | null;
+  industry: string | null;
+  kisIndustry: string | null;
+}
+
+async function lookupMaster(ticker: string): Promise<MasterRow | null> {
   try {
-    const { rows } = await pool.query<{ name: string }>(
-      `SELECT name FROM stocks WHERE ticker = $1 LIMIT 1`, [ticker]);
-    return rows[0]?.name?.trim() || null;
+    const { rows } = await pool.query<{
+      name: string | null; industry: string | null; kis_industry: string | null;
+    }>(
+      `SELECT name, industry, kis_industry FROM stocks WHERE ticker = $1 LIMIT 1`,
+      [ticker],
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      name: r.name?.trim() || null,
+      industry: r.industry?.trim() || null,
+      kisIndustry: r.kis_industry?.trim() || null,
+    };
   } catch {
     return null;
   }
 }
 
+/**
+ * 업종의 단일 출처도 종목 마스터다 — 이름과 같은 원칙.
+ *
+ * 야후는 한국 종목의 industry를 자주 비운다. 예전에는 그때 `"일반"`을 넣었고, 그 값이
+ * 업종 분류·모델 선택·섹터 프라이어로 그대로 흘러가 KR_OTHER 취급(목표가 150% 상한,
+ * WACC 12~13%)을 받았다. 실제로 메디포스트는 마스터에 KIS 분류 "기초 의약물질 및
+ * 생물학적 제제 제조업"이 정확히 들어 있는데도 분석 기록에는 `"일반"`이 저장됐고,
+ * 사람이 종목 메모로 "실제는 바이오텍이니 KR_OTHER로 보지 말 것"을 손수 적어 메웠다.
+ * 분석 63건이 `"일반"`으로 남아 있다.
+ *
+ * 종목 메모는 **사람의 판단**(예: "이 약은 이미 허가됐으니 PoS를 또 곱하지 말 것)을
+ * 담는 자리다. 꺼내 쓸 수 있는 데이터를 못 꺼내서 손으로 채우는 일은 없어야 한다.
+ */
+function resolveIndustry(yahooIndustry: string | null | undefined, master: MasterRow | null): string {
+  // KIS 값은 모호한 것을 걸러서 쓴다. "기타 금융업"을 그대로 넘기면 야후용 규칙표의
+  // "금융"에 걸려, 배터리 소재 지주회사 에코프로가 KR_FINANCIAL로 분류된다.
+  const kis = isUsableKisIndustry(master?.kisIndustry) ? master!.kisIndustry! : null;
+  return yahooIndustry?.trim()
+    || master?.industry
+    || kis
+    || "일반";
+}
+
 async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; englishName: string | null; industry: string; resolvedSymbol: string }> {
   await loadKRXList();
 
-  if (/^\d{6}$/.test(ticker)) {
-    const [ksResult, kqResult, masterName] = await Promise.all([
+  if (isKoreanTicker(ticker)) {
+    const [ksResult, kqResult, master] = await Promise.all([
       tryQuoteSummary(`${ticker}.KS`),
       tryQuoteSummary(`${ticker}.KQ`),
-      lookupMasterName(ticker),
+      lookupMaster(ticker),
     ]);
     const yahooResult = kqResult ?? ksResult;
     const resolvedSymbol = kqResult ? `${ticker}.KQ` : `${ticker}.KS`;
     // 마스터(종목약명) → KRX 목록(법인명) → 야후 영문명 → 티커 순
-    const koreanName = masterName ?? lookupKoreanName(ticker);
+    const koreanName = master?.name ?? lookupKoreanName(ticker);
     const englishName = yahooResult?.companyName ?? null;
     const companyName = koreanName ?? englishName ?? ticker;
-    return { companyName, englishName: englishName !== companyName ? englishName : null, industry: yahooResult?.industry ?? "일반", resolvedSymbol };
+    const industry = resolveIndustry(yahooResult?.industry, master);
+    if (!yahooResult?.industry && industry !== "일반") {
+      console.log(`[ticker-info] ${ticker} 업종을 종목 마스터에서 보충: "${industry}"`);
+    }
+    return { companyName, englishName: englishName !== companyName ? englishName : null, industry, resolvedSymbol };
   }
 
-  const [result, masterName] = await Promise.all([
+  const [result, master] = await Promise.all([
     tryQuoteSummary(ticker),
-    lookupMasterName(ticker),
+    lookupMaster(ticker),
   ]);
-  const koreanName = masterName ?? lookupKoreanName(ticker);
+  const koreanName = master?.name ?? lookupKoreanName(ticker);
   const englishName = result?.companyName ?? null;
   const companyName = koreanName ?? englishName ?? ticker;
-  return { companyName, englishName: englishName !== companyName ? englishName : null, industry: result?.industry ?? "일반", resolvedSymbol: ticker };
+  return {
+    companyName,
+    englishName: englishName !== companyName ? englishName : null,
+    industry: resolveIndustry(result?.industry, master),
+    resolvedSymbol: ticker,
+  };
 }
 
 // ─── Naver Finance data fetching ─────────────────────────────────────────────

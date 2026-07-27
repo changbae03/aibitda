@@ -12,3 +12,4 @@ export * from "./ml";
 export * from "./relations";
 export * from "./valuations";
 export * from "./peers";
+export * from "./sector_bands";

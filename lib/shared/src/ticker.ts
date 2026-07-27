@@ -13,7 +13,18 @@ export type Market = "KR" | "US";
 /** 한국거래소 시장 구분. 야후 심볼 접미사가 달라진다. */
 export type KrExchange = "KOSPI" | "KOSDAQ";
 
-const KR_CODE = /^\d{6}$/;
+/**
+ * 한국 종목코드: 6자리이고 **숫자로 시작**한다.
+ *
+ * 예전에는 `/^\d{6}$/`(6자리 전부 숫자)였다. 그런데 KRX가 신규상장·스팩에
+ * `0004Y0`·`0126Z0`처럼 영문이 섞인 코드를 발급하기 시작했고, 그런 종목 55개가
+ * 전부 "한국이 아님"으로 판정돼 KIS·DART 조회가 통째로 막혀 있었다.
+ *
+ * 첫 글자를 숫자로 못박는 이유는 미국 티커와 겹치지 않게 하기 위해서다. 실제 데이터로
+ * 확인했다 — 미국 10,448종목 중 숫자로 시작하는 티커는 0개이고, 6글자 티커 303개는
+ * 전부 `ICR-PA` 같은 우선주라 하이픈이 들어간다. 한국 2,800종목은 전부 숫자로 시작한다.
+ */
+const KR_CODE = /^\d[0-9A-Z]{5}$/;
 const KR_SUFFIX = /\.(KS|KQ)$/i;
 
 /**
@@ -26,7 +37,7 @@ export function normalizeTicker(raw: string | null | undefined): string {
   return raw.trim().replace(KR_SUFFIX, "").toUpperCase();
 }
 
-/** 표준형 티커가 한국 종목인지. 6자리 숫자면 한국으로 본다. */
+/** 표준형 티커가 한국 종목인지. 6자리이고 숫자로 시작하면 한국으로 본다. */
 export function isKoreanTicker(ticker: string | null | undefined): boolean {
   return KR_CODE.test(normalizeTicker(ticker));
 }

@@ -155,6 +155,8 @@ export const stocksView = pgView("stocks", {
   dataFetched: boolean("data_fetched"),
   fetchError: text("fetch_error"),
   lastUpdated: timestamp("last_updated", { withTimezone: true }),
+  /** 한국 표준산업분류(KIS). 미국 종목에는 없는 개념이라 항상 NULL이다 */
+  kisIndustry: text("kis_industry"),
 }).existing();
 
 export type Stock = typeof stocksView.$inferSelect;

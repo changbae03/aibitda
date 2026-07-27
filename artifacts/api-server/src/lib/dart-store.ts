@@ -7,7 +7,8 @@
  * - 30일 캐시 유효 기간으로 API 호출 절약
  */
 
-import { pool } from "@workspace/db";
+import { isKoreanTicker } from "@workspace/shared";
+import { pool, readJsonb } from "@workspace/db";
 import { getCorpCodeFromCache } from "./dart-corp-cache.js";
 
 // ─── reprt_code 정의 ─────────────────────────────────────────────────────────
@@ -61,6 +62,13 @@ async function ensureTable(): Promise<void> {
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS eps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS bps             BIGINT`,
     `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS fetched_at      TIMESTAMPTZ DEFAULT NOW()`,
+    // 순차입금(이자부부채 − 현금). total_debt와 **다른 값**이다.
+    //   total_debt = 부채총계(매입채무·충당부채까지 포함) — 한화시스템 5.3조
+    //   net_debt   = 이자부부채 − 현금성자산            — 한화시스템 0.7조 수준
+    // 둘을 혼동하면 기업가치에서 7배를 잘못 빼게 된다.
+    // 예전에는 IFRS 코드로 정확히 계산해놓고 프롬프트에 넣은 뒤 버렸다 — 저장해서 재사용한다.
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS net_debt             BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS interest_bearing_debt BIGINT`,
     `CREATE INDEX IF NOT EXISTS idx_ticker_financials_ticker ON ticker_financials (ticker, bsns_year DESC)`,
   ];
   for (const sql of migrations) {
@@ -87,12 +95,17 @@ export async function lookupCorpCode(stockCode: string): Promise<string | null> 
 
   // 1순위: system_cache DB — TTL 만료돼도 허용 (corp_code는 거의 불변)
   try {
-    const r = await pool.query<{ data: string }>(
+    const r = await pool.query<{ data: unknown }>(
       `SELECT data FROM system_cache WHERE key = 'dart_corp_code_map_v1' ORDER BY expires_at DESC LIMIT 1`
     );
     if (r.rows[0]?.data) {
-      const map = JSON.parse(r.rows[0].data) as Record<string, string>;
-      const found = map[stockCode];
+      // ⚠️ system_cache.data는 jsonb다 — pg 드라이버가 **이미 객체로** 돌려준다.
+      // 예전에는 여기서 무조건 JSON.parse를 걸었고, 객체를 넣으면 "[object Object]"가 되어
+      // 예외가 났다. 그 예외를 아래 catch가 조용히 삼켜, 3,977개짜리 맵이 멀쩡히 있는데도
+      // 이 단계가 **항상 실패**했다. 그래서 이미 분석한 종목(ticker_financials)만 겨우
+      // corp_code를 얻고 나머지는 폐기된 API로 흘러가 null이 됐다.
+      const map = readJsonb<Record<string, string>>(r.rows[0].data);
+      const found = map?.[stockCode];
       if (found) {
         console.log(`[dart-store] ${stockCode} corp_code=${found} (system_cache)`);
         return found;
@@ -285,6 +298,41 @@ async function upsertFinancial(
       f.equity, f.cash, f.totalDebt, f.eps, f.bps]);
 }
 
+/**
+ * IFRS 코드로 집계한 순차입금을 남긴다.
+ *
+ * 예전에는 분석할 때마다 DART 전체 재무제표를 받아 순차입금을 계산하고, 프롬프트에
+ * 넣은 뒤 버렸다. 같은 종목을 다시 분석하면 다시 받았고, 무엇보다 **저장된 곳이 없어서
+ * 다른 코드가 쓸 수 없었다** — 목표주가 검산도, 입력 점검도 불가능했다.
+ *
+ * total_debt(부채총계)와 반드시 구분할 것. 한화시스템 기준 부채총계 5.3조 vs 순차입금
+ * 0.7조 수준이다. 기업가치에서 빼야 하는 것은 후자다.
+ */
+export async function saveNetDebt(
+  ticker: string,
+  corpCode: string,
+  bsnsYear: number,
+  fsType: "CFS" | "OFS",
+  netDebt: number,
+  interestBearingDebt: number,
+): Promise<void> {
+  try {
+    await ensureTable();
+    await pool.query(`
+      INSERT INTO ticker_financials
+        (ticker, corp_code, bsns_year, reprt_code, period_label, fs_type,
+         net_debt, interest_bearing_debt)
+      VALUES ($1,$2,$3,'11011','FY',$4,$5,$6)
+      ON CONFLICT (ticker, bsns_year, reprt_code, fs_type) DO UPDATE SET
+        net_debt = EXCLUDED.net_debt,
+        interest_bearing_debt = EXCLUDED.interest_bearing_debt,
+        fetched_at = NOW()
+    `, [ticker, corpCode, bsnsYear, fsType, Math.round(netDebt), Math.round(interestBearingDebt)]);
+  } catch (e) {
+    console.warn(`[dart-store] ${ticker} 순차입금 저장 실패:`, (e as Error)?.message?.slice(0, 80));
+  }
+}
+
 // ─── 메인: 분기·연간 데이터 수집 및 저장 ──────────────────────────────────────
 
 /**
@@ -295,7 +343,7 @@ async function upsertFinancial(
 export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<void> {
   const key = process.env["DART_API_KEY"];
   if (!key) return;
-  if (!/^\d{6}$/.test(stockCode)) return;
+  if (!isKoreanTicker(stockCode)) return;
 
   try {
     await ensureTable();
@@ -396,7 +444,7 @@ function opm(revenue: bigint | null, opIncome: bigint | null): string {
  * 데이터가 없으면 null 반환.
  */
 export async function getDartHistoricalContext(stockCode: string): Promise<string | null> {
-  if (!/^\d{6}$/.test(stockCode)) return null;
+  if (!isKoreanTicker(stockCode)) return null;
   try {
     await ensureTable();
     const r = await pool.query<{
@@ -621,7 +669,7 @@ export interface DartAnchorNumerics {
  * 데이터 없으면 null 반환.
  */
 export async function getDartAnchorNumerics(stockCode: string): Promise<DartAnchorNumerics | null> {
-  if (!/^\d{6}$/.test(stockCode)) return null;
+  if (!isKoreanTicker(stockCode)) return null;
   try {
     await ensureTable();
     const r = await pool.query<{

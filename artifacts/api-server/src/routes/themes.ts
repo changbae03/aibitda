@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
 import AdmZip from "adm-zip";
-import { pool } from "@workspace/db";
+import { pool, readJsonb } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
 import { fetchInvestorData, fetchBothMarketsOHLCV, fetchInvestorByStocks } from "../lib/pykrx-client";
 import { setCorpCodeMap, setCorpInfoList, type CorpInfo } from "../lib/dart-corp-cache.js";
@@ -1467,7 +1467,7 @@ router.post("/themes/discover", async (req, res) => {
       );
       if (cached.rows.length) {
         console.log(`[themes] 캐시 히트(theme_stock_cache): "${trimmed}"`);
-        return res.json(JSON.parse(cached.rows[0].data));
+        return res.json(readJsonb(cached.rows[0].data));
       }
     } catch (_) { /* 캐시 미스 시 정상 진행 */ }
     // 레거시 system_cache 폴백
@@ -1478,7 +1478,7 @@ router.post("/themes/discover", async (req, res) => {
       );
       if (cached.rows.length) {
         console.log(`[themes] 캐시 히트(system_cache): "${trimmed}"`);
-        return res.json(JSON.parse(cached.rows[0].data));
+        return res.json(readJsonb(cached.rows[0].data));
       }
     } catch (_) { /* 캐시 미스 시 정상 진행 */ }
 

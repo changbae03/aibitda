@@ -12,6 +12,8 @@
 
 import zlib from "node:zlib";
 import { pool } from "@workspace/db";
+import { lookupCorpCode } from "./dart-store.js";
+import { isKoreanTicker } from "@workspace/shared";
 
 const DART_API = "https://opendart.fss.or.kr/api";
 const MAX_ZIP_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -71,58 +73,72 @@ async function setCached(
 
 // ─── corp_code 조회 ───────────────────────────────────────────────────────────
 
-async function lookupCorpCode(stockCode: string, key: string): Promise<string | null> {
-  // 1순위: DB에서 이미 수집된 corp_code 조회
-  try {
-    const r = await pool.query<{ corp_code: string }>(
-      "SELECT DISTINCT corp_code FROM ticker_financials WHERE ticker = $1 LIMIT 1",
-      [stockCode]
-    );
-    if (r.rows[0]?.corp_code) return r.rows[0].corp_code;
-  } catch { /* fallthrough */ }
-
-  // 2순위: DART API 직접 조회
-  try {
-    const res = await fetch(
-      `${DART_API}/company.json?crtfc_key=${key}&stock_code=${stockCode}`,
-      { signal: AbortSignal.timeout(8_000) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    return data.status === "000" ? (data.corp_code ?? null) : null;
-  } catch {
-    return null;
-  }
-}
+/**
+ * ⚠️ 여기에 corp_code 조회를 다시 구현하지 말 것.
+ *
+ * 예전에는 이 파일이 자체 구현을 갖고 있었고, 그것이 두 갈래로 실패했다.
+ *   1순위 ticker_financials 조회 — 이미 분석된 종목에만 값이 있어 신규 종목은 빈손
+ *   2순위 `company.json?stock_code=` — DART가 규격을 바꿔(corp_code 필수) 폐기된 API
+ * 그 결과 삼성전자조차 corp_code를 못 얻어 사업보고서가 **한 건도** 수집되지 않았다.
+ *
+ * dart-store의 것은 서버 기동 시 적재된 3,967개 corp_code 맵을 먼저 본다.
+ * 조회 창구는 그 하나뿐이다 — stocks 뷰로 종목 조회를 모은 것과 같은 원칙.
+ */
 
 // ─── ZIP 파서 (Local File Header 방식) ───────────────────────────────────────
 
 interface ZipEntry { name: string; data: Buffer; }
 
+/**
+ * ZIP을 **중앙 디렉터리(Central Directory)** 기준으로 읽는다.
+ *
+ * 예전에는 로컬 파일 헤더만 훑으면서 압축크기가 0이면 건너뛰었다. 그런데 DART 원문 ZIP은
+ * 스트리밍 압축(범용 플래그 bit 3 = 데이터 서술자)이라 **로컬 헤더의 크기가 항상 0**이고
+ * 실제 크기는 데이터 뒤에 따로 붙는다. 그래서 파서가 모든 항목을 건너뛰고 0개를 돌려줬다.
+ *
+ * 중앙 디렉터리는 파일 끝에 있고 크기·오프셋이 언제나 정확히 적혀 있다.
+ */
 function parseZip(buf: Buffer): ZipEntry[] {
+  const EOCD_SIG = 0x06054b50; // PK\x05\x06 — 중앙 디렉터리 끝 기록
+  const CEN_SIG  = 0x02014b50; // PK\x01\x02 — 중앙 디렉터리 항목
+
+  // 끝에서부터 EOCD를 찾는다(주석이 최대 64KB까지 붙을 수 있다)
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66_000); i--) {
+    if (buf.readUInt32LE(i) === EOCD_SIG) { eocd = i; break; }
+  }
+  if (eocd < 0) return [];
+
+  const count     = buf.readUInt16LE(eocd + 10);
+  const cenOffset = buf.readUInt32LE(eocd + 16);
+
   const entries: ZipEntry[] = [];
-  const SIG = 0x04034b50; // PK\x03\x04
-  let i = 0;
+  let p = cenOffset;
 
-  while (i <= buf.length - 30) {
-    if (buf.readUInt32LE(i) !== SIG) { i++; continue; }
+  for (let n = 0; n < count && p + 46 <= buf.length; n++) {
+    if (buf.readUInt32LE(p) !== CEN_SIG) break;
 
-    const method  = buf.readUInt16LE(i + 8);
-    const compSz  = buf.readUInt32LE(i + 18);
-    const fnLen   = buf.readUInt16LE(i + 26);
-    const exLen   = buf.readUInt16LE(i + 28);
-    const name    = buf.subarray(i + 30, i + 30 + fnLen).toString("utf8");
-    const dataOff = i + 30 + fnLen + exLen;
+    const method   = buf.readUInt16LE(p + 10);
+    const compSz   = buf.readUInt32LE(p + 20);
+    const fnLen    = buf.readUInt16LE(p + 28);
+    const exLen    = buf.readUInt16LE(p + 30);
+    const cmLen    = buf.readUInt16LE(p + 32);
+    const localOff = buf.readUInt32LE(p + 42);
+    const name     = buf.subarray(p + 46, p + 46 + fnLen).toString("utf8");
+    p += 46 + fnLen + exLen + cmLen;
 
-    if (compSz === 0 || dataOff + compSz > buf.length) { i = Math.max(dataOff, i + 1); continue; }
+    // 로컬 헤더의 이름·부가필드 길이는 중앙 디렉터리와 다를 수 있어 그 자리에서 다시 읽는다
+    if (localOff + 30 > buf.length) continue;
+    const lFnLen = buf.readUInt16LE(localOff + 26);
+    const lExLen = buf.readUInt16LE(localOff + 28);
+    const dataOff = localOff + 30 + lFnLen + lExLen;
+    if (compSz === 0 || dataOff + compSz > buf.length) continue;
 
     const compressed = buf.subarray(dataOff, dataOff + compSz);
     try {
       const data = method === 0 ? compressed : zlib.inflateRawSync(compressed);
       if (data.length > 1_000) entries.push({ name, data }); // 1KB 미만 파일 제외
     } catch { /* 손상된 항목 스킵 */ }
-
-    i = dataOff + compSz;
   }
 
   return entries;
@@ -236,18 +252,31 @@ export async function fetchDartCompetitorSection(stockCode: string): Promise<str
 // ─── 공개 함수 ────────────────────────────────────────────────────────────────
 
 /**
- * 한국 주식 6자리 코드를 입력받아 DART 사업보고서 "사업의 내용" 주요 섹션 텍스트를 반환.
- * 실패·타임아웃 시 null 반환 (분석 파이프라인을 블로킹하지 않음).
+ * 실패 사유를 남기고 null을 돌려준다.
+ *
+ * 예전에는 이 파일의 수집 함수가 로그 없이 `return null`을 14군데에서 했다. 그래서
+ * dart_biz_content가 0행인데도 **어디서 끊겼는지 알 수 없었다** — 분석마다 호출되는데
+ * 한 건도 쌓이지 않았고, 그 사실조차 아무도 몰랐다.
+ * 수집이 실패하는 것 자체는 괜찮다(분석을 막지 않는다). 조용히 실패하는 것이 문제다.
+ */
+function bail(stockCode: string, stage: string, detail?: string | number): null {
+  console.warn(`[dart-biz] ${stockCode} 중단 — ${stage}${detail !== undefined ? `: ${detail}` : ""}`);
+  return null;
+}
+
+/**
+ * 한국 주식 종목코드를 입력받아 DART 사업보고서 "사업의 내용" 주요 섹션 텍스트를 반환.
+ * 실패·타임아웃 시 null 반환 (분석 파이프라인을 블로킹하지 않음) — 다만 사유는 반드시 남긴다.
  */
 export async function fetchDartBusinessContent(stockCode: string): Promise<string | null> {
-  if (!/^\d{6}$/.test(stockCode)) return null;
+  if (!isKoreanTicker(stockCode)) return bail(stockCode, "한국 종목코드 형식 아님");
 
   const key = process.env["DART_API_KEY"];
-  if (!key) return null;
+  if (!key) return bail(stockCode, "DART_API_KEY 없음");
 
   // ── corp_code 획득 ──
-  const corpCode = await lookupCorpCode(stockCode, key);
-  if (!corpCode) return null;
+  const corpCode = await lookupCorpCode(stockCode);
+  if (!corpCode) return bail(stockCode, "corp_code 조회 실패");
 
   // ── 캐시 확인 ──
   const cached = await getCached(corpCode);
@@ -259,53 +288,90 @@ export async function fetchDartBusinessContent(stockCode: string): Promise<strin
     const bgn  = `${year - 2}0101`;
     const end  = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
+    // last_reprt_at=N — 정정본만이 아니라 **원본까지** 받는다.
+    //   Y로 두면 각 보고서의 최신판만 오는데, 정정공시는 원문 ZIP이 없어 받을 수 없다.
+    //   한화에어로스페이스는 Y에서 `[첨부정정]사업보고서`만 보였고, N으로 바꾸니
+    //   원본 `사업보고서 (2025.12)`가 함께 나왔다.
+    // page_count=30 — 5로 두면 분기·반기 공시에 밀려 사업보고서가 목록에서 잘린다.
     const listRes = await fetch(
       `${DART_API}/list.json?crtfc_key=${key}&corp_code=${corpCode}` +
-      `&bgn_de=${bgn}&end_de=${end}&pblntf_ty=A&last_reprt_at=Y&page_count=5`,
+      `&bgn_de=${bgn}&end_de=${end}&pblntf_ty=A&last_reprt_at=N&page_count=30`,
       { signal: AbortSignal.timeout(FETCH_TIMEOUT) }
     );
-    if (!listRes.ok) return null;
+    if (!listRes.ok) return bail(stockCode, "공시목록 HTTP 실패", listRes.status);
     const listData = await listRes.json() as any;
-    if (listData.status !== "000" || !Array.isArray(listData.list) || !listData.list.length) return null;
+    if (listData.status !== "000") return bail(stockCode, "공시목록 status", `${listData.status} ${listData.message ?? ""}`);
+    if (!Array.isArray(listData.list) || !listData.list.length) return bail(stockCode, "공시목록 비어 있음");
 
-    // 분기·반기 제외, 순수 사업보고서 선택
-    const annual = (listData.list as any[]).find(
-      (r) => r.report_nm?.includes("사업보고서") &&
-             !r.report_nm?.includes("분기") &&
-             !r.report_nm?.includes("반기")
-    );
-    if (!annual) return null;
-    const rcpNo: string  = annual.rcp_no;
-    const rcpDt: string  = annual.rcept_dt ?? "";
+    // 분기·반기를 뺀 사업보고서 후보를 최신순으로 모은다.
+    //
+    // 하나만 고르면 안 된다. 정정공시(`[첨부정정]사업보고서`·`[기재정정]사업보고서`)가
+    // 목록 맨 위에 오는 경우가 있는데, 정정 건은 원문 ZIP이 없어 DART가 status 014
+    // "파일이 존재하지 않습니다"를 돌려준다. 실측에서 한화에어로스페이스·KB금융이
+    // 정확히 이 경우였다 — 원본 사업보고서는 멀쩡히 있는데 정정 건에 걸려 실패했다.
+    const candidates = (listData.list as any[])
+      .filter((r) => r.report_nm?.includes("사업보고서") &&
+                     !r.report_nm?.includes("분기") &&
+                     !r.report_nm?.includes("반기") &&
+                     (r.rcept_no ?? r.rcp_no))
+      // 정정이 아닌 원본을 먼저, 그다음 최신 접수순으로 시도한다
+      .sort((a, b) =>
+        Number(/정정/.test(a.report_nm)) - Number(/정정/.test(b.report_nm)) ||
+        String(b.rcept_no ?? "").localeCompare(String(a.rcept_no ?? "")));
 
-    // ── 2. 원문 ZIP URL 획득 ──
-    const docRes = await fetch(
-      `${DART_API}/document.json?crtfc_key=${key}&rcpNo=${rcpNo}`,
-      { signal: AbortSignal.timeout(FETCH_TIMEOUT) }
-    );
-    if (!docRes.ok) return null;
-    const docData = await docRes.json() as any;
-    const zipUrl: string | undefined = docData.url;
-    if (!zipUrl) return null;
+    if (!candidates.length) return bail(stockCode, "사업보고서 없음(분기·반기만 존재)",
+      (listData.list as any[]).map(r => r.report_nm).join(" / "));
 
-    // ── 3. ZIP 다운로드 (크기 제한) ──
-    const zipRes = await fetch(zipUrl, { signal: AbortSignal.timeout(25_000) });
-    if (!zipRes.ok) return null;
-    const cl = Number(zipRes.headers.get("content-length") ?? "0");
-    if (cl > MAX_ZIP_BYTES) {
-      console.warn(`[dart-biz-content] ${stockCode} ZIP 크기 ${(cl / 1e6).toFixed(1)}MB > 20MB 제한, 스킵`);
-      return null;
+    // ── 2. 원문 ZIP 내려받기 ──
+    //
+    // ⚠️ DART 원문 API는 `document.xml`이고 파라미터는 `rcept_no`이며, **응답이 곧 ZIP**이다.
+    // 예전 코드는 `document.json?rcpNo=`을 부르고 응답 JSON에서 url을 꺼내 다시 받으려 했는데,
+    // 그런 규격은 없다. DART는 status 101 "잘못된 URL입니다"를 돌려줬고, 코드는 그걸
+    // 조용히 삼켜 null을 반환했다 — 그래서 사업보고서가 단 한 건도 수집되지 않았다.
+    let zipBuf: Buffer | null = null;
+    let rcpNo = "";
+    let rcpDt = "";
+
+    for (const cand of candidates.slice(0, 3)) {
+      const tryNo: string = cand.rcept_no ?? cand.rcp_no;
+      const docRes = await fetch(
+        `${DART_API}/document.xml?crtfc_key=${key}&rcept_no=${tryNo}`,
+        { signal: AbortSignal.timeout(25_000) }
+      );
+      if (!docRes.ok) { bail(stockCode, "원문 다운로드 HTTP 실패", docRes.status); continue; }
+
+      const cl = Number(docRes.headers.get("content-length") ?? "0");
+      if (cl > MAX_ZIP_BYTES) { bail(stockCode, "ZIP 크기 초과(헤더)", `${(cl / 1e6).toFixed(1)}MB`); continue; }
+
+      const buf = Buffer.from(await docRes.arrayBuffer());
+      if (buf.length > MAX_ZIP_BYTES) { bail(stockCode, "ZIP 크기 초과", buf.length); continue; }
+
+      // 오류일 때는 ZIP 대신 XML 오류 문서가 온다. ZIP 서명(PK\x03\x04)으로 가려낸다.
+      if (buf.length < 4 || buf.readUInt32LE(0) !== 0x04034b50) {
+        bail(stockCode, `원문 없음(${cand.report_nm})`,
+          buf.subarray(0, 160).toString("utf8").replace(/\s+/g, " "));
+        continue;
+      }
+
+      zipBuf = buf;
+      rcpNo  = tryNo;
+      rcpDt  = cand.rcept_dt ?? "";
+      break;
     }
-    const zipBuf = Buffer.from(await zipRes.arrayBuffer());
-    if (zipBuf.length > MAX_ZIP_BYTES) return null;
+
+    if (!zipBuf) return bail(stockCode, "후보 사업보고서에서 원문을 못 받음",
+      candidates.slice(0, 3).map(c => c.report_nm).join(" / "));
 
     // ── 4. ZIP 파싱 → HTML 파일 추출 ──
     const entries = parseZip(zipBuf);
+    // DART 원문은 .xml로 들어 있다(태그 구조는 HTML과 같아 htmlToText로 처리된다).
+    // 예전 필터는 .html/.htm만 받아 전부 걸러냈다.
     const htmlFiles = entries
-      .filter((e) => /\.(html|htm)$/i.test(e.name))
+      .filter((e) => /\.(x|s)?html?$/i.test(e.name) || /\.xml$/i.test(e.name))
       .sort((a, b) => b.data.length - a.data.length); // 크기 내림차순 (본문이 가장 큼)
 
-    if (!htmlFiles.length) return null;
+    if (!htmlFiles.length) return bail(stockCode, "ZIP 안에 본문 파일 없음",
+      entries.map(e => e.name).join(",").slice(0, 150));
 
     // ── 5. 사업 내용 키워드 포함 파일에서 텍스트 추출 ──
     let extracted = "";
@@ -321,7 +387,8 @@ export async function fetchDartBusinessContent(stockCode: string): Promise<strin
       }
     }
 
-    if (!extracted) return null;
+    if (!extracted) return bail(stockCode, "본문에서 사업의 내용 섹션을 못 찾음",
+      `html ${htmlFiles.length}개 검사`);
 
     const reportPeriod = rcpDt ? `${rcpDt.slice(0, 4)}년도` : `${year - 1}년도`;
     const result = [
