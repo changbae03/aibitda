@@ -4276,7 +4276,12 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
         )}
       </div>
 
-      {json ? (() => {
+      {/* markdown prose fallback (investment_strategy는 JSON 아닌 마크다운 산문) */}
+      {!json && step.content && !step.content.startsWith("분析 오류:") && !step.content.startsWith("분析 결과를 생성하지 못했습니다") ? (
+        <div className="p-4 sm:p-6">
+          <MdBlock src={step.content} isEn={isEn} />
+        </div>
+      ) : json ? (() => {
         const vm = verdictMeta(validatedVerdict ?? json.verdict ?? "");
         return (
           <div className="divide-y divide-border">

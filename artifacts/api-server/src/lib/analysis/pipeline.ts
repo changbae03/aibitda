@@ -592,8 +592,7 @@ async function executeStep(
         const [annualRows, quarterRows] = await Promise.all([
           rawQuery(
             `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
-                    total_assets, equity, cash, total_debt, capex, rd_expense,
-                    employee_count, operating_margin
+                    total_assets, equity, cash, total_debt, operating_margin
              FROM ticker_financials
              WHERE ticker = $1 AND reprt_code = '11011'
              ORDER BY bsns_year DESC LIMIT 4`,
@@ -601,7 +600,7 @@ async function executeStep(
           ),
           rawQuery(
             `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
-                    total_assets, capex, rd_expense
+                    total_assets
              FROM ticker_financials
              WHERE ticker = $1 AND reprt_code != '11011'
              ORDER BY bsns_year DESC, reprt_code DESC LIMIT 5`,
@@ -615,20 +614,20 @@ async function executeStep(
           const reprtLabel: Record<string, string> = { "11011": "연간", "11012": "반기", "11013": "1분기", "11014": "3분기" };
 
           let annualTable = "\n[📊 연간 재무 추이 (억원)]\n";
-          annualTable += "| 연도 | 매출 | 영업이익 | 순이익 | OPM | 자산 | 자본 | CapEx | R&D | 임직원 |\n";
-          annualTable += "|------|------|---------|--------|-----|------|------|-------|-----|--------|\n";
+          annualTable += "| 연도 | 매출 | 영업이익 | 순이익 | OPM | 자산 | 자본 |\n";
+          annualTable += "|------|------|---------|--------|-----|------|------|\n";
           for (const r of annualRows) {
-            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(r.operating_margin)} | ${fmt(r.total_assets)} | ${fmt(r.equity)} | ${fmt(r.capex)} | ${fmt(r.rd_expense)} | ${fmt(r.employee_count)} |\n`;
+            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(r.operating_margin)} | ${fmt(r.total_assets)} | ${fmt(r.equity)} |\n`;
           }
           dartBlocks.push(annualTable);
 
           if (quarterRows.length > 0) {
             let qTable = "\n[📊 최근 분기 재무 추이 (억원)]\n";
-            qTable += "| 기간 | 매출 | 영업이익 | 순이익 | CapEx | R&D |\n";
-            qTable += "|------|------|---------|--------|-------|-----|\n";
+            qTable += "| 기간 | 매출 | 영업이익 | 순이익 |\n";
+            qTable += "|------|------|---------|--------|\n";
             for (const r of quarterRows) {
               const label = `${r.bsns_year}년 ${reprtLabel[r.reprt_code] ?? r.reprt_code}`;
-              qTable += `| ${label} | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${fmt(r.capex)} | ${fmt(r.rd_expense)} |\n`;
+              qTable += `| ${label} | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} |\n`;
             }
             dartBlocks.push(qTable);
           }

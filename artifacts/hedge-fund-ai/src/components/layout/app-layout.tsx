@@ -108,10 +108,7 @@ const NAV_GROUPS = [
     labelEn: "Company",
     items: [
       { href: "/analysis/new", label: "AI 기업분석",   labelEn: "AI Analysis", Icon: Sparkles },
-      { href: "/portfolio",    label: "내 포트폴리오",  labelEn: "Portfolio",   Icon: Briefcase },
-      { href: "/history",      label: "최근 본 분석",   labelEn: "Recent Reports",  Icon: BookOpen },
       { href: "/themes",       label: "테마 및 수급 분석", labelEn: "Theme & Flow", Icon: Lightbulb },
-      { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
     ],
   },
 ];
