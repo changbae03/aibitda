@@ -146,7 +146,7 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
       bond3Y_D, bond10Y_D,
       bond3Y_M, bond10Y_M,
     ] = await Promise.all([
-      ecosFetch("722Y001", "M", yyyymm(-3), yyyymm(0),    "0101000",  5),  // 기준금리
+      ecosFetch("722Y001", "D", yyyymmdd(-20), yyyymmdd(0), "0101000", 20),  // 기준금리 (일별 — 월중 변경 즉시 반영)
       ecosFetch("901Y009", "M", yyyymm(-2), yyyymm(0),    "0",        3),  // CPI 현재
       ecosFetch("901Y009", "M", yyyymm(-14), yyyymm(-12), "0",        3),  // CPI 전년
       ecosFetch("731Y001", "D", yyyymmdd(-15), yyyymmdd(0),"0000001", 10), // 원달러
