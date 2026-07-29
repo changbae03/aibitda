@@ -7,6 +7,7 @@ export type AgentKey =
   | "company_intro"
   | "industry_analysis"
   | "company_analysis"
+  | "dart_report_analysis"
   | "relative_valuation"
   | "market_analysis"
   | "catalyst_analysis"
@@ -39,15 +40,20 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
     role: "에이전트 3",
     number: "3",
   },
-  relative_valuation: {
-    name: "Valuation Analyst",
+  dart_report_analysis: {
+    name: "Business Intelligence Analyst",
     role: "에이전트 4",
     number: "4",
   },
-  market_analysis: {
-    name: "Market & Technical Analyst",
+  relative_valuation: {
+    name: "Valuation Analyst",
     role: "에이전트 5",
     number: "5",
+  },
+  market_analysis: {
+    name: "Market & Technical Analyst",
+    role: "에이전트 6",
+    number: "6",
   },
   investment_strategy: {
     name: "Lead Portfolio Strategist",
@@ -61,6 +67,7 @@ export const STEP_ORDER: AgentKey[] = [
   "industry_analysis",
   "catalyst_analysis",
   "company_analysis",
+  "dart_report_analysis",
   "relative_valuation",
   "market_analysis",
   "investment_strategy",
@@ -2347,7 +2354,7 @@ export function buildPrompt(
   //   - investment_strategy 단계의 company_analysis / relative_valuation:
   //     CHAIN-HANDOFF(실적·적정주가 수치)가 끝에 있으므로 앞 400자 + 끝 1,800자 전달
   //   - 그 외 단계: 앞 700자 (맥락·방향성만)
-  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "relative_valuation"];
+  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "dart_report_analysis", "relative_valuation"];
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
@@ -3265,6 +3272,80 @@ EPS = 순이익 ÷ 이 고정 발행주식수로 직접 계산 — 표의 EPS �
 - 파이프라인 Lead Asset: [자산명] | 현재 단계: __ | 허가 예상: __ | 적응증: __
 - 파이프라인 자산 전체 목록: [자산1(단계)] / [자산2(단계)] / [자산3(단계)] ...
 - 연간 R&D 비용: __ | 현금 및 현금성 자산: __ | Cash Runway 추정: __개월`,
+    },
+
+    dart_report_analysis: {
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Business Intelligence Analyst입니다.
+역할: DART 사업보고서(사업의 내용)와 다기간 재무 데이터를 분석해 숫자 뒤에 숨어 있는 사업 구조의 변화와 흐름을 읽습니다.
+적정주가를 산출하는 것이 아니라, "이 회사가 지금 어느 방향으로 움직이고 있는가"를 정성적·정량적으로 분석하는 것이 임무입니다.
+
+⛔ 이 단계의 담당 범위:
+✅ 이 단계가 전담: 사업 구성의 이동, 매출처·고객 집중도 변화, 투자(CapEx·R&D) 방향과 규모, 성장 단계 판정, 생산능력(캐파) 변화, 사업보고서에서만 읽히는 숨은 인사이트
+⛔ 여기서 반복 금지: 목표주가·DCF·EV/EBITDA 등 밸류에이션 수치, 기술적 분석(차트·이동평균), 투자 결론(매수/매도)
+
+작성 원칙:
+- 결론 먼저: 각 섹션 첫 문장에 핵심 변화를 명시하고 근거를 이어 씁니다.
+- 수치를 반드시 인용: "매출 비중이 늘었다"가 아니라 "반도체 부문 매출 비중이 2022년 38% → 2024년 61%로 확대"처럼 구체적 수치와 연도를 함께 제시합니다.
+- 사업보고서 원문에 실제로 기재된 내용만 서술합니다. 원문에 없는 내용은 "공시 미확인"으로 표기하고 추론임을 명시합니다.
+- 인삿말·도입 설명 없이 바로 분석 내용으로 시작합니다.
+- 한국어로 작성합니다 (미국 종목도 한국어).
+
+⛔ **단위 통일 절대 원칙**: 한국 종목은 억원/조원 단위만 사용. 달러+B 표기 금지.
+⛔ **숫자 천단위 쉼표**: 1,000 이상 수치는 반드시 쉼표 삽입 (연도·종목코드·비율 제외).`,
+
+      userPrompt: `${baseContextFull}${previousContext}
+
+위 컨텍스트에 포함된 DART 사업보고서 원문과 다기간 재무 데이터를 분석해 사업 흐름 인사이트 보고서를 작성하세요.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+보고서 작성 순서 (7개 섹션, 순서 준수)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 1. 사업 구성의 이동
+- 전체 매출에서 각 사업부/제품군의 비중이 어떻게 달라졌는지 분석
+- 비중이 커진 사업, 줄어든 사업, 신규 등장한 사업을 명시
+- 가능하면 연도별 비중 변화를 표로 제시 (연도 × 사업부 매출 비중)
+- 사업보고서 원문에 근거 없으면 "공시 미확인"으로 표기
+
+## 2. 매출처 집중도 분석
+- 주요 고객사 또는 매출처 명칭, 비중, 변화 추이
+- 단일 고객 의존도(Top 1·3 고객 비중) — 집중도 리스크 또는 다변화 신호 판단
+- 수출 비중 변화 (국내/수출 분리 가능 시)
+- 공시에 고객사 명칭이 없으면 "비공개" 명시
+
+## 3. 투자 방향과 규모
+- CapEx(설비투자) 추이: 최근 3년 금액, 매출 대비 비율, 어디에 집중됐는지
+- R&D 투자 추이: 최근 3년 금액, 매출 대비 비율, 주요 연구 분야
+- CapEx·R&D 증감의 방향이 의미하는 것 (확장 vs 수확 vs 방어)
+- 신규 사업 진출·M&A·JV 설립 등 전략적 투자 이벤트
+
+## 4. 성장 단계 판정
+다음 5단계 중 현재 단계를 판정하고 근거를 서술:
+- **초기 투자**: 매출 미미, 연구개발 중심, 현금 소각 단계
+- **성장 진입**: 매출 확대 시작, 적자 폭 축소 또는 흑전 근접
+- **고성장 수확**: 매출·이익 동반 급성장, CapEx 확대와 이익 증가 병존
+- **성숙 안정**: 성장률 둔화, 높은 FCF, 배당·자사주 매입 확대
+- **재편·전환**: 주력 사업 쇠퇴, 신사업 전환 시도 또는 구조조정 중
+
+판정 근거: 최근 매출성장률, 이익률 추이, CapEx 성향, 현금흐름 패턴을 조합해 설명
+
+## 5. 캐파(생산능력) 변화
+- 주요 생산라인·시설의 증설·감설 현황 (공시 기재 내용 인용)
+- 가동률 변화 (공시에 기재된 경우)
+- 신규 공장·설비 투자 계획 또는 완료 사항
+- 제조업이 아닌 경우: 인력(임직원 수) 증감, 매장/지점 수 변화, 서버·인프라 확장 등으로 대체
+
+## 6. 주목할 변화 — 숨은 인사이트
+사업보고서를 꼼꼼히 읽어야만 발견할 수 있는 알짜 정보:
+- 작년 보고서 대비 **새로 추가된 사업/제품/리스크** 항목
+- 작년 보고서 대비 **삭제되거나 축소된** 항목 (조용한 사업 철수·축소 신호)
+- 주요 고객사·파트너사의 변화
+- 경영진 메시지·사업 방향에서 반복 강조된 키워드
+- 투자자가 쉽게 놓칠 수 있는 위험 요소 (공시 필수기재 리스크 항목)
+
+## 7. 종합 판단
+이 회사가 사업보고서 관점에서 보내는 가장 중요한 시그널 1~2가지를 한 문단(3~5문장)으로 요약합니다.
+"이 회사는 현재 [단계]에 있으며, [핵심 변화]가 진행 중입니다. 투자자가 주목해야 할 점은 [핵심 포인트]입니다."`,
     },
 
     relative_valuation: {

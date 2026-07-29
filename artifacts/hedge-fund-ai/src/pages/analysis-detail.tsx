@@ -3403,6 +3403,7 @@ export default function AnalysisDetail() {
       <div className="space-y-4" style={{ overflowAnchor: "none" }}>
         <AnimatePresence>
           {[...analysis.steps]
+            .filter((step) => step.stepKey !== "relative_valuation")
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
             <div key={step.id} id={`step-${step.stepKey}`}>
@@ -4830,6 +4831,7 @@ const AGENT_COLORS: Record<string, string> = {
   company_intro: BRAND_BLUE,
   industry_analysis: BRAND_BLUE,
   company_analysis: BRAND_BLUE,
+  dart_report_analysis: "hsl(158, 60%, 35%)",
   relative_valuation: BRAND_BLUE,
   market_analysis: BRAND_BLUE,
   catalyst_analysis: BRAND_AMBER,
@@ -5691,7 +5693,7 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
   );
 }
 
-const BLUR_GATED_STEPS = ["company_analysis", "relative_valuation", "market_analysis", "investment_strategy"];
+const BLUR_GATED_STEPS = ["company_analysis", "dart_report_analysis", "market_analysis", "investment_strategy"];
 
 const MD_BODY_COMPONENTS = {
   h2: ({ children }: any) => (

@@ -77,8 +77,9 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
   company_intro:       { name: "브리핑",                role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
   industry_analysis:   { name: "매크로 및 산업 분석",   role: "Macro & Industry Analyst",      Icon: Globe2,      accent: "border-sky-500/30 bg-sky-500/5" },
   catalyst_analysis:   { name: "투자 촉매 및 수급 분석",role: "Catalyst & Smart Money Analyst",Icon: Zap,         accent: "border-amber-500/30 bg-amber-500/5" },
-  company_analysis:    { name: "실적 전망",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
-  relative_valuation:  { name: "적정주가 산출",         role: "Valuation Analyst",             Icon: Scale,       accent: "border-emerald-500/30 bg-emerald-500/5" },
+  company_analysis:      { name: "실적 전망",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
+  dart_report_analysis:  { name: "사업보고서 분석",      role: "Business Intelligence Analyst", Icon: PieChart,    accent: "border-teal-500/30 bg-teal-500/5" },
+  relative_valuation:    { name: "적정주가 산출",         role: "Valuation Analyst",             Icon: Scale,       accent: "border-emerald-500/30 bg-emerald-500/5" },
   market_analysis:     { name: "기술적 분석",           role: "Market & Technical Analyst",    Icon: BarChart2,   accent: "border-rose-500/30 bg-rose-500/5" },
   investment_strategy: { name: "최종 결론",             role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
 };
@@ -446,7 +447,7 @@ const STEP_ORDER = [
   "industry_analysis",
   "catalyst_analysis",
   "company_analysis",
-  "relative_valuation",
+  "dart_report_analysis",
   "market_analysis",
   "investment_strategy",
 ];

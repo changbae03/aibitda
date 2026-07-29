@@ -54,6 +54,17 @@ export const AGENTS: Record<string, AgentInfo> = {
     description: "재무 분석(수익성·현금흐름·건전성) + Base 실적 추정",
     descriptionEn: "Financial analysis (profitability, cash flow, balance sheet) + base case estimates",
   },
+  dart_report_analysis: {
+    id: "dart_report_analysis",
+    name: "사업보고서 분석",
+    nameEn: "Business Report Analysis",
+    role: "Business Intelligence Analyst",
+    icon: PieChart,
+    color: "text-emerald-700",
+    bgColor: "bg-emerald-50",
+    description: "사업 구성 변화·매출처 집중도·투자 방향·성장 단계·캐파 변화 분석",
+    descriptionEn: "Business mix shifts, revenue concentration, investment direction, growth stage, capacity changes",
+  },
   relative_valuation: {
     id: "relative_valuation",
     name: "적정주가 산출",
@@ -105,7 +116,7 @@ export const ANALYSIS_STEPS_ORDER = [
   "industry_analysis",
   "catalyst_analysis",
   "company_analysis",
-  "relative_valuation",
+  "dart_report_analysis",
   "market_analysis",
   "investment_strategy",
 ] as const;

@@ -359,9 +359,10 @@ const STEP_CFG: Record<string, { emoji: string; label: string; labelEn: string; 
   company_intro:      { emoji: "🏢", label: "브리핑",        labelEn: "Briefing",    hex: "#94A3FF", rgb: "148,163,255" },
   industry_analysis:  { emoji: "🌐", label: "산업 분석",     labelEn: "Industry",    hex: "#7AE8B4", rgb: "122,232,180" },
   catalyst_analysis:  { emoji: "⚡", label: "촉매 분석",     labelEn: "Catalysts",   hex: "#FFD97A", rgb: "255,217,122" },
-  company_analysis:   { emoji: "📊", label: "실적 전망",     labelEn: "Financials",  hex: "#C87AFF", rgb: "200,122,255" },
-  relative_valuation: { emoji: "💰", label: "적정주가",      labelEn: "Valuation",   hex: "#7AB8FF", rgb: "122,184,255" },
-  market_analysis:    { emoji: "📈", label: "기술적 분석",   labelEn: "Technical",   hex: "#FF9F7A", rgb: "255,159,122" },
+  company_analysis:       { emoji: "📊", label: "실적 전망",       labelEn: "Financials",  hex: "#C87AFF", rgb: "200,122,255" },
+  dart_report_analysis:  { emoji: "📋", label: "사업보고서 분석", labelEn: "Biz Report",  hex: "#7AE8D4", rgb: "122,232,212" },
+  relative_valuation:    { emoji: "💰", label: "적정주가",         labelEn: "Valuation",   hex: "#7AB8FF", rgb: "122,184,255" },
+  market_analysis:       { emoji: "📈", label: "기술적 분석",     labelEn: "Technical",   hex: "#FF9F7A", rgb: "255,159,122" },
   investment_strategy:{ emoji: "🎯", label: "최종 결론",     labelEn: "Conclusion",  hex: "#FF8A7A", rgb: "255,138,122" },
 };
 

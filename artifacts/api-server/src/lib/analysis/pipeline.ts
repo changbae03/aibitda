@@ -892,6 +892,83 @@ async function executeStep(
     }
   }
 
+  // ── dart_report_analysis: 사업보고서 원문 + 다기간 재무 데이터 주입 ────────
+  if (stepKey === "dart_report_analysis") {
+    try {
+      const dartBlocks: string[] = [];
+
+      // 1) 사업의 내용 원문
+      if (isKoreanTicker(analysis.ticker)) {
+        const bizContent = await fetchDartBusinessContent(analysis.ticker).catch(() => null);
+        if (bizContent && bizContent.length > 100) {
+          dartBlocks.push(`[📄 DART 사업보고서 — 사업의 내용 원문]\n${bizContent.slice(0, 12000)}`);
+        } else {
+          dartBlocks.push("[📄 DART 사업보고서] 수집 실패 또는 미수집 — 이전 단계 컨텍스트 기반으로 분석하세요.");
+        }
+      } else {
+        dartBlocks.push("[📄 미국 종목] SEC 10-K/10-Q 기반 분석. 아래 재무 데이터를 활용해 사업 흐름을 분석하세요.");
+      }
+
+      // 2) 다기간 재무 데이터 (연간 3개년 + 분기 4개)
+      try {
+        const [annualRows, quarterRows] = await Promise.all([
+          rawQuery(
+            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
+                    total_assets, equity, cash, total_debt, capex, rd_expense,
+                    employee_count, operating_margin
+             FROM ticker_financials
+             WHERE ticker = $1 AND reprt_code = '11011'
+             ORDER BY bsns_year DESC LIMIT 4`,
+            [analysis.ticker]
+          ),
+          rawQuery(
+            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
+                    total_assets, capex, rd_expense
+             FROM ticker_financials
+             WHERE ticker = $1 AND reprt_code != '11011'
+             ORDER BY bsns_year DESC, reprt_code DESC LIMIT 5`,
+            [analysis.ticker]
+          ),
+        ]);
+
+        if (annualRows.length > 0) {
+          const fmt = (v: any) => (v == null ? "—" : Number(v).toLocaleString("ko-KR"));
+          const pct = (v: any) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
+          const reprtLabel: Record<string, string> = { "11011": "연간", "11012": "반기", "11013": "1분기", "11014": "3분기" };
+
+          let annualTable = "\n[📊 연간 재무 추이 (억원)]\n";
+          annualTable += "| 연도 | 매출 | 영업이익 | 순이익 | OPM | 자산 | 자본 | CapEx | R&D | 임직원 |\n";
+          annualTable += "|------|------|---------|--------|-----|------|------|-------|-----|--------|\n";
+          for (const r of annualRows) {
+            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(r.operating_margin)} | ${fmt(r.total_assets)} | ${fmt(r.equity)} | ${fmt(r.capex)} | ${fmt(r.rd_expense)} | ${fmt(r.employee_count)} |\n`;
+          }
+          dartBlocks.push(annualTable);
+
+          if (quarterRows.length > 0) {
+            let qTable = "\n[📊 최근 분기 재무 추이 (억원)]\n";
+            qTable += "| 기간 | 매출 | 영업이익 | 순이익 | CapEx | R&D |\n";
+            qTable += "|------|------|---------|--------|-------|-----|\n";
+            for (const r of quarterRows) {
+              const label = `${r.bsns_year}년 ${reprtLabel[r.reprt_code] ?? r.reprt_code}`;
+              qTable += `| ${label} | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${fmt(r.capex)} | ${fmt(r.rd_expense)} |\n`;
+            }
+            dartBlocks.push(qTable);
+          }
+        }
+      } catch (e) {
+        console.warn("[dart_report_analysis] 재무 데이터 조회 실패:", (e as Error)?.message?.slice(0, 80));
+        dartBlocks.push("[📊 재무 데이터] 조회 실패 — 이전 단계 컨텍스트 기반으로 추론하세요.");
+      }
+
+      const dartContext = dartBlocks.join("\n\n");
+      const injected = `\n\n${dartContext}`;
+      enrichedContext = enrichedContext ? enrichedContext + injected : injected;
+      console.log(`[dart_report_analysis] 컨텍스트 주입 완료 — ${dartContext.length}chars`);
+    } catch (err) {
+      console.error("[dart_report_analysis] 컨텍스트 주입 실패:", (err as Error)?.message?.slice(0, 80));
+    }
+  }
+
   // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
   if (stepKey === "relative_valuation") {
     try {
