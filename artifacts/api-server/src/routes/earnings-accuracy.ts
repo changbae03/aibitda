@@ -388,68 +388,87 @@ async function isAdmin(userId: string | null): Promise<boolean> {
 }
 
 // ── POST /api/earnings-accuracy/parse-all ─────────────────────────────────────
+/**
+ * 실적 전망을 추출해 저장하고, DART 확정치와 대조한다.
+ *
+ * 예전에는 관리자 전용 POST 엔드포인트 안에만 있어서 **아무도 부르지 않았고**,
+ * 게다가 질의가 존재하지 않는 컬럼(`s.status`)을 봐서 눌러도 500으로 죽었다.
+ * 그래서 earnings_estimates·earnings_accuracy가 둘 다 0행이었다 — 예측 정확도를
+ * 재는 장치가 있는데 한 번도 재본 적이 없는 상태였다.
+ *
+ * 스케줄러가 부를 수 있도록 함수로 뺐다.
+ *
+ * @param sinceId 이 id보다 큰 분석만 처리한다. 매일 도는 경우 증분 처리용.
+ */
+export async function parseAndMatchEarnings(sinceId = 0): Promise<{
+  analysesProcessed: number; totalEstimates: number; totalMatched: number;
+  summary: Array<{ id: number; ticker: string; estimates: number; matched: number }>;
+}> {
+  const { rows: analyses } = await pool.query<{
+    id: number; ticker: string; company_name: string; created_at: string;
+  }>(
+    `SELECT a.id, a.ticker, a.company_name, a.created_at
+       FROM analyses a
+       JOIN analysis_steps s ON s.analysis_id = a.id AND s.step_key = 'company_analysis'
+      WHERE s.content IS NOT NULL AND length(s.content) > 200
+        AND a.id > $1
+      ORDER BY a.id DESC`,
+    [sinceId],
+  );
+
+  let totalEstimates = 0;
+  let totalMatched   = 0;
+  const summary: Array<{ id: number; ticker: string; estimates: number; matched: number }> = [];
+
+  for (const analysis of analyses) {
+    const { rows: steps } = await pool.query<{ content: string }>(
+      `SELECT content FROM analysis_steps WHERE analysis_id=$1 AND step_key='company_analysis'`,
+      [analysis.id],
+    );
+    if (!steps[0]?.content) continue;
+
+    const createdAt = new Date(analysis.created_at);
+    const parsed = parseAnalysisContent(steps[0].content, createdAt);
+    if (parsed.length === 0) continue;
+
+    const stored = await storeEstimates(
+      analysis.id, analysis.ticker, analysis.company_name, createdAt, parsed,
+    );
+    totalEstimates += stored;
+
+    // 추정치인 경우만 DART 확정치와 대조
+    let matchedCount = 0;
+    for (const est of parsed.filter(e => e.isEstimate)) {
+      const { rows: ee } = await pool.query<{
+        id: number; revenue_won: string | null; op_income_won: string | null; net_income_won: string | null;
+      }>(
+        `SELECT id, revenue_won, op_income_won, net_income_won
+           FROM earnings_estimates WHERE analysis_id=$1 AND est_year=$2`,
+        [analysis.id, est.year],
+      );
+      const e = ee[0];
+      if (!e) continue;
+      const matched = await matchWithDart(
+        e.id, analysis.ticker, est.year,
+        e.revenue_won    ? BigInt(e.revenue_won)    : null,
+        e.op_income_won  ? BigInt(e.op_income_won)  : null,
+        e.net_income_won ? BigInt(e.net_income_won) : null,
+      );
+      if (matched) matchedCount++;
+    }
+    totalMatched += matchedCount;
+    summary.push({ id: analysis.id, ticker: analysis.ticker, estimates: stored, matched: matchedCount });
+  }
+
+  return { analysesProcessed: analyses.length, totalEstimates, totalMatched, summary };
+}
+
 router.post("/earnings-accuracy/parse-all", async (req, res) => {
   try {
     const uid = req.auth?.userId ?? null;
     if (!(await isAdmin(uid))) return res.status(403).json({ error: "admin only" });
-
-    // company_analysis 완료된 분석 목록
-    const { rows: analyses } = await pool.query<{
-      id: number; ticker: string; company_name: string; created_at: string;
-    }>(
-      `SELECT a.id, a.ticker, a.company_name, a.created_at
-       FROM analyses a
-       JOIN analysis_steps s ON s.analysis_id = a.id AND s.step_key = 'company_analysis'
-       WHERE s.status = 'done'
-       ORDER BY a.id DESC`
-    );
-
-    let totalEstimates = 0;
-    let totalMatched   = 0;
-    const summary: Array<{ id: number; ticker: string; estimates: number; matched: number }> = [];
-
-    for (const analysis of analyses) {
-      const { rows: steps } = await pool.query<{ content: string }>(
-        `SELECT content FROM analysis_steps WHERE analysis_id=$1 AND step_key='company_analysis'`,
-        [analysis.id]
-      );
-      if (!steps[0]?.content) continue;
-
-      const createdAt = new Date(analysis.created_at);
-      const parsed = parseAnalysisContent(steps[0].content, createdAt);
-      if (parsed.length === 0) continue;
-
-      const stored = await storeEstimates(
-        analysis.id, analysis.ticker, analysis.company_name, createdAt, parsed
-      );
-      totalEstimates += stored;
-
-      // 추정치인 경우만 DART 매칭 시도
-      const estimateOnly = parsed.filter((e) => e.isEstimate);
-      let matchedCount = 0;
-      for (const est of estimateOnly) {
-        const { rows: ee } = await pool.query<{
-          id: number; revenue_won: string | null; op_income_won: string | null; net_income_won: string | null;
-        }>(
-          `SELECT id, revenue_won, op_income_won, net_income_won
-           FROM earnings_estimates WHERE analysis_id=$1 AND est_year=$2`,
-          [analysis.id, est.year]
-        );
-        if (!ee[0]) continue;
-        const e = ee[0];
-        const matched = await matchWithDart(
-          e.id, analysis.ticker, est.year,
-          e.revenue_won   ? BigInt(e.revenue_won)   : null,
-          e.op_income_won ? BigInt(e.op_income_won) : null,
-          e.net_income_won ? BigInt(e.net_income_won) : null
-        );
-        if (matched) matchedCount++;
-      }
-      totalMatched += matchedCount;
-      summary.push({ id: analysis.id, ticker: analysis.ticker, estimates: stored, matched: matchedCount });
-    }
-
-    res.json({ ok: true, analysesProcessed: analyses.length, totalEstimates, totalMatched, summary });
+    const result = await parseAndMatchEarnings();
+    res.json({ ok: true, ...result });
   } catch (err) {
     console.error("[earnings-accuracy/parse-all]", err);
     res.status(500).json({ error: "internal" });
