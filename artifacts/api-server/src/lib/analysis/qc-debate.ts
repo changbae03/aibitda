@@ -16,6 +16,8 @@ import { fetchFREDMacro, buildFREDContext } from "../fred-client.js";
 import { auditSotp, formatSotpIssues } from "./sotp-audit.js";
 import { auditReconciliation, formatReconcileIssues } from "../valuation/reconcile-audit.js";
 import { auditRnpv, formatRnpvIssues } from "../valuation/rnpv-audit.js";
+import { auditQuarters, formatQuarterIssues } from "../valuation/quarter-audit.js";
+import { getConfirmedQuarters } from "../dart-store.js";
 import { extractValuation } from "./valuation-extract.js";
 import { pickModel } from "../valuation/pick-model.js";
 import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, type AgentKey } from "../ai-agents.js";
@@ -49,6 +51,20 @@ async function runQCCheck(
   // SOTP 표의 산수는 서버가 직접 검산한다. LLM에게 물으면 자기가 쓴 숫자를
   // 그대로 옳다고 하는 경우가 있어, 어긋나면 판정을 기다리지 않고 즉시 불승인한다.
   // 실제 사고: EV/Sales 두 행이 1/10로 계산돼 목표주가가 6배 왜곡됐다(한화시스템).
+  // 실적 전망은 확정 분기가 연간을 구속해야 한다. 분기가 하나씩 확정될수록
+  // 연간은 정확해져야 하는데, LLM은 연간을 먼저 정해놓고 분기를 끼워 맞추거나
+  // 확정된 분기 값을 슬쩍 바꾼다. 메디포스트는 "743.7억원 → 743.7억원으로 상향 조정"
+  // 이라고 썼다 — 같은 숫자를 놓고 조정했다고 한 것이다.
+  if (stepKey === "company_analysis") {
+    const confirmed = await getConfirmedQuarters(ticker).catch(() => []);
+    const qIssues = auditQuarters({ content, confirmed });
+    const qText = formatQuarterIssues(qIssues);
+    if (qText) {
+      console.warn(`[qc] ${ticker} 분기·연간 검산 실패 — ${qIssues.map(i => i.code).join(", ")}`);
+      return { approved: false, score: 3, feedback: qText };
+    }
+  }
+
   if (stepKey === "relative_valuation") {
     const audit = auditSotp(content);
     const issues = formatSotpIssues(audit);

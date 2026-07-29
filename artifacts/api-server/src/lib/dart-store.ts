@@ -10,6 +10,7 @@
 import { isKoreanTicker } from "@workspace/shared";
 import { pool, readJsonb } from "@workspace/db";
 import { getCorpCodeFromCache } from "./dart-corp-cache.js";
+import { sortChronologically, buildQuarterBridge, renderQuarterBridge, quarterOf } from "./valuation/quarter-bridge.js";
 
 // ─── reprt_code 정의 ─────────────────────────────────────────────────────────
 
@@ -443,18 +444,61 @@ function opm(revenue: bigint | null, opIncome: bigint | null): string {
  * DB에 저장된 분기·연간 재무 시계열을 AI 프롬프트용 문자열로 반환.
  * 데이터가 없으면 null 반환.
  */
+/**
+ * 올해 이미 공시된 분기 실적. 억원 단위로 돌려준다.
+ *
+ * QC의 분기·연간 검산이 "보고서에 적힌 확정 분기 값이 공시와 같은가"를 따질 때 쓴다.
+ * 확정 분기는 추정 대상이 아니다 — 그 칸을 바꾸면 연간 전체가 어긋난다.
+ */
+export async function getConfirmedQuarters(
+  stockCode: string,
+): Promise<Array<{ quarter: number; revenue: number | null; operatingIncome: number | null }>> {
+  if (!isKoreanTicker(stockCode)) return [];
+  try {
+    const year = new Date().getFullYear();
+    const { rows } = await pool.query<{
+      reprt_code: string; revenue: string | null; operating_income: string | null;
+    }>(
+      `SELECT reprt_code, revenue, operating_income
+         FROM ticker_financials
+        WHERE ticker = $1 AND bsns_year = $2 AND reprt_code <> '11011'
+          AND (revenue IS NOT NULL OR operating_income IS NOT NULL)`,
+      [stockCode, year],
+    );
+    const 억 = (v: string | null) => {
+      const n = parseAmt(v);
+      return n === null ? null : n / 1e8;
+    };
+    return rows
+      .map(r => ({
+        quarter: quarterOf(r.reprt_code) ?? 0,
+        revenue: 억(r.revenue),
+        operatingIncome: 억(r.operating_income),
+      }))
+      .filter(r => r.quarter > 0);
+  } catch {
+    return [];
+  }
+}
+
 export async function getDartHistoricalContext(stockCode: string): Promise<string | null> {
   if (!isKoreanTicker(stockCode)) return null;
   try {
     await ensureTable();
-    const r = await pool.query<{
+    // ⚠️ reprt_code로 정렬하지 말 것 — 번호 순서와 시간 순서가 다르다.
+    //   11011(연간) · 11012(반기) · 11013(1분기) · 11014(3분기)
+    // 예전에는 `ORDER BY reprt_code ASC`라 Q1·Q2가 확정된 종목에서 "최신 확정 분기"로
+    // **Q1이 집혔고**, OPM 추세 판단과 권고 범위가 한 분기 뒤진 값으로 계산됐다.
+    // 정렬은 quarter-bridge의 sortChronologically 하나만 쓴다.
+    const r0 = await pool.query<{
+      bsns_year: number; reprt_code: string;
       period_label: string; fs_type: string;
       revenue: string | null; operating_income: string | null;
       net_income: string | null; equity: string | null;
       cash: string | null; total_debt: string | null;
       eps: string | null; bps: string | null;
     }>(
-      `SELECT period_label, fs_type,
+      `SELECT bsns_year, reprt_code, period_label, fs_type,
               revenue, operating_income, net_income,
               equity, cash, total_debt, eps, bps
        FROM ticker_financials
@@ -463,6 +507,12 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
        LIMIT 24`,
       [stockCode]
     );
+    // 최신이 앞에 오도록 시간 역순으로 다시 세운다(아래 로직이 그 전제로 쓰인다).
+    const r = {
+      rows: sortChronologically(
+        r0.rows.map(x => ({ ...x, bsnsYear: Number(x.bsns_year), reprtCode: x.reprt_code })),
+      ).reverse(),
+    };
 
     if (r.rows.length === 0) return null;
 
@@ -475,8 +525,13 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
     ];
 
     // ── 최신 분기 사전 분석: 흑자전환/적자전환 감지 + 연간 앵커 표시 ──────────
-    const latestQRow = r.rows.find(row => !row.period_label?.endsWith("FY"));
-    const latestFYRow = r.rows.find(row => row.period_label?.endsWith("FY"));
+    //
+    // ⚠️ 연간 여부는 **보고서 코드**로 가른다. 라벨로 `endsWith("FY")`를 보면 안 된다 —
+    // 같은 연간 실적이 `2025 FY`와 `2025.12.` 두 라벨로 저장돼 있고(fs_type CFS/연결 중복),
+    // 후자가 분기로 취급돼 **연간 수치가 분기 OPM 추세에 섞여 들어갔다.**
+    const isFY = (row: { reprt_code: string }) => row.reprt_code === "11011";
+    const latestQRow = r.rows.find(row => !isFY(row));
+    const latestFYRow = r.rows.find(row => isFY(row));
     if (latestQRow) {
       const qOp  = parseAmt(latestQRow.operating_income);
       const fyOp = latestFYRow ? parseAmt(latestFYRow.operating_income) : null;
@@ -489,7 +544,7 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
       }
       // 확정 분기 수학적 하한선 계산
       // 복수 확정 분기가 있으면 모두 합산 (예: Q1+Q2 확정)
-      const confirmedQRows = r.rows.filter(row => !row.period_label?.endsWith("FY"));
+      const confirmedQRows = r.rows.filter(row => !isFY(row));
       // 같은 회계연도 분기만(올해E 기준)
       const currentYearStr = String(new Date().getFullYear());
       const confirmedThisYearRows = confirmedQRows.filter(row =>
@@ -516,7 +571,7 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
       });
 
       // ── Q2~Q4 OPM 합리 범위 계산 (최근 비-현재연도 분기 OPM 추세 기반) ──
-      const allQRows = r.rows.filter(row => !row.period_label?.endsWith("FY"));
+      const allQRows = r.rows.filter(row => !isFY(row));
       const prevYearQRows = allQRows.filter(row => !row.period_label?.startsWith(currentYearStr));
       // 최신 순으로 정렬된 최근 3분기 OPM 추출
       const recentOPMs: { label: string; opm: number }[] = [];
@@ -549,11 +604,19 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
           : "확인불가";
 
         // Q2~Q4 권고 범위: 최신 확정 OPM 기준 ±3pp, 단 직전분기 OPM도 반영
-        const refOPMs = [latestConfirmedOPM, ...(latestPrevOPM !== null ? [latestPrevOPM] : [])].filter(v => v > -20);
-        const rangeLow  = (Math.min(...refOPMs) - 1).toFixed(1);
-        const rangeHigh = (Math.max(...refOPMs) + 2).toFixed(1);
+        //
+        // ⚠️ 예전에는 `.filter(v => v > -20)`으로 극단값을 걸렀는데, 적자 기업은 OPM이
+        // 원래 그 아래다(메디포스트 -86.6%). 배열이 통째로 비어 Math.min()이 Infinity가 되고
+        // 프롬프트에 "합리 범위: Infinity% ~ -Infinity%"가 그대로 나갔다.
+        // 적자는 이상값이 아니라 그 회사의 상태다 — 거르지 않는다.
+        const refOPMs = [latestConfirmedOPM, ...(latestPrevOPM !== null ? [latestPrevOPM] : [])]
+          .filter(v => Number.isFinite(v));
+        const rangeLow  = refOPMs.length ? (Math.min(...refOPMs) - 1).toFixed(1) : null;
+        const rangeHigh = refOPMs.length ? (Math.max(...refOPMs) + 2).toFixed(1) : null;
 
-        const recentTrend = recentOPMs.slice(0, 3)
+        // 추세는 왼쪽에서 오른쪽으로 읽힌다. recentOPMs는 최신순이라 뒤집어야
+        // "Q1 → Q2 → Q3" 순으로 보인다(예전에는 Q3 → Q2 → Q1으로 거꾸로 나왔다).
+        const recentTrend = recentOPMs.slice(0, 3).reverse()
           .map(r2 => `${r2.label}: ${r2.opm.toFixed(1)}%`)
           .join(" → ");
         const confirmedTrend = confirmedOPMs
@@ -563,10 +626,26 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
         opmRangeNote = [
           `   ⛔ [Q2~Q4 OPM bottom-up 추정 앵커 — 코드 계산값]`,
           `      최근 분기 OPM 추세: ${recentTrend}${recentTrend && confirmedTrend ? " → " : ""}${confirmedTrend} (추세: ${trendDir})`,
-          `      Q2~Q4 OPM 합리 범위: ${rangeLow}% ~ ${rangeHigh}% (최신 확정 분기 OPM 기준 ±조정)`,
-          `      이 범위 밖으로 추정하면 반드시 이탈 사유 명시 — 특히 최신 분기 OPM(${latestConfirmedOPM.toFixed(1)}%)보다 ${Math.abs(parseFloat(rangeLow))}pp 이상 낮게 잡는 것은 근거 필수`,
+          ...(rangeLow !== null && rangeHigh !== null ? [
+            `      Q2~Q4 OPM 합리 범위: ${rangeLow}% ~ ${rangeHigh}% (최신 확정 분기 OPM 기준 ±조정)`,
+            `      이 범위 밖으로 추정하면 반드시 이탈 사유 명시 — 특히 최신 분기 OPM(${latestConfirmedOPM.toFixed(1)}%) 대비 크게 낮추는 것은 근거 필수`,
+          ] : []),
         ].join("\n");
       }
+
+      // 확정 분기 → 연간 역산. "계절성을 고려해 추정하라"만으로는 연간E를 먼저 정하고
+      // 분기를 끼워 맞추는 순서가 된다. 남은 몫을 먼저 보게 한다.
+      const bridge = buildQuarterBridge(
+        r0.rows.map(x => ({
+          bsnsYear: Number(x.bsns_year),
+          reprtCode: x.reprt_code,
+          periodLabel: x.period_label,
+          revenue: parseAmt(x.revenue),
+          operatingIncome: parseAmt(x.operating_income),
+        })),
+        new Date().getFullYear(),
+      );
+      if (bridge) lines.push(renderQuarterBridge(bridge, new Date().getFullYear()));
 
       lines.push(
         ``,
@@ -620,9 +699,10 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
     }
 
     lines.push(`⭐ 위 시계열로 영업이익 성장 추세·마진 변화·재무 건전성을 반드시 분석에 활용하세요.`);
-    // 피어 비교 테이블 OPM·ROE override: 최신 연간 실적에서 추출 (period_label 형식: "2025 FY")
-    const annualRows = r.rows.filter(row => row.period_label?.endsWith("FY"));
-    const latestAnnual = annualRows[0]; // ORDER BY bsns_year DESC → 첫 번째가 최신 연간
+    // 피어 비교 테이블 OPM·ROE override: 최신 연간 실적에서 추출.
+    // 라벨이 "2025 FY"와 "2025.12." 두 가지로 저장돼 있어 보고서 코드로 가른다.
+    const annualRows = r.rows.filter(row => row.reprt_code === "11011");
+    const latestAnnual = annualRows[0]; // 시간 역순 정렬 → 첫 번째가 최신 연간
     if (latestAnnual) {
       const rev = parseAmt(latestAnnual.revenue);
       const op  = parseAmt(latestAnnual.operating_income);
