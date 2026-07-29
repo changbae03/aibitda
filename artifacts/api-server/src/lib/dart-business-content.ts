@@ -98,7 +98,7 @@ interface ZipEntry { name: string; data: Buffer; }
  *
  * 중앙 디렉터리는 파일 끝에 있고 크기·오프셋이 언제나 정확히 적혀 있다.
  */
-function parseZip(buf: Buffer): ZipEntry[] {
+export function parseZip(buf: Buffer): ZipEntry[] {
   const EOCD_SIG = 0x06054b50; // PK\x05\x06 — 중앙 디렉터리 끝 기록
   const CEN_SIG  = 0x02014b50; // PK\x01\x02 — 중앙 디렉터리 항목
 
@@ -146,7 +146,7 @@ function parseZip(buf: Buffer): ZipEntry[] {
 
 // ─── HTML → 평문 변환 ─────────────────────────────────────────────────────────
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")

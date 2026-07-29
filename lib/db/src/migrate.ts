@@ -529,6 +529,32 @@ export async function runMigrations() {
       ALTER TABLE analysis_valuations ADD COLUMN IF NOT EXISTS audit_issues TEXT;
     `);
 
+    // ── 사업보고서 시계열 ────────────────────────────────────────────────────
+    //
+    // 기존 dart_biz_content는 `UNIQUE(corp_code)`라 **회사당 최신 1건**만 남는다.
+    // 그래서 "이 회사가 어디로 가고 있나"를 볼 수 없었다 — 비교할 과거가 없으니까.
+    //
+    // 사업보고서는 DART에 7~8년치가 그대로 있다(삼성전자 2019~2025 7건 확인).
+    // 연도별로 쌓아두면 사업 구성의 이동·신규 사업 등장·매출처 집중도 변화를
+    // 원문 근거로 짚을 수 있다. 이건 예측이 아니라 **서술**이라 틀릴 수가 없다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dart_biz_reports (
+        id         SERIAL PRIMARY KEY,
+        ticker     TEXT NOT NULL,
+        corp_code  TEXT NOT NULL,
+        bsns_year  INTEGER NOT NULL,
+        rcept_no   TEXT NOT NULL,
+        report_nm  TEXT,
+        /** "사업의 내용" 원문 발췌 (섹션별로 잘라 저장) */
+        content    TEXT NOT NULL,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        fetched_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        CONSTRAINT dart_biz_reports_uniq UNIQUE (ticker, bsns_year)
+      );
+      CREATE INDEX IF NOT EXISTS idx_dart_biz_reports_ticker
+        ON dart_biz_reports (ticker, bsns_year DESC);
+    `);
+
     // ── 종목별 정본 ─────────────────────────────────────────────────────────
     //
     // "이 종목의 현재 유효한 밸류에이션·실적전망"을 한 줄로 꺼내는 창구.
