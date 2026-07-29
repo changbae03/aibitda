@@ -76,6 +76,26 @@ const VERDICT_MINI: Record<string, { icon: React.ReactNode; color: string }> = {
   "Strong Sell": { icon: <TrendingDown className="w-3 h-3" />, color: "text-red-500" },
 };
 
+// localStorage에서 최근 조회 종목 읽기 (비로그인 포함)
+const LOCAL_RECENT_KEY = "avitda-recent-analyses";
+function useLocalRecentTickers(): Array<{ id: number; ticker: string; companyName: string | null; englishName: string | null }> {
+  const [items, setItems] = useState<Array<{ id: number; ticker: string; companyName: string | null; englishName: string | null }>>([]);
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LOCAL_RECENT_KEY) || "[]") as any[];
+      const seen = new Set<string>();
+      const deduped = raw.filter((x) => {
+        const t = (x.ticker ?? "").replace(/\.(KS|KQ)$/, "");
+        if (seen.has(t)) return false;
+        seen.add(t);
+        return true;
+      }).slice(0, 8);
+      setItems(deduped.map((x) => ({ id: x.id, ticker: (x.ticker ?? "").replace(/\.(KS|KQ)$/, ""), companyName: x.companyName ?? null, englishName: x.englishName ?? null })));
+    } catch {}
+  }, []);
+  return items;
+}
+
 function useRecentAnalyses() {
   return useQuery<RecentAnalysis[]>({
     queryKey: ["recent-analyses-home"],
@@ -277,6 +297,7 @@ export default function NewAnalysis() {
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
+  const localRecent = useLocalRecentTickers();
   const { data: recentAnalyses } = useRecentAnalyses();
   const { data: personalizedPicks } = usePersonalizedPicks();
   const relatedCompanies = useRelatedCompanies(recentAnalyses, personalizedPicks);
@@ -510,13 +531,17 @@ export default function NewAnalysis() {
             className="text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.1]"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
-            {isEn ? <>Which stock would you<br />like to analyze?</> : <>어떤 종목을<br />분석할까요?</>}
+            {isEn ? (
+              <>One read reveals<br />the hidden flow.</>
+            ) : (
+              <>한번 읽으면<br />드러나지 않은<br />흐름이 보입니다</>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed break-keep">
             {isEn ? (
-              <>Search by ticker or company name (KOSPI · KOSDAQ · NYSE · NASDAQ){" "}<br className="hidden sm:block" />and our AI agents will start a deep analysis instantly</>
+              <>Which stock would you like to analyze?<br className="hidden sm:block" />Enter a ticker or company name to start.</>
             ) : (
-              <>코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다</>
+              <>어떤 종목이든 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다</>
             )}
           </p>
           <CreditsBadge credits={credits} />
@@ -728,45 +753,62 @@ export default function NewAnalysis() {
           )}
         </form>
 
-        {/* ── 최근 분석 종목 (로그인 유저 전용) — 칩 형태 ── */}
-        {user && recentAnalyses && recentAnalyses.length > 0 && (() => {
-          const seen = new Set<string>();
-          const uniqueRecent = recentAnalyses.filter(a => {
-            const t = a.ticker?.replace(/\.(KS|KQ)$/, "") ?? a.ticker;
-            if (seen.has(t)) return false;
-            seen.add(t);
-            return true;
-          }).slice(0, 6);
+        {/* ── 최근 조회 종목 — localStorage 기반, 비로그인도 표시 ── */}
+        {(() => {
+          // 서버 데이터(로그인) 우선, 없으면 localStorage 폴백
+          const serverItems = (user && recentAnalyses && recentAnalyses.length > 0)
+            ? (() => {
+                const seen = new Set<string>();
+                return recentAnalyses.filter(a => {
+                  const t = (a.ticker ?? "").replace(/\.(KS|KQ)$/, "");
+                  if (seen.has(t)) return false; seen.add(t); return true;
+                }).slice(0, 8).map(a => ({
+                  id: a.id,
+                  ticker: (a.ticker ?? "").replace(/\.(KS|KQ)$/, ""),
+                  companyName: a.companyName ?? null,
+                  englishName: a.englishName ?? null,
+                  verdict: a.investmentVerdict ?? null,
+                }));
+              })()
+            : null;
+          const localItems = localRecent.map(a => ({ ...a, verdict: null }));
+          const displayItems = serverItems ?? localItems;
+          if (displayItems.length === 0) return null;
           return (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-col gap-2"
+              className="flex flex-col gap-2.5"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                  <span className="text-[11px] font-semibold text-muted-foreground/70 tracking-wide">{isEn ? "Recent" : "최근 분석"}</span>
+                  <Clock className="w-3 h-3 text-muted-foreground/50" />
+                  <span className="text-[11px] font-semibold text-muted-foreground/60 tracking-wide uppercase">
+                    {isEn ? "Recently viewed" : "최근 조회"}
+                  </span>
                 </div>
-                <a href="/history" className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
-                  {isEn ? "All" : "전체"} <ChevronRight className="w-3 h-3" />
-                </a>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {uniqueRecent.map(a => {
-                  const shortTicker = a.ticker?.replace(/\.(KS|KQ)$/, "") ?? a.ticker;
-                  const vm = VERDICT_MINI[a.investmentVerdict ?? ""];
+              <div className="flex flex-col gap-1.5">
+                {displayItems.map(a => {
+                  const vm = a.verdict ? VERDICT_MINI[a.verdict] : null;
+                  const label = dn(a.companyName, a.englishName, isEn) || a.ticker;
                   return (
                     <button
                       key={a.id}
-                      onClick={() => showConfirm(shortTicker, dn(a.companyName, a.englishName, isEn) || shortTicker)}
+                      onClick={() => showConfirm(a.ticker, label)}
                       disabled={isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:text-foreground transition-all disabled:opacity-40 group"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-card/80 hover:border-primary/30 hover:bg-primary/5 transition-all disabled:opacity-40 group text-left"
                     >
-                      <span className="font-mono text-[11px] text-muted-foreground/40 group-hover:text-primary/50 transition-colors">{shortTicker}</span>
-                      <span className="text-[12.5px] text-muted-foreground font-medium group-hover:text-foreground transition-colors">{dn(a.companyName, a.englishName, isEn) || shortTicker}</span>
-                      {vm && <span className={cn("flex items-center", vm.color)}>{vm.icon}</span>}
+                      <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <span className="font-mono text-[9px] font-bold text-muted-foreground/60 leading-none">{a.ticker.slice(0, 4)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-semibold text-foreground group-hover:text-primary transition-colors truncate block">{label}</span>
+                        <span className="text-[11px] text-muted-foreground/50 font-mono">{a.ticker}</span>
+                      </div>
+                      {vm && <span className={cn("flex items-center shrink-0", vm.color)}>{vm.icon}</span>}
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
                     </button>
                   );
                 })}
