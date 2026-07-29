@@ -5753,6 +5753,134 @@ function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: 
   );
 }
 
+// ── DART 사업보고서 재무 차트 컴포넌트 ──────────────────────────────────────
+const FMT_EO = (v: number | null, isEn: boolean) => {
+  if (v == null) return "—";
+  const abs = Math.abs(v);
+  if (isEn) {
+    if (abs >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+    if (abs >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+    return `$${(v / 1e6).toFixed(0)}M`;
+  }
+  if (abs >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (abs >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
+  return v.toLocaleString("ko-KR");
+};
+
+function DartFinancialCharts({ ticker, isEn, color }: { ticker: string; isEn: boolean; color: string }) {
+  const [data, setData] = useState<{ annual: any[]; quarterly: any[] } | null>(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null); setErr(false);
+    fetch(getApiUrl(`/api/market-data/financials/${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled && j) setData({ annual: j.annual ?? [], quarterly: j.quarterly ?? [] }); })
+      .catch(() => { if (!cancelled) setErr(true); });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (err || !data || (data.annual.length === 0 && data.quarterly.length === 0)) return null;
+
+  const annualRows = data.annual.filter((r: any) => r.revenue || r.operatingIncome).slice(-4);
+  const qRows = data.quarterly.filter((r: any) => r.revenue || r.operatingIncome).slice(-6);
+
+  const DIVIDER = isUSTicker(ticker) ? 1e9 : 1e8; // USD→십억, KRW→억
+  const UNIT_LABEL = isEn ? "B USD" : "억원";
+
+  const toChart = (rows: any[]) => rows.map((r: any) => ({
+    name: r.period?.replace(/\d{4}-/, "").replace(/\.\d{2}$/, "") || r.period,
+    fullName: r.period,
+    revenue: r.revenue != null ? Math.round(r.revenue / DIVIDER) : null,
+    opIncome: r.operatingIncome != null ? Math.round(r.operatingIncome / DIVIDER) : null,
+    netIncome: r.netIncome != null ? Math.round(r.netIncome / DIVIDER) : null,
+    opm: r.operatingMargin != null ? Math.round(r.operatingMargin * 10) / 10 : null,
+    isEstimate: r.isEstimate,
+  }));
+
+  const annualChart = toChart(annualRows);
+  const qChart = toChart(qRows);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-card border border-border rounded-lg px-3 py-2 text-[12px] shadow-lg">
+        <p className="font-semibold text-foreground mb-1">{payload[0]?.payload?.fullName || label}</p>
+        {payload.map((p: any) => (
+          <div key={p.dataKey} className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+            <span className="text-muted-foreground">{p.name}</span>
+            <span className="font-mono text-foreground ml-auto pl-4">
+              {p.value != null ? `${p.value.toLocaleString()} ${UNIT_LABEL}` : "—"}
+            </span>
+          </div>
+        ))}
+        {payload[0]?.payload?.opm != null && (
+          <div className="mt-1 pt-1 border-t border-border/50 text-muted-foreground">
+            OPM <span className="text-foreground font-mono">{payload[0].payload.opm}%</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-5 mb-1 flex flex-col gap-5">
+      {annualChart.length >= 2 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {isEn ? "Annual P&L" : "연간 실적 추이"}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={annualChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%">
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={38}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted)/0.4)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+              <Bar dataKey="revenue" name={isEn ? "Revenue" : "매출"} fill={`${color}55`} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="opIncome" name={isEn ? "Op. Income" : "영업이익"} fill={color} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {qChart.length >= 2 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {isEn ? "Quarterly P&L" : "분기 실적 추이"}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={qChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%">
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={38}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted)/0.4)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+              <Bar dataKey="revenue" name={isEn ? "Revenue" : "매출"} fill={`${color}55`} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="opIncome" name={isEn ? "Op. Income" : "영업이익"} fill={color} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          {qChart.some((r: any) => r.isEstimate) && (
+            <p className="text-[10px] text-muted-foreground/50 mt-1 text-right">
+              {isEn ? "E = Analyst consensus estimate" : "E = 애널리스트 컨센서스 추정치"}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyNameEn, startPrice, isEn = false, isSignedIn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, companyNameEn?: string, startPrice?: number, isEn?: boolean, isSignedIn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -5807,16 +5935,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
     return bodyContent;
   }, [bodyContent, valuationMetricsSplit]);
 
-
-  // WACC 토글에서 "선택 모델별 가정" 표 제거 — Part A에서 더 상세히 보여주므로 중복 제거
-  const waccOnlySection = useMemo(() => {
-    if (!modelAssumptionsSplit) return "";
-    return modelAssumptionsSplit.section
-      .replace(/\n+---\s*\n+###\s+선택 모델별 가정[\s\S]*/m, "") // --- + 선택 모델별 가정 이하 전부 제거
-      .replace(/\n+###\s+선택 모델별 가정[\s\S]*/m, "")           // --- 없이 바로 나오는 경우
-      .replace(/\n+---\s*$/m, "")                                  // 남은 trailing --- 제거
-      .trimEnd();
-  }, [modelAssumptionsSplit]);
 
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
@@ -5888,252 +6006,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           </div>
         )}
 
-        {(() => {
-          if (modelAssumptionsSplit) {
-            return (
-              <>
-                <MdBlock src={modelAssumptionsSplit.before} isEn={isEn} />
-                {/* 모델 가정 수립 — 토글 (WACC 결과값은 항상 노출) */}
-                {(() => {
-                  const waccMatch = modelAssumptionsSplit.section.match(/→\s*WACC:\s*([\d.]+\s*%)/);
-                  const waccVal = waccMatch?.[1]?.trim();
-                  return (
-                <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setShowModelAssumptions(v => !v)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-                  >
-                    <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-                    <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Model Assumptions" : "모델 가정 수립"}</span>
-                    {waccVal && (
-                      <span
-                        className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md mr-1 shrink-0"
-                        style={{ background: `${color}20`, color }}
-                      >
-                        WACC {waccVal}
-                      </span>
-                    )}
-                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {showModelAssumptions && (
-                      <motion.div
-                        key="model-assumptions"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                          <RoadmapEnContext.Provider value={isEn}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                            h2: ({ children }: any) => <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
-                            p: ({ children }: any) => <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>,
-                            ul: ({ children }: any) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                            li: ({ children }: any) => (
-                              <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                                <span className="flex-1 min-w-0">{children}</span>
-                              </li>
-                            ),
-                            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
-                            ...MD_TABLE_COMPONENTS,
-                          }}>
-                            {prepareMarkdown(waccOnlySection, isEn)}
-                          </ReactMarkdown>
-                          </RoadmapEnContext.Provider>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                  );
-                })()}
-                <MdBlock src={modelAssumptionsSplit.after} isEn={isEn} />
-              </>
-            );
-          }
-          return <MdBlock src={mainBodyContent} isEn={isEn} />;
-        })()}
+        <MdBlock src={mainBodyContent} isEn={isEn} />
 
-        {/* 밸류에이션 핵심 지표 — 토글 섹션 */}
-        {valuationMetricsContent && (
-          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setShowValuationMetrics(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-            >
-              <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Metrics" : "밸류에이션 핵심 지표"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
-            </button>
-            <AnimatePresence initial={false}>
-              {showValuationMetrics && (
-                <motion.div
-                  key="val-metrics"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                    <RoadmapEnContext.Provider value={isEn}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        h2: ({ children }) => (
-                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>
-                        ),
-                        p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
-                        ),
-                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                        li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                            <span className="flex-1 min-w-0">{children}</span>
-                          </li>
-                        ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                        ...MD_TABLE_COMPONENTS,
-                      }}
-                    >
-                      {prepareMarkdown(valuationMetricsContent, isEn)}
-                    </ReactMarkdown>
-                    </RoadmapEnContext.Provider>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+        {/* DART 사업보고서: 재무 차트 (dart_report_analysis 전용) */}
+        {step.stepKey === "dart_report_analysis" && ticker && (
+          <DartFinancialCharts ticker={ticker} isEn={isEn} color={color} />
         )}
 
-        {/* 적정주가 산출: 핵심 밸류에이션 가정 요약 — 토글 섹션 */}
-        {keyAssumptionsContent && (
-          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setShowKeyAssumptions(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-            >
-              <Table2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Assumptions" : "핵심 밸류에이션 가정 요약"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showKeyAssumptions && "rotate-180")} />
-            </button>
-            <AnimatePresence initial={false}>
-              {showKeyAssumptions && (
-                <motion.div
-                  key="key-assumptions"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                    <RoadmapEnContext.Provider value={isEn}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        h2: ({ children }) => (
-                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
-                            {children}
-                          </h2>
-                        ),
-                        p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
-                        ),
-                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                        li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                            <span className="flex-1 min-w-0">{children}</span>
-                          </li>
-                        ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                        ...MD_TABLE_COMPONENTS,
-                      }}
-                    >
-                      {prepareMarkdown(keyAssumptionsContent, isEn)}
-                    </ReactMarkdown>
-                    </RoadmapEnContext.Provider>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {/* Valuation Analyst — 최종 조율 적정주가 (redesigned: clean & modern) */}
 
 
-        {/* Fundamental & Valuation 적정주가 — 레인지 바 + 요약 테이블 */}
-        {isFundamental && valuationData && (() => {
-          const gMin = Math.min(valuationData.dcf_bear, valuationData.pe_bear, valuationData.ev_bear, valuationData.current) * 0.96;
-          const gMax = Math.max(valuationData.dcf_bull, valuationData.pe_bull, valuationData.ev_bull) * 1.04;
-          const avgBase = (valuationData.dcf_base + valuationData.pe_base + valuationData.ev_base) / 3;
-          const avgUpside = valuationData.current > 0 ? ((avgBase - valuationData.current) / valuationData.current * 100) : 0;
-          const isUp = avgBase >= valuationData.current;
-          return (
-            <div className="mt-5 pt-4 border-t border-border">
-              {/* 섹션 헤더 */}
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Valuation Fair Value" : "밸류에이션 적정주가"}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">{isEn ? "3-Method Blend" : "3-Method 종합"}</span>
-              </div>
-
-              {/* 현재가 + 평균 업사이드 요약 칩 */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[13px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency, isEn)}</span>
-                </div>
-                <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
-                  <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
-                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>{isEn ? "3-Method Avg." : "3방법론 평균"}</span>
-                  <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
-                    {isUp ? "+" : ""}{avgUpside.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* 레인지 바 시각화 */}
-              <div className="bg-muted/60 dark:bg-muted/15 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/70">
-                {/* 범례 */}
-                <div className="flex items-center gap-4 mb-2 pb-2 border-b border-border/40">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-rose-400" />
-                    <span className="text-[10px] text-muted-foreground">Bear</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] text-muted-foreground">{isEn ? "Base (Fair)" : "Base (적정)"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-blue-400" />
-                    <span className="text-[10px] text-muted-foreground">Bull</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <div className="w-0.5 h-3 rounded-full bg-foreground/50" />
-                    <span className="text-[10px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  </div>
-                </div>
-                <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-                <ValuationScaleBar label="Fwd P/E" bear={valuationData.pe_bear} base={valuationData.pe_base} bull={valuationData.pe_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-                <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-              </div>
-
-            </div>
-          );
-        })()}
 
       </div>
           </motion.div>
