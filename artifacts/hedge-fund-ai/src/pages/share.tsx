@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowRight, TrendingUp, TrendingDown,
   Target, Building2, Loader2, AlertCircle,
-  Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale,
+  Check, Link2, ShieldCheck, Globe2, PieChart, Zap,
   Users, Database, RefreshCw, FileText, ExternalLink,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
@@ -77,11 +77,9 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
   company_intro:       { name: "브리핑",                role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
   industry_analysis:   { name: "매크로 및 산업 분석",   role: "Macro & Industry Analyst",      Icon: Globe2,      accent: "border-sky-500/30 bg-sky-500/5" },
   catalyst_analysis:   { name: "투자 촉매 및 수급 분석",role: "Catalyst & Smart Money Analyst",Icon: Zap,         accent: "border-amber-500/30 bg-amber-500/5" },
-  company_analysis:      { name: "실적 전망",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
+  company_analysis:      { name: "실적분析",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
   dart_report_analysis:  { name: "사업보고서 분석",      role: "Business Intelligence Analyst", Icon: PieChart,    accent: "border-teal-500/30 bg-teal-500/5" },
-  relative_valuation:    { name: "적정주가 산출",         role: "Valuation Analyst",             Icon: Scale,       accent: "border-emerald-500/30 bg-emerald-500/5" },
-  market_analysis:     { name: "기술적 분석",           role: "Market & Technical Analyst",    Icon: BarChart2,   accent: "border-rose-500/30 bg-rose-500/5" },
-  investment_strategy: { name: "최종 결론",             role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
+  investment_strategy: { name: "결론",             role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
 };
 
 function stripInternalData(content: string): string {
@@ -448,7 +446,6 @@ const STEP_ORDER = [
   "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
-  "market_analysis",
   "investment_strategy",
 ];
 
@@ -1251,29 +1248,7 @@ export default function SharePage() {
                     {/* 스텝 본문 */}
                     <div className="px-5 py-7">
                       {step.stepKey === "investment_strategy" ? (
-                        (() => {
-                          const card = <ShareInvestmentCard content={step.content} currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"} />;
-                          if (card.props.content && extractJson(step.content)) return card;
-                          return <MarkdownBody content={step.content} />;
-                        })()
-                      ) : step.stepKey === "market_analysis" ? (
-                        <>
-                          <ShareChartLevels
-                            content={step.content}
-                            currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
-                          />
-                          <MarkdownBody content={step.content} />
-                          <div className="mt-4 pt-4 border-t border-slate-700/60">
-                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-3">주가 차트</p>
-                            <StockChart
-                              ticker={analysis.ticker}
-                              companyName={analysis.companyName ?? undefined}
-                              chartLevels={parseChartLevels(step.content) ?? undefined}
-                              events={parseChartEvents(step.content)}
-                              currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
-                            />
-                          </div>
-                        </>
+                        <MarkdownBody content={step.content} />
                       ) : (
                         <MarkdownBody content={step.content} />
                       )}

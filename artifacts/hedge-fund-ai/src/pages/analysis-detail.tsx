@@ -3403,7 +3403,7 @@ export default function AnalysisDetail() {
       <div className="space-y-4" style={{ overflowAnchor: "none" }}>
         <AnimatePresence>
           {[...analysis.steps]
-            .filter((step) => step.stepKey !== "relative_valuation")
+            .filter((step) => step.stepKey !== "relative_valuation" && step.stepKey !== "market_analysis")
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
             <div key={step.id} id={`step-${step.stepKey}`}>
@@ -4630,27 +4630,8 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
     "데이터가 많아요. 커피 한 잔 더 드세요 ☕",
     "마지막 검토 중이에요! 거의 다 왔어요 🏁",
   ],
-  relative_valuation: [
-    "DCF 10년치 가동... 이 스프레드시트 감정 있어요 📈",
-    "WACC 계산 중... 과학처럼 보이려 노력 중인 숫자예요",
-    "피어 멀티플 수집 중. 비싼 건지 싼 건지, 영원한 논쟁",
-    "Terminal Value가 모델을 잡아먹지 않게 확인 중 😅",
-    "Reverse DCF: 지금 주가가 맞으려면 뭘 믿어야 하는가",
-    "절대가치 vs 상대가치, 싸우게 두는 중이에요 ⚔️",
-    "FCFF 정합성 최종 점검. 믿되 검증해요",
-    "두 밸류에이션 하나로 압축하는 중이에요 🎯",
-  ],
-  market_analysis: [
-    "차트 소환 완료. 오를지 내릴지는 차트도 몰라요 📉📈",
-    "지지선 그리는 중이에요. 장식이 아니라고요 📏",
-    "지지·저항 구간 정밀 계산. 희망과 현실의 교차점",
-    "큰 손들 수급 추적 중이에요. 쟤네가 움직이나 봐요 🕵️",
-    "이 가격에 사도 되는지... 계산 중이에요 💭",
-    "손절선 설정 중... 제일 스트레스 받는 부분이에요",
-    "진입 타점 확정! 이제부터 긴장하세요 🔒",
-  ],
   investment_strategy: [
-    "6개 보고서를 의견 하나로 압축 중이에요. 부담 없어요 🧠",
+    "5개 보고서를 종합 중이에요. 거의 다 왔어요 🧠",
     "상승여력 계산... 이 주식이 데이트 상대 자격이 있는지 💘",
     "투자 논거 한 문장으로 우겨넣는 중이에요 ✍️",
     "리스크 vs 기회, 최종 라운드 ⚖️",
@@ -4693,27 +4674,8 @@ const SLOW_STEP_MESSAGES_EN: Record<string, string[]> = {
     "So much data. So little time. Hang tight 🙏",
     "Final lap — finishing strong!",
   ],
-  relative_valuation: [
-    "Firing up 10 years of DCF... this spreadsheet has feelings 📈",
-    "WACC: the number that pretends to be science",
-    "Comps gathering: cheap vs. expensive — eternal debate",
-    "Making sure Terminal Value doesn't eat the whole model 😅",
-    "Reverse DCF: asking what price means market is right",
-    "Intrinsic vs. relative value — let them fight ⚔️",
-    "FCFF sanity check: trust but verify",
-    "Squeezing two valuations into one number 🎯",
-  ],
-  market_analysis: [
-    "Chart time. Bulls, bears, and confused sideways 📉📈",
-    "Drawing support lines. Purely decorative. (Kidding) 📏",
-    "Support & resistance: where hope meets reality",
-    "Following the smart money — or whoever is moving this thing 🕵️",
-    "Is this a buy, or is this a trap? Calculating... 💭",
-    "Stop loss placement: the most stressful part",
-    "Entry zone locked. Time to sweat! 🔒",
-  ],
   investment_strategy: [
-    "Turning six reports into one opinion — no pressure 🧠",
+    "Turning five reports into one — final stretch 🧠",
     "Upside math: does this stock deserve a date? 💘",
     "Fitting the whole thesis into one sentence ✍️",
     "Risk vs. reward: final round ⚖️",
@@ -4832,8 +4794,6 @@ const AGENT_COLORS: Record<string, string> = {
   industry_analysis: BRAND_BLUE,
   company_analysis: BRAND_BLUE,
   dart_report_analysis: "hsl(158, 60%, 35%)",
-  relative_valuation: BRAND_BLUE,
-  market_analysis: BRAND_BLUE,
   catalyst_analysis: BRAND_AMBER,
   investment_strategy: BRAND_BLUE,
 };
@@ -5693,7 +5653,7 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
   );
 }
 
-const BLUR_GATED_STEPS = ["company_analysis", "dart_report_analysis", "market_analysis", "investment_strategy"];
+const BLUR_GATED_STEPS = ["company_analysis", "dart_report_analysis", "investment_strategy"];
 
 const MD_BODY_COMPONENTS = {
   h2: ({ children }: any) => (
@@ -5810,26 +5770,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
   const isGated = !isSignedIn && BLUR_GATED_STEPS.includes(step.stepKey);
 
-  const isMarket = step.stepKey === "market_analysis";
   const isFundamental = step.stepKey === "company_analysis";
-  const isRelativeVal = step.stepKey === "relative_valuation";
   const content = step.content ?? "";
 
-  const chartLevels = useMemo(() => isMarket ? parseChartLevels(content) : null, [isMarket, content]);
-  const chartEvents = useMemo(() => isMarket ? parseChartEvents(content) : [], [isMarket, content]);
-  const marketSignals = useMemo(() => isMarket ? parseMarketSignals(content) : null, [isMarket, content]);
-  const priceScenario = useMemo(() => isMarket ? parsePriceScenario(content) : { pathType: null }, [isMarket, content]);
   const valuationData = useMemo(() => isFundamental ? parseValuationData(content) : null, [isFundamental, content]);
-  const finalValuationData = useMemo(() => isRelativeVal ? parseFinalValuationData(content) : null, [isRelativeVal, content]);
   const displayContent = useMemo(() => stripPromptInstructions(stripEstimationLabels(
-    isMarket
-      ? stripChartData(content)
-      : isFundamental
-        ? stripValuationData(content)
-        : isRelativeVal
-          ? stripFinalValuationData(content)
-          : content
-  )), [isMarket, isFundamental, isRelativeVal, content]);
+    isFundamental
+      ? stripValuationData(content)
+      : content
+  )), [isFundamental, content]);
 
   // 리드 문장 — 첫 번째 ## 소제목 이전의 텍스트
   const leadIdx = useMemo(() => displayContent.search(/(?:^|\n)## /), [displayContent]);
@@ -5851,59 +5800,13 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
     }
     return null;
   }, [isFundamental, bodyContent]);
-  // 적정주가 산출 카드: 핵심 밸류에이션 가정 요약 섹션 분리 (토글화)
-  // 이모지가 다양하게 출력될 수 있으므로 "핵심 밸류에이션 가정" 텍스트로만 탐지
-  const keyAssumptionsSplit = useMemo(() => {
-    if (!isRelativeVal) return null;
-    const midIdx = bodyContent.search(/\n## [^\n]*핵심 밸류에이션 가정/);
-    if (midIdx >= 0) {
-      return { before: bodyContent.slice(0, midIdx), section: bodyContent.slice(midIdx + 1) };
-    }
-    if (/^## [^\n]*핵심 밸류에이션 가정/.test(bodyContent)) {
-      return { before: '', section: bodyContent };
-    }
-    return null;
-  }, [isRelativeVal, bodyContent]);
+  const keyAssumptionsSplit = null; // relative_valuation removed
 
   const mainBodyContent = useMemo(() => {
     if (valuationMetricsSplit) return valuationMetricsSplit.before;
-    if (keyAssumptionsSplit) return keyAssumptionsSplit.before;
     return bodyContent;
-  }, [bodyContent, valuationMetricsSplit, keyAssumptionsSplit]);
+  }, [bodyContent, valuationMetricsSplit]);
 
-  const valuationMetricsContent = useMemo(() =>
-    valuationMetricsSplit ? valuationMetricsSplit.section : null,
-    [valuationMetricsSplit]
-  );
-  const keyAssumptionsContent = useMemo(() =>
-    keyAssumptionsSplit ? keyAssumptionsSplit.section : null,
-    [keyAssumptionsSplit]
-  );
-
-  // 적정주가 산출 카드: 모델 가정 수립 섹션 (중간 위치) — 앞/섹션/뒤 3분할
-  const modelAssumptionsSplit = useMemo(() => {
-    if (!isRelativeVal) return null;
-    const src = mainBodyContent;
-    const midIdx = src.search(/\n## 🔢 모델 가정 수립/);
-    if (midIdx >= 0) {
-      const afterStart = src.slice(midIdx + 1); // starts with "## 🔢 모델 가정..."
-      const nextMatch = afterStart.search(/\n## /);
-      return {
-        before: src.slice(0, midIdx),
-        section: nextMatch >= 0 ? afterStart.slice(0, nextMatch) : afterStart,
-        after: nextMatch >= 0 ? afterStart.slice(nextMatch) : '',
-      };
-    }
-    if (/^## 🔢 모델 가정 수립/.test(src)) {
-      const nextMatch = src.search(/\n## /);
-      return {
-        before: '',
-        section: nextMatch >= 0 ? src.slice(0, nextMatch) : src,
-        after: nextMatch >= 0 ? src.slice(nextMatch) : '',
-      };
-    }
-    return null;
-  }, [isRelativeVal, mainBodyContent]);
 
   // WACC 토글에서 "선택 모델별 가정" 표 제거 — Part A에서 더 상세히 보여주므로 중복 제거
   const waccOnlySection = useMemo(() => {
@@ -5970,117 +5873,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           >
       <div className="p-4 sm:p-5">
 
-        {/* ① 주가 차트 — 기술적 분석 최상단 */}
-        {isMarket && ticker && (
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Chart" : "주가 차트"}</span>
-              {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
-                  {isEn ? "Incl. entry/target/stop" : "진입·목표·손절 레벨 포함"}
-                </span>
-              )}
-              {chartEvents.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
-                  {isEn ? `${chartEvents.length} key events` : `핵심 이슈 ${chartEvents.length}건`}
-                </span>
-              )}
-            </div>
-            <StockChart
-              ticker={ticker}
-              companyName={companyName}
-              companyNameEn={companyNameEn}
-              chartLevels={chartLevels ?? undefined}
-              validatedTargetPrice={
-                // finalValuationData.base(밸류에이션 패널 원본)가 있으면 우선 사용
-                // — DB targetPrice는 과거 2.5x 캡으로 잘린 경우가 있어 불일치 발생
-                (finalValuationData?.base && finalValuationData.base > 0)
-                  ? finalValuationData.base
-                  : (validatedTargetPrice ?? undefined)
-              }
-              events={chartEvents}
-              currency={priceCurrency}
-              isEn={isEn}
-              priceScenario={priceScenario}
-            />
-          </div>
-        )}
 
         {/* ③ 현재가 vs 적정주가 + 단기 방향 분석 */}
-        {isMarket && marketSignals && (() => {
-          const cp = (chartLevels?.currentPrice && chartLevels.currentPrice > 0) ? chartLevels.currentPrice : (startPrice ?? 0);
-          const tp = validatedTargetPrice;
-          const { trend, signal, rrRatio } = marketSignals;
-
-          type Dir = { label: string; sub: string; clr: string; bg: string; icon: string };
-          const dirKey = `${trend}-${signal}`;
-          const dirMap: Record<string, Dir> = {
-            "bullish-continuing": { icon: "▲", label: isEn ? "Uptrend Intact" : "상승 추세 지속",   sub: isEn ? "Momentum remains strong — trend likely continues short-term." : "모멘텀 유지 중. 단기 추가 상승 흐름 지속 예상.",        clr: "#10b981", bg: "#10b98112" },
-            "bullish-peaking":    { icon: "⚠", label: isEn ? "Near Peak — Caution" : "고점 경계 구간", sub: isEn ? "Extended rally approaching 52W high — short-term pullback likely." : "52주 고점권 접근. 단기 차익 실현·조정 가능성 높음.",  clr: "#f59e0b", bg: "#f59e0b12" },
-            "bullish-reversing":  { icon: "↘", label: isEn ? "Trend Weakening" : "상승 둔화",        sub: isEn ? "Uptrend losing momentum — watch for breakdown." : "상승 추세 내 모멘텀 약화. 추세 이탈 여부 주시 필요.",     clr: "#f59e0b", bg: "#f59e0b12" },
-            "bullish-wait":       { icon: "→", label: isEn ? "Uptrend — Hold" : "상승 추세, 관망",   sub: isEn ? "Uptrend intact but short-term direction unclear." : "추세는 상승이나 단기 방향성 불명확. 신호 확인 후 대응.", clr: "#10b981", bg: "#10b98112" },
-            "bullish-buy":        { icon: "▲", label: isEn ? "Buy on Dip" : "눌림목 매수",           sub: isEn ? "Pullback within uptrend — potential re-entry." : "상승 추세 내 일시 조정. 재진입 기회 포착 구간.",         clr: "#10b981", bg: "#10b98112" },
-            "bearish-reversing":  { icon: "↗", label: isEn ? "Reversal Attempt" : "반등 시도 중",    sub: isEn ? "Downtrend with technical rebound signals." : "하락 추세 내 기술적 반등 시도. 추세 전환 확인 필요.",    clr: "#f59e0b", bg: "#f59e0b12" },
-            "bearish-continuing": { icon: "▼", label: isEn ? "Downtrend Intact" : "하락 추세 지속",  sub: isEn ? "Downward pressure continues — avoid new longs short-term." : "하락 모멘텀 지속. 단기 신규 매수 자제 권고.",          clr: "#ef4444", bg: "#ef444412" },
-            "bearish-wait":       { icon: "↘", label: isEn ? "Bearish — Watch" : "하락 추세, 관망",  sub: isEn ? "Downtrend intact, await reversal confirmation." : "하락 추세 내 반전 신호 대기. 성급한 매수 자제.",         clr: "#ef4444", bg: "#ef444412" },
-            "neutral-buy":        { icon: "▲", label: isEn ? "Support Entry Zone" : "지지 매수 구간", sub: isEn ? "Near key support — potential entry if holds." : "주요 지지구간 접근. 지지 확인 시 단기 매수 기회.",       clr: "#10b981", bg: "#10b98112" },
-            "neutral-sell":       { icon: "▼", label: isEn ? "Resistance Zone" : "저항 매도 구간",   sub: isEn ? "Near resistance — consider trimming on strength." : "주요 저항구간 접근. 단기 비중 축소 고려.",              clr: "#ef4444", bg: "#ef444412" },
-            "neutral-wait":       { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망",       sub: isEn ? "Await clearer signal before acting." : "방향성 신호 확인 대기. 명확한 돌파 후 대응 권장.",            clr: "#94a3b8", bg: "#94a3b812" },
-          };
-          const dir: Dir = dirMap[dirKey] ?? { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망", sub: isEn ? "Await clearer signal." : "방향성 신호 확인 대기.", clr: "#94a3b8", bg: "#94a3b812" };
-
-          const upside = (cp > 0 && tp) ? ((Number(tp) - cp) / cp * 100) : null;
-          const isUp = upside !== null ? upside >= 0 : null;
-
-          return (
-            <div className="mb-5 pt-4 border-t border-border">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price vs Target · Short-term Outlook" : "현재가 · 적정주가 · 단기 전망"}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {cp > 0 && tp && (
-                  <div className="rounded-xl border border-border/60 p-3.5 bg-muted/20">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">{isEn ? "Price vs Target (12M)" : "현재가 vs 적정주가 (12개월)"}</p>
-                    <div className="flex items-end gap-3 flex-wrap">
-                      <div>
-                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Current" : "현재가"}</p>
-                        <p className="text-[16px] font-bold font-mono text-foreground leading-none">{formatPrice(cp, priceCurrency, isEn)}</p>
-                      </div>
-                      <span className="text-muted-foreground/40 text-sm mb-0.5">→</span>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Target" : "적정주가"}</p>
-                        <p className={`text-[16px] font-bold font-mono leading-none ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{formatPrice(Number(tp), priceCurrency, isEn)}</p>
-                      </div>
-                      {upside !== null && (
-                        <span className={`text-[13px] font-bold mb-0.5 ${isUp ? "text-emerald-500" : "text-rose-500"}`}>
-                          {isUp ? "+" : ""}{upside.toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="rounded-xl border p-3.5" style={{ borderColor: `${dir.clr}35`, background: dir.bg }}>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isEn ? "Short-term Outlook" : "단기 주가 전망"}</p>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[18px] leading-none font-bold" style={{ color: dir.clr }}>{dir.icon}</span>
-                    <span className="text-[14px] font-bold" style={{ color: dir.clr }}>{dir.label}</span>
-                  </div>
-                  <p className="text-[12px] text-foreground/70 leading-relaxed">{dir.sub}</p>
-                  {rrRatio > 0 && (
-                    <div className="mt-2 pt-2 border-t" style={{ borderColor: `${dir.clr}25` }}>
-                      <span className="text-[10px] text-muted-foreground">R/R {rrRatio.toFixed(1)} : 1</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
         {/* ④ Market & Technical Analyst: 기술적 신호 칩 */}
-        {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} isEn={isEn} />}
 
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
         {leadPara && (
@@ -6276,172 +6072,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         )}
 
         {/* Valuation Analyst — 최종 조율 적정주가 (redesigned: clean & modern) */}
-        {isRelativeVal && finalValuationData && (() => {
-          const fv = finalValuationData;
-          const absModel = fv.abs_model ?? detectAbsModelFromContent(step.content ?? "");
-          const isUp = fv.base >= fv.current;
-          const upside = fv.current > 0 ? ((fv.base - fv.current) / fv.current * 100) : 0;
-          const absUp = fv.current > 0 ? ((fv.abs_base - fv.current) / fv.current * 100) : 0;
-          const relUp = fv.current > 0 ? ((fv.rel_base - fv.current) / fv.current * 100) : 0;
-
-          // 범위 바 계산
-          const allVals = [fv.bear, fv.bull, fv.current, fv.base].filter(v => v > 0);
-          const gMin = Math.min(...allVals) * 0.95;
-          const gMax = Math.max(...allVals) * 1.05;
-          const span = gMax - gMin || 1;
-          const toP = (v: number) => Math.max(2, Math.min(98, ((v - gMin) / span) * 100));
-          const bearP = toP(fv.bear);
-          const baseP = toP(fv.base);
-          const bullP = toP(fv.bull);
-          const curP  = toP(fv.current);
-
-          const targetColor = isUp ? "#10b981" : "#ef4444";
-
-          return (
-            <div className="mt-5 pt-5 border-t border-border space-y-4">
-
-              {/* ── Hero: 적정주가 + 업사이드 ── */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                    {isEn ? "Target Price" : "적정주가"}
-                  </p>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-[28px] font-bold font-mono leading-none text-foreground">
-                      {formatPrice(fv.base, priceCurrency, isEn)}
-                    </span>
-                    <span className="text-[17px] font-bold font-mono leading-none" style={{ color: targetColor }}>
-                      {isUp ? "+" : ""}{upside.toFixed(1)}%
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    {isEn ? "vs. current " : "현재가 "}<span className="font-mono font-medium text-foreground/75">{formatPrice(fv.current, priceCurrency, isEn)}</span>
-                  </p>
-                </div>
-
-                {/* Blend 구성 — 우측 compact */}
-                <div className="shrink-0 flex flex-col items-end gap-1.5 pt-0.5">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">{isEn ? "Blend" : "구성"}</p>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="text-muted-foreground/70">{absModel}</span>
-                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.abs_base, priceCurrency, isEn)}</span>
-                    <span className={cn("font-bold text-[10px]", absUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                      {absUp >= 0 ? "+" : ""}{absUp.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="text-muted-foreground/70">{isEn ? "Peers" : "피어"}</span>
-                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.rel_base, priceCurrency, isEn)}</span>
-                    <span className={cn("font-bold text-[10px]", relUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                      {relUp >= 0 ? "+" : ""}{relUp.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Range bar: Bear ─ Current | Base ─ Bull ── */}
-              <div className="px-1">
-                {/* Track */}
-                <div className="relative h-2 bg-muted/50 rounded-full">
-                  {/* Bear→Bull fill */}
-                  <div className="absolute inset-y-0 rounded-full opacity-20"
-                    style={{ left: `${bearP}%`, right: `${100 - bullP}%`, background: targetColor }} />
-                  {/* Bear dot */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-400 ring-2 ring-background"
-                    style={{ left: `${bearP}%` }} />
-                  {/* Current tick */}
-                  <div className="absolute -top-1 -bottom-1 w-[2px] -translate-x-1/2 bg-foreground/40 rounded-full"
-                    style={{ left: `${curP}%` }} />
-                  {/* Base dot — prominent */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full ring-2 ring-background shadow-md z-10"
-                    style={{ left: `${baseP}%`, background: targetColor }} />
-                  {/* Bull dot */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-background"
-                    style={{ left: `${bullP}%` }} />
-                </div>
-
-                {/* Price labels row */}
-                <div className="flex items-start justify-between mt-2.5 text-[10px] font-mono">
-                  <div className="flex flex-col items-start">
-                    <span className="text-rose-400 font-semibold">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">Bear</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="font-semibold text-foreground/70">{formatPrice(fv.current, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">{isEn ? "Now" : "현재"}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="font-bold" style={{ color: targetColor }}>{formatPrice(fv.base, priceCurrency, isEn)}</span>
-                    <span className="font-semibold text-[9px]" style={{ color: targetColor }}>{isEn ? "Target" : "적정"}</span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-blue-400 font-semibold">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">Bull</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── 상세 보기 (collapsed by default) ── */}
-              <button
-                onClick={() => setShowDetailTable(v => !v)}
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", showDetailTable && "rotate-180")} />
-                {showDetailTable
-                  ? (isEn ? "Hide breakdown" : "상세 숨기기")
-                  : (isEn ? "Show breakdown" : "절대·상대가치 상세")}
-              </button>
-
-              <AnimatePresence initial={false}>
-                {showDetailTable && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    style={{ overflow: "hidden" }}
-                  >
-                    <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
-                      <table className="w-full min-w-[300px] text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-muted/60">
-                            <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "구분"}</th>
-                            <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
-                            <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                            <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/50">
-                          {[
-                            { label: isEn ? `Absolute (${absModel})` : `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
-                            { label: isEn ? "Relative (Peers)" : "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
-                            { label: isEn ? "Blended" : "최종 조율", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
-                          ].map(({ label, bear, base, bull, bold }) => {
-                            const up = fv.current > 0 ? ((base - fv.current) / fv.current * 100) : 0;
-                            return (
-                              <tr key={label} className={cn("transition-colors", bold ? "bg-muted/25" : "hover:bg-muted/10")}>
-                                <td className={cn("px-3 py-2 text-foreground/75", bold && "font-bold text-foreground")}>{label}</td>
-                                <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
-                                <td className="px-3 py-2 text-right font-mono">
-                                  <span className={cn(bold && "font-bold")}>{formatPrice(base, priceCurrency, isEn)}</span>
-                                  <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                                    {up >= 0 ? "+" : ""}{up.toFixed(1)}%
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-            </div>
-          );
-        })()}
 
 
         {/* Fundamental & Valuation 적정주가 — 레인지 바 + 요약 테이블 */}
