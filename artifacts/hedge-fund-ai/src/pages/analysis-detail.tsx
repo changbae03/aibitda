@@ -3495,9 +3495,6 @@ export default function AnalysisDetail() {
             {/* 산업 소개 — compact 다이제스트 */}
             {indStep ? (
               <div className={introStep ? "mt-6 pt-6 border-t border-border/40" : ""}>
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
-                  {isEn ? "Industry context" : "이 산업의 특징"}
-                </p>
                 <ErrorBoundary fallback={null}>
                   <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#6366F1" compact />
                 </ErrorBoundary>
