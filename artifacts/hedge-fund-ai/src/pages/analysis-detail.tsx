@@ -2529,9 +2529,9 @@ function NarrativeSectionBlock({
 
 // ── 단일 스텝 컨텐츠 (어코디언 없이 산문체로) ────────────────────────────────
 function NarrativeStepContent({
-  step, isEn = false, ticker, accent,
+  step, isEn = false, ticker, accent, compact = false,
 }: {
-  step: any; isEn?: boolean; ticker?: string; accent?: string;
+  step: any; isEn?: boolean; ticker?: string; accent?: string; compact?: boolean;
 }) {
   const raw = step.content ?? "";
   const processed = stripPromptInstructions(stripEstimationLabels(
@@ -2542,6 +2542,18 @@ function NarrativeStepContent({
   const leadPara = leadIdx > 0 ? processed.slice(0, leadIdx).trim() : "";
   const body = leadIdx >= 0 ? processed.slice(leadIdx) : processed;
   const accentColor = accent ?? "hsl(var(--primary))";
+
+  // compact 모드: 첫 단락(들)만 표시 — 섹션 1과 같은 호흡
+  if (compact) {
+    const compactText = leadPara || processed.split(/\n\n/)[0]?.trim() || processed;
+    return (
+      <div className="space-y-3">
+        <div className="prose-narrative">
+          <MdBlock src={compactText} isEn={isEn} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -3455,7 +3467,7 @@ export default function AnalysisDetail() {
           <NarrativeSectionBlock
             num={2}
             title={isEn ? "What defines this industry?" : "이 산업의 특징은 무엇인가요?"}
-            subtitle={isEn ? "Market structure · Industry dynamics · Key drivers" : "시장 구조 · 업황 흐름 · 핵심 성장 동인"}
+            subtitle={isEn ? "Market structure · Growth drivers · Competitive dynamics" : "시장 구조 · 핵심 성장 동인 · 경쟁 구도"}
             accent="#F59E0B"
             pending={!indStep && !streaming}
             isEn={isEn}
@@ -3467,7 +3479,7 @@ export default function AnalysisDetail() {
               </div>
             ) : indStep ? (
               <ErrorBoundary fallback={null}>
-                <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" />
+                <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" compact />
               </ErrorBoundary>
             ) : null}
           </NarrativeSectionBlock>
@@ -3487,14 +3499,11 @@ export default function AnalysisDetail() {
           <NarrativeSectionBlock
             num={3}
             title={isEn ? "What do the filings reveal?" : "사업보고서로 보는 주요 변화"}
-            subtitle={isEn ? "DART filings · Revenue trend · Margins · Financial health" : "실적 추이 · 수익성 변화 · 재무 건전성"}
+            subtitle={isEn ? "DART filings · Key business changes · Management commentary" : "사업 변화 · 경영진 코멘트 · 주요 리스크"}
             accent="#10B981"
             pending={!hasAny && !activelyStreaming}
             isEn={isEn}
           >
-            <div className="mb-6 rounded-xl bg-muted/30 p-3">
-              <FinancialChart ticker={analysis.ticker} isEn={isEn} />
-            </div>
             {dartStep ? (
               <ErrorBoundary fallback={null}>
                 <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
@@ -3506,7 +3515,7 @@ export default function AnalysisDetail() {
               </div>
             ) : null}
             {compStep && (
-              <div className="mt-6 pt-6 border-t border-border/40">
+              <div className={dartStep ? "mt-6 pt-6 border-t border-border/40" : ""}>
                 <ErrorBoundary fallback={null}>
                   <NarrativeStepContent step={compStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
                 </ErrorBoundary>
@@ -3515,6 +3524,24 @@ export default function AnalysisDetail() {
           </NarrativeSectionBlock>
         );
       })()}
+
+      {/* ══ 재무 분析 카드 (섹션 3 다음 독립 카드) ══ */}
+      {(isComplete || analysis.steps.some((s: any) => ["dart_report_analysis","company_analysis"].includes(s.stepKey))) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.18 }}
+          className="rounded-2xl bg-card border border-border/50 overflow-hidden"
+        >
+          <div className="px-5 sm:px-6 pt-4 pb-3.5" style={{ borderBottom: "1px solid hsl(var(--border) / 0.3)" }}>
+            <p className="text-[13px] font-semibold text-foreground/70">{isEn ? "Financial Overview" : "재무 분析"}</p>
+            <p className="text-[11px] text-muted-foreground/50 mt-0.5">{isEn ? "Revenue · Margins · Earnings trend" : "매출 · 이익 · 수익성 추이"}</p>
+          </div>
+          <div className="px-3 sm:px-4 py-4">
+            <FinancialChart ticker={analysis.ticker} isEn={isEn} />
+          </div>
+        </motion.div>
+      )}
 
       {/* ══ 섹션 4: 투자 포인트 + 살 때 확인할 것들 ══ */}
       {(() => {
