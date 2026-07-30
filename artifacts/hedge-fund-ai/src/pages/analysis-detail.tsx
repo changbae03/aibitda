@@ -3446,7 +3446,35 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 2: 최근 몇 년, 어떻게 변했나요? ══ */}
+      {/* ══ 섹션 2: 이 산업의 특징은 무엇인가요? ══ */}
+      {(() => {
+        const indStep = analysis.steps.find((s: any) => s.stepKey === "industry_analysis");
+        const streaming = streamingStep?.key === "industry_analysis";
+        if (!indStep && !streaming && (isComplete || isError)) return null;
+        return (
+          <NarrativeSectionBlock
+            num={2}
+            title={isEn ? "What defines this industry?" : "이 산업의 특징은 무엇인가요?"}
+            subtitle={isEn ? "Market structure · Industry dynamics · Key drivers" : "시장 구조 · 업황 흐름 · 핵심 성장 동인"}
+            accent="#F59E0B"
+            pending={!indStep && !streaming}
+            isEn={isEn}
+          >
+            {streaming && !indStep ? (
+              <div className="flex items-center gap-3 py-10 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing industry…" : "업황 분析 중…"}</span>
+              </div>
+            ) : indStep ? (
+              <ErrorBoundary fallback={null}>
+                <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" />
+              </ErrorBoundary>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 섹션 3: 사업보고서로 보는 주요 변화 ══ */}
       {(() => {
         const dartStep = analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis");
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
@@ -3457,9 +3485,9 @@ export default function AnalysisDetail() {
         if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
         return (
           <NarrativeSectionBlock
-            num={2}
-            title={isEn ? "How has it changed over the years?" : "최근 몇 년, 어떻게 변했나요?"}
-            subtitle={isEn ? "DART filings · Revenue trend · CAPA · Order backlog" : "사업보고서 · 실적 흐름 · CAPA 변화 · 수주잔고"}
+            num={3}
+            title={isEn ? "What do the filings reveal?" : "사업보고서로 보는 주요 변화"}
+            subtitle={isEn ? "DART filings · Revenue trend · Margins · Financial health" : "실적 추이 · 수익성 변화 · 재무 건전성"}
             accent="#10B981"
             pending={!hasAny && !activelyStreaming}
             isEn={isEn}
@@ -3488,95 +3516,63 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 3: 지금 이 기업, 어떤 상태인가요? ══ */}
+      {/* ══ 섹션 4: 투자 포인트 + 살 때 확인할 것들 ══ */}
       {(() => {
-        const indStep = analysis.steps.find((s: any) => s.stepKey === "industry_analysis");
         const catStep = analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis");
-        const streamingInd = streamingStep?.key === "industry_analysis";
+        const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
         const streamingCat = streamingStep?.key === "catalyst_analysis";
-        const hasAny = !!(indStep || catStep);
-        const activelyStreaming = streamingInd || streamingCat;
+        const streamingStrat = streamingStep?.key === "investment_strategy";
+        const hasAny = !!(catStep || stratStep);
+        const activelyStreaming = streamingCat || streamingStrat;
         if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
-        return (
-          <NarrativeSectionBlock
-            num={3}
-            title={isEn ? "Where does this company stand right now?" : "지금 이 기업, 어떤 상태인가요?"}
-            subtitle={isEn ? "Industry dynamics · Growth stage · News & catalysts" : "업황 · 성장/정체/축소 단계 · 최근 뉴스"}
-            accent="#F59E0B"
-            pending={!hasAny && !activelyStreaming}
-            isEn={isEn}
-          >
-            {isComplete && effectiveVerdict && (
-              <div className="mb-5 flex items-center gap-2">
-                <span className="text-[12px] text-muted-foreground font-medium">{isEn ? "Current phase:" : "현재 단계:"}</span>
-                <PhaseTag verdict={effectiveVerdict} isEn={isEn} />
-              </div>
-            )}
-            {indStep ? (
-              <ErrorBoundary fallback={null}>
-                <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" />
-              </ErrorBoundary>
-            ) : streamingInd ? (
-              <div className="flex items-center gap-3 py-6 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing industry…" : "업황 분析 중…"}</span>
-              </div>
-            ) : null}
-            {catStep && (
-              <div className="mt-6 pt-6 border-t border-border/40">
-                <ErrorBoundary fallback={null}>
-                  <NarrativeStepContent step={catStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" />
-                </ErrorBoundary>
-              </div>
-            )}
-            {streamingCat && !catStep && (
-              <div className="flex items-center gap-3 py-6 justify-center mt-4">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Finding catalysts…" : "투자 촉매 분析 중…"}</span>
-              </div>
-            )}
-            <div className="mt-6 pt-6 border-t border-border/40">
-              <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-3">{isEn ? "Recent News" : "최근 뉴스"}</p>
-              <StockNewsTimeline ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />
-            </div>
-          </NarrativeSectionBlock>
-        );
-      })()}
-
-      {/* ══ 섹션 4: 살 때 확인할 것들 ══ */}
-      {(() => {
-        const step = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
-        const streaming = streamingStep?.key === "investment_strategy";
-        if (!step && !streaming && (isComplete || isError)) return null;
         const agent = AGENTS["investment_strategy"];
         const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
         return (
           <NarrativeSectionBlock
             num={4}
-            title={isEn ? "What to check before buying" : "살 때 확인할 것들"}
+            title={isEn ? "Investment thesis & what to check before buying" : "투자 포인트 + 살 때 확인할 것들"}
             subtitle={isEn ? "Catalysts · Entry conditions · Risk checklist" : "어떤 촉매가 있어야 오르는지 · 매수 전 체크리스트"}
             accent="#FF8A7A"
-            pending={!step && !streaming}
+            pending={!hasAny && !activelyStreaming}
             isEn={isEn}
           >
-            {streaming && !step ? (
-              <div className="flex items-center gap-3 py-10 justify-center">
+            {/* 최근 뉴스 & 촉매 */}
+            {catStep ? (
+              <ErrorBoundary fallback={null}>
+                <NarrativeStepContent step={catStep} isEn={isEn} ticker={analysis.ticker} accent="#FF8A7A" />
+              </ErrorBoundary>
+            ) : streamingCat ? (
+              <div className="flex items-center gap-3 py-6 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Finding catalysts…" : "투자 촉매 분析 중…"}</span>
+              </div>
+            ) : null}
+            {/* 최근 뉴스 타임라인 */}
+            <div className={catStep ? "mt-5 pt-5 border-t border-border/40" : ""}>
+              <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-3">{isEn ? "Recent News" : "최근 뉴스"}</p>
+              <StockNewsTimeline ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />
+            </div>
+            {/* 투자 전략 카드 */}
+            {streamingStrat && !stratStep ? (
+              <div className="flex items-center gap-3 py-8 justify-center mt-6 pt-6 border-t border-border/40">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
                 <span className="text-sm text-muted-foreground">{isEn ? "Writing investment strategy…" : "투자 전략 작성 중…"}</span>
               </div>
-            ) : step ? (
-              <ErrorBoundary fallback={null}>
-                <InvestmentStrategyCard
-                  step={step}
-                  agent={agent ?? fallbackAgent}
-                  delay={0}
-                  ticker={analysis.ticker}
-                  companyName={analysis.companyName}
-                  isEn={isEn}
-                  validatedTargetPrice={(analysis as any).targetPrice ?? undefined}
-                  validatedVerdict={(analysis as any).investmentVerdict ?? undefined}
-                />
-              </ErrorBoundary>
+            ) : stratStep ? (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <ErrorBoundary fallback={null}>
+                  <InvestmentStrategyCard
+                    step={stratStep}
+                    agent={agent ?? fallbackAgent}
+                    delay={0}
+                    ticker={analysis.ticker}
+                    companyName={analysis.companyName}
+                    isEn={isEn}
+                    validatedTargetPrice={(analysis as any).targetPrice ?? undefined}
+                    validatedVerdict={(analysis as any).investmentVerdict ?? undefined}
+                  />
+                </ErrorBoundary>
+              </div>
             ) : null}
           </NarrativeSectionBlock>
         );
