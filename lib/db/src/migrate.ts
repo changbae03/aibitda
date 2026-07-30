@@ -553,6 +553,19 @@ export async function runMigrations() {
       );
       CREATE INDEX IF NOT EXISTS idx_dart_biz_reports_ticker
         ON dart_biz_reports (ticker, bsns_year DESC);
+
+      -- 분기·반기까지 담는다.
+      --
+      -- 연간만 보면 1년에 한 점뿐이라 "언제부터 시작했나"를 1년 단위로만 알 수 있다.
+      -- 신규 사업·계약은 분기보고서에 먼저 뜨므로 분기까지 봐야 변화 시점이 잡힌다.
+      -- DART에 분기·반기가 그대로 있다(메디포스트·SK하이닉스 3년치 14건씩 확인).
+      --   quarter 1=1분기 · 2=반기 · 3=3분기 · 4=사업보고서(연간)
+      ALTER TABLE dart_biz_reports ADD COLUMN IF NOT EXISTS quarter INTEGER NOT NULL DEFAULT 4;
+      ALTER TABLE dart_biz_reports DROP CONSTRAINT IF EXISTS dart_biz_reports_uniq;
+      ALTER TABLE dart_biz_reports
+        ADD CONSTRAINT dart_biz_reports_uniq UNIQUE (ticker, bsns_year, quarter);
+      CREATE INDEX IF NOT EXISTS idx_dart_biz_reports_period
+        ON dart_biz_reports (ticker, bsns_year DESC, quarter DESC);
     `);
 
     // ── 종목별 정본 ─────────────────────────────────────────────────────────

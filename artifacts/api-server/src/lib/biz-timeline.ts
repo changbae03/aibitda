@@ -43,13 +43,41 @@ export const TIMELINE_SECTIONS = [
 
 export interface BizReportYear {
   bsnsYear: number;
+  /** 1=1분기 · 2=반기 · 3=3분기 · 4=사업보고서(연간) */
+  quarter: number;
   rceptNo: string;
   reportNm: string;
   content: string;
 }
 
-/** 사업보고서 목록에서 연도별 최신 원본을 고른다 */
-async function listAnnualReports(corpCode: string, key: string, fromYear: number) {
+/** 사람이 읽는 기간 표기 */
+export function periodLabel(bsnsYear: number, quarter: number): string {
+  return quarter === 4 ? `${bsnsYear}년 연간`
+    : quarter === 2 ? `${bsnsYear}년 상반기`
+    : `${bsnsYear}년 ${quarter}분기`;
+}
+
+/**
+ * 보고서 이름의 결산월로 분기를 가른다.
+ *   "사업보고서 (2025.12)" → 4   "반기보고서 (2025.06)" → 2
+ *   "분기보고서 (2025.03)" → 1   "분기보고서 (2025.09)" → 3
+ */
+function parsePeriod(reportNm: string): { year: number; quarter: number } | null {
+  const m = reportNm.match(/\((\d{4})\.(\d{2})\)/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const quarter = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
+  return Number.isFinite(year) ? { year, quarter } : null;
+}
+
+/**
+ * 정기공시(사업·반기·분기) 목록을 기간별로 하나씩 고른다.
+ *
+ * 연간만 보면 1년에 한 점뿐이라 "언제부터 시작했나"를 1년 단위로만 알 수 있다.
+ * 신규 사업·계약은 **분기보고서에 먼저 뜬다** — 분기까지 봐야 변화 시점이 잡힌다.
+ */
+async function listPeriodicReports(corpCode: string, key: string, fromYear: number) {
   const res = await fetch(
     `${DART_API}/list.json?crtfc_key=${key}&corp_code=${corpCode}` +
     `&bgn_de=${fromYear}0101&end_de=${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` +
@@ -60,25 +88,24 @@ async function listAnnualReports(corpCode: string, key: string, fromYear: number
   const data = await res.json() as any;
   if (data.status !== "000" || !Array.isArray(data.list)) return [];
 
-  const byYear = new Map<number, { rceptNo: string; reportNm: string }>();
+  const byPeriod = new Map<string, { bsnsYear: number; quarter: number; rceptNo: string; reportNm: string }>();
   for (const r of data.list as any[]) {
     const nm: string = r.report_nm ?? "";
-    if (!nm.includes("사업보고서") || /분기|반기/.test(nm)) continue;
-    // "사업보고서 (2025.12)" → 2025
-    const y = Number(nm.match(/\((\d{4})\./)?.[1]);
-    if (!Number.isFinite(y)) continue;
+    if (!/사업보고서|반기보고서|분기보고서/.test(nm)) continue;
+    const p = parsePeriod(nm);
+    if (!p) continue;
     const rceptNo = r.rcept_no ?? r.rcp_no;
     if (!rceptNo) continue;
+
     // 정정본은 원문 ZIP이 없는 경우가 많다 — 원본을 우선한다
-    const isCorrection = /정정/.test(nm);
-    const cur = byYear.get(y);
-    if (!cur || (isCorrection === false && /정정/.test(cur.reportNm))) {
-      byYear.set(y, { rceptNo, reportNm: nm });
+    const key2 = `${p.year}-${p.quarter}`;
+    const cur = byPeriod.get(key2);
+    if (!cur || (!/정정/.test(nm) && /정정/.test(cur.reportNm))) {
+      byPeriod.set(key2, { bsnsYear: p.year, quarter: p.quarter, rceptNo, reportNm: nm });
     }
   }
-  return [...byYear.entries()]
-    .map(([bsnsYear, v]) => ({ bsnsYear, ...v }))
-    .sort((a, b) => b.bsnsYear - a.bsnsYear);
+  return [...byPeriod.values()]
+    .sort((a, b) => b.bsnsYear - a.bsnsYear || b.quarter - a.quarter);
 }
 
 /** 원문 ZIP → 평문 */
@@ -130,60 +157,68 @@ export function extractSections(text: string, perSection = 2_500): string {
  */
 export async function collectBizTimeline(
   ticker: string,
-  years = 5,
-): Promise<{ collected: number; skipped: number; years: number[] }> {
-  if (!isKoreanTicker(ticker)) return { collected: 0, skipped: 0, years: [] };
+  years = 4,
+): Promise<{ collected: number; skipped: number; periods: string[] }> {
+  const nil = { collected: 0, skipped: 0, periods: [] as string[] };
+  if (!isKoreanTicker(ticker)) return nil;
   const key = process.env["DART_API_KEY"];
-  if (!key) { console.warn("[biz-timeline] DART_API_KEY 없음"); return { collected: 0, skipped: 0, years: [] }; }
+  if (!key) { console.warn("[biz-timeline] DART_API_KEY 없음"); return nil; }
 
   const corpCode = await lookupCorpCode(ticker);
-  if (!corpCode) { console.warn(`[biz-timeline] ${ticker} corp_code 조회 실패`); return { collected: 0, skipped: 0, years: [] }; }
+  if (!corpCode) { console.warn(`[biz-timeline] ${ticker} corp_code 조회 실패`); return nil; }
 
-  const fromYear = new Date().getFullYear() - years - 1;
-  const reports = (await listAnnualReports(corpCode, key, fromYear)).slice(0, years);
-  if (!reports.length) { console.warn(`[biz-timeline] ${ticker} 사업보고서 없음`); return { collected: 0, skipped: 0, years: [] }; }
+  const fromYear = new Date().getFullYear() - years;
+  const reports = await listPeriodicReports(corpCode, key, fromYear);
+  if (!reports.length) { console.warn(`[biz-timeline] ${ticker} 정기공시 없음`); return nil; }
 
-  const { rows: have } = await pool.query<{ bsns_year: number }>(
-    `SELECT bsns_year FROM dart_biz_reports WHERE ticker = $1`, [ticker]);
-  const haveYears = new Set(have.map(r => Number(r.bsns_year)));
+  const { rows: have } = await pool.query<{ bsns_year: number; quarter: number }>(
+    `SELECT bsns_year, quarter FROM dart_biz_reports WHERE ticker = $1`, [ticker]);
+  const haveKeys = new Set(have.map(r => `${r.bsns_year}-${r.quarter}`));
 
   let collected = 0, skipped = 0;
-  const got: number[] = [];
+  const got: string[] = [];
 
   for (const rep of reports) {
-    if (haveYears.has(rep.bsnsYear)) { skipped++; got.push(rep.bsnsYear); continue; }
+    const k = `${rep.bsnsYear}-${rep.quarter}`;
+    const label = periodLabel(rep.bsnsYear, rep.quarter);
+    if (haveKeys.has(k)) { skipped++; got.push(label); continue; }
 
     const raw = await fetchReportText(rep.rceptNo, key);
-    if (!raw) { console.warn(`[biz-timeline] ${ticker} ${rep.bsnsYear}년 원문 실패 (${rep.reportNm})`); continue; }
+    if (!raw) { console.warn(`[biz-timeline] ${ticker} ${label} 원문 실패 (${rep.reportNm})`); continue; }
 
-    const content = extractSections(raw);
-    if (content.length < 300) { console.warn(`[biz-timeline] ${ticker} ${rep.bsnsYear}년 섹션 추출 실패`); continue; }
+    // 분기·반기는 짧게 뽑는다. 12개 기간을 연간과 같은 분량으로 넣으면 프롬프트가
+    // 20만자를 넘어 감당이 안 되고, 무엇보다 분기 보고서는 연간의 요약·증분이라
+    // 같은 내용이 반복된다. 변화가 드러나는 만큼만 담는다.
+    const content = extractSections(raw, rep.quarter === 4 ? 2_500 : 1_100);
+    if (content.length < 300) { console.warn(`[biz-timeline] ${ticker} ${label} 섹션 추출 실패`); continue; }
 
     await pool.query(
-      `INSERT INTO dart_biz_reports (ticker, corp_code, bsns_year, rcept_no, report_nm, content, char_count)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (ticker, bsns_year) DO UPDATE SET
+      `INSERT INTO dart_biz_reports
+         (ticker, corp_code, bsns_year, quarter, rcept_no, report_nm, content, char_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (ticker, bsns_year, quarter) DO UPDATE SET
          rcept_no=EXCLUDED.rcept_no, report_nm=EXCLUDED.report_nm,
          content=EXCLUDED.content, char_count=EXCLUDED.char_count, fetched_at=NOW()`,
-      [ticker, corpCode, rep.bsnsYear, rep.rceptNo, rep.reportNm, content, content.length],
+      [ticker, corpCode, rep.bsnsYear, rep.quarter, rep.rceptNo, rep.reportNm, content, content.length],
     );
     collected++;
-    got.push(rep.bsnsYear);
-    console.log(`[biz-timeline] ${ticker} ${rep.bsnsYear}년 저장 (${content.length}자)`);
+    got.push(label);
+    console.log(`[biz-timeline] ${ticker} ${label} 저장 (${content.length}자)`);
   }
 
-  return { collected, skipped, years: got.sort() };
+  return { collected, skipped, periods: got.reverse() };
 }
 
-/** 저장된 연도별 보고서를 오래된 것부터 */
+/** 저장된 기간별 보고서를 오래된 것부터 */
 export async function getBizTimeline(ticker: string): Promise<BizReportYear[]> {
   const { rows } = await pool.query<{
-    bsns_year: number; rcept_no: string; report_nm: string; content: string;
+    bsns_year: number; quarter: number; rcept_no: string; report_nm: string; content: string;
   }>(
-    `SELECT bsns_year, rcept_no, report_nm, content
-       FROM dart_biz_reports WHERE ticker = $1 ORDER BY bsns_year ASC`, [ticker]);
+    `SELECT bsns_year, quarter, rcept_no, report_nm, content
+       FROM dart_biz_reports WHERE ticker = $1
+      ORDER BY bsns_year ASC, quarter ASC`, [ticker]);
   return rows.map(r => ({
-    bsnsYear: Number(r.bsns_year), rceptNo: r.rcept_no,
-    reportNm: r.report_nm, content: r.content,
+    bsnsYear: Number(r.bsns_year), quarter: Number(r.quarter),
+    rceptNo: r.rcept_no, reportNm: r.report_nm, content: r.content,
   }));
 }

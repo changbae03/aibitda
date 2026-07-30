@@ -10,7 +10,7 @@
  */
 
 import { ai, geminiSemaphore } from "./analysis/gemini.js";
-import { getBizTimeline, type BizReportYear } from "./biz-timeline.js";
+import { getBizTimeline, periodLabel, type BizReportYear } from "./biz-timeline.js";
 
 /**
  * 비교 축. 순서가 곧 보고서 목차다.
@@ -24,8 +24,10 @@ const AXES = `
    비중이 안 나와 있으면 "공시에 비중 미기재"라고 적고 넘어갈 것.
 
 ② 새로 등장한 것 / 사라진 것
-   작년 보고서엔 없던 제품·사업·계약·법인이 올해 생겼나. 반대로 언급이 끊긴 것은?
-   각 항목에 **처음 등장한 연도**를 붙일 것. 이게 이 분석의 핵심이다.
+   직전 보고서엔 없던 제품·사업·계약·법인이 생겼나. 반대로 언급이 끊긴 것은?
+   각 항목에 **처음 등장한 기간을 분기까지** 붙일 것 (예: "2024년 3분기부터").
+   이게 이 분석의 핵심이다 — 분기보고서까지 받는 이유가 이 해상도 때문이다.
+   연간 보고서에만 있는 항목이면 "2024년 연간"이라고 적을 것.
 
 ③ 매출처·고객 집중도
    주요 매출처 수와 비중이 어떻게 변했나. 집중도가 오르면 위험, 내리면 분산이다.
@@ -57,7 +59,7 @@ const RULES = `
 export interface TimelineReport {
   ticker: string;
   companyName: string;
-  years: number[];
+  periods: string[];
   content: string;
 }
 
@@ -68,14 +70,20 @@ export interface TimelineReport {
  */
 function buildPrompt(companyName: string, timeline: BizReportYear[]): string {
   const body = timeline
-    .map(y => `\n═══════════ ${y.bsnsYear}년 사업보고서 ═══════════\n${y.content}`)
+    .map(y => `\n═══════════ ${periodLabel(y.bsnsYear, y.quarter)} (${y.reportNm}) ═══════════\n${y.content}`)
     .join("\n");
 
-  const span = `${timeline[0].bsnsYear}~${timeline[timeline.length - 1].bsnsYear}`;
+  const first = timeline[0];
+  const last = timeline[timeline.length - 1];
+  const span = `${periodLabel(first.bsnsYear, first.quarter)} ~ ${periodLabel(last.bsnsYear, last.quarter)}`;
 
   return `당신은 기업 공시를 오래 읽어온 애널리스트입니다.
-${companyName}의 사업보고서 ${timeline.length}개년(${span})을 나란히 놓고,
+${companyName}의 정기공시 ${timeline.length}개 기간(${span})을 시간 순으로 나란히 놓고,
 **이 회사가 어디에서 어디로 옮겨가고 있는지**를 정리하세요.
+
+분기·반기 보고서가 함께 들어 있습니다. 분기 보고서는 연간의 요약이라 내용이 겹치지만,
+**새 사업·계약·제품이 처음 나타나는 시점**은 분기 쪽이 먼저입니다. 그 시점을 잡는 것이
+이 자료를 분기까지 받은 이유입니다.
 
 ${RULES}
 
@@ -98,12 +106,12 @@ export async function analyzeBizTimeline(
 ): Promise<TimelineReport | null> {
   const timeline = await getBizTimeline(ticker);
   if (timeline.length < 2) {
-    console.warn(`[biz-timeline] ${ticker} 비교할 연도가 ${timeline.length}개뿐 — 분석 생략`);
+    console.warn(`[biz-timeline] ${ticker} 비교할 기간이 ${timeline.length}개뿐 — 분석 생략`);
     return null;
   }
 
   const prompt = buildPrompt(companyName, timeline);
-  console.log(`[biz-timeline] ${ticker} 분석 시작 — ${timeline.length}개년, 프롬프트 ${(prompt.length / 1000).toFixed(0)}k자`);
+  console.log(`[biz-timeline] ${ticker} 분석 시작 — ${timeline.length}개 기간, 프롬프트 ${(prompt.length / 1000).toFixed(0)}k자`);
 
   await geminiSemaphore.acquire();
   try {
@@ -120,7 +128,7 @@ export async function analyzeBizTimeline(
     }
     return {
       ticker, companyName,
-      years: timeline.map(t => t.bsnsYear),
+      periods: timeline.map(t => periodLabel(t.bsnsYear, t.quarter)),
       content,
     };
   } finally {
