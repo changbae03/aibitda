@@ -2096,6 +2096,175 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
   );
 }
 
+// ── catalyst_analysis 마크다운을 섹션별로 파싱해 시각화 ────────────────
+function parseCatalystSections(raw: string) {
+  const clean = raw.replace(/```[\s\S]*?```/g, "").replace(/\bVALUATION_DATA[\s\S]*?}/g, "");
+  const parts = clean.split(/\n(?=##\s)/);
+  const lead = parts[0]?.trim().startsWith("##") ? "" : parts[0]?.trim() ?? "";
+  const sections: { emoji: string; title: string; body: string }[] = [];
+  for (const part of parts) {
+    if (!part.trim().startsWith("##")) continue;
+    const nl = part.indexOf("\n");
+    const header = nl > 0 ? part.slice(2, nl).trim() : part.slice(2).trim();
+    const body = nl > 0 ? part.slice(nl + 1).trim() : "";
+    // emoji prefix if any
+    const emojiMatch = header.match(/^([\p{Emoji}\u200d]+)\s*/u);
+    sections.push({ emoji: emojiMatch?.[1] ?? "", title: header.replace(/^[\p{Emoji}\u200d]+\s*/u, ""), body });
+  }
+  return { lead, sections };
+}
+
+function ForwardTimeline({ body, accent }: { body: string; accent: string }) {
+  const lines = body.split("\n").filter(l => l.trim().startsWith("-") || l.trim().match(/^\d+\./));
+  if (lines.length === 0) return <p className="text-[13px] text-muted-foreground/70 leading-relaxed">{body}</p>;
+  return (
+    <div className="relative pl-5">
+      <div className="absolute left-[3px] top-1.5 bottom-3 w-px" style={{ background: `${accent}30` }} />
+      <div className="space-y-4">
+        {lines.map((line, i) => {
+          const text = line.replace(/^[-\d.]\s*/, "").trim();
+          const colonIdx = text.search(/[：:]/);
+          const date = colonIdx > 0 ? text.slice(0, colonIdx).trim() : null;
+          const event = colonIdx > 0 ? text.slice(colonIdx + 1).trim() : text;
+          return (
+            <div key={i} className="flex gap-3">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full mt-[6px] relative z-10" style={{ background: accent }} />
+              <div className="flex-1 min-w-0">
+                {date && <span className="text-[10.5px] font-mono font-semibold block mb-0.5" style={{ color: accent }}>{date}</span>}
+                <p className="text-[13px] text-foreground/80 leading-snug">{event}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CatalystBullets({ body }: { body: string }) {
+  const lines = body.split("\n").filter(l => l.trim().startsWith("-") || l.trim().match(/^\d+\./));
+  if (lines.length === 0) return <div className="prose-narrative"><MdBlock src={body} /></div>;
+  return (
+    <div className="space-y-3">
+      {lines.map((line, i) => {
+        const text = line.replace(/^[-\d.]\s*/, "").trim();
+        const isUp = /상승|긍정|호재|↑|강|상향|매수|개선|증가|확장/.test(text);
+        const isDown = /하락|부정|악재|↓|약|하향|매도|악화|감소|축소/.test(text);
+        const dotColor = isUp ? "#10B981" : isDown ? "#F87171" : "#F59E0B";
+        return (
+          <div key={i} className="flex gap-2.5 items-start">
+            <div className="w-1.5 h-1.5 rounded-full mt-[6px] shrink-0" style={{ background: dotColor }} />
+            <p className="text-[13px] text-foreground/80 leading-relaxed flex-1">{text}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent: string }) {
+  const { lead, sections } = parseCatalystSections(step.content ?? "");
+  // 섹션 키워드 매핑
+  const timelineSection = sections.find(s => /타임라인|timeline/i.test(s.title));
+  const catalystSection = sections.find(s => /촉매|catalyst/i.test(s.title));
+  const flowSection = sections.find(s => /수급|flow|smart|money/i.test(s.title));
+  const others = sections.filter(s => s !== timelineSection && s !== catalystSection && s !== flowSection);
+
+  return (
+    <div className="space-y-6">
+      {lead && (
+        <p className="text-[14px] leading-[1.85] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+          style={{ borderLeftColor: `${accent}70` }}>{lead}</p>
+      )}
+
+      {/* 핵심 촉매 */}
+      {catalystSection && (
+        <div>
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+            {isEn ? "Key catalysts (3–6M)" : "⚡ 핵심 촉매 (3-6개월)"}
+          </p>
+          <CatalystBullets body={catalystSection.body} />
+        </div>
+      )}
+
+      {/* 향후 이벤트 타임라인 */}
+      {timelineSection && (
+        <div className={catalystSection ? "pt-5 border-t border-border/30" : ""}>
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
+            {isEn ? "📅 Event timeline (12M)" : "📅 향후 12개월 이벤트 타임라인"}
+          </p>
+          <ForwardTimeline body={timelineSection.body} accent={accent} />
+        </div>
+      )}
+
+      {/* 수급 동향 */}
+      {flowSection && (
+        <div className="pt-5 border-t border-border/30">
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+            {isEn ? "💰 Smart money flow" : "💰 수급 동향"}
+          </p>
+          <div className="prose-narrative text-[13.5px]">
+            <MdBlock src={flowSection.body} isEn={isEn} />
+          </div>
+        </div>
+      )}
+
+      {/* 기타 섹션 fallback */}
+      {others.map((s, i) => (
+        <div key={i} className="pt-5 border-t border-border/30">
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">{s.title}</p>
+          <div className="prose-narrative text-[13.5px]"><MdBlock src={s.body} isEn={isEn} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── 투자 결론: 핵심 포인트 3개 렌더러 ────────────────────────────────────────
+function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
+  const content = step.content ?? "";
+
+  // ① ② ③ 파싱
+  const pointRegex = /([①②③])\s*([^\n]+)\n([\s\S]*?)(?=[①②③]|$)/g;
+  const points: { num: string; title: string; body: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = pointRegex.exec(content)) !== null) {
+    points.push({ num: m[1], title: m[2].trim(), body: m[3].trim() });
+  }
+
+  const COLORS = ["#6366F1", "#10B981", "#F59E0B"];
+  const BG = ["bg-indigo-500/10", "bg-emerald-500/10", "bg-amber-500/10"];
+  const BORDER = ["border-indigo-500/20", "border-emerald-500/20", "border-amber-500/20"];
+
+  if (points.length === 0) {
+    // 파싱 실패 시 마크다운 그대로
+    return (
+      <div className="prose-narrative px-1">
+        <MdBlock src={content} isEn={isEn} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {points.slice(0, 3).map((pt, i) => (
+        <div key={i} className={`rounded-xl border p-4 sm:p-5 ${BG[i]} ${BORDER[i]}`}>
+          <div className="flex items-center gap-3 mb-2.5">
+            <span
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[13px] font-bold shrink-0"
+              style={{ background: COLORS[i] }}
+            >
+              {i + 1}
+            </span>
+            <p className="font-bold text-[14px] text-foreground leading-tight">{pt.title}</p>
+          </div>
+          <p className="text-[13.5px] text-foreground/75 leading-[1.8] pl-10">{pt.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
   const [events, setEvents] = useState<StockNewsEvent[]>([]);
   const [summary, setSummary] = useState<string>("");
@@ -3523,12 +3692,11 @@ export default function AnalysisDetail() {
           <NarrativeSectionBlock
             num={2}
             title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
-            subtitle={isEn ? "DART filings · Historical flow · Hidden context · Financial deep-dive · Price action" : "과거 흐름 · 숨은 맥락 · 재무 변화 · 경영진 신호 · 주가"}
+            subtitle={isEn ? "DART filings · Historical flow · Hidden context · Management signals" : "과거 흐름 · 숨은 맥락 · 사업 변화 · 경영진 신호"}
             accent="#10B981"
-            pending={!dartStep && !compStep && !streamingDart && !streamingComp}
+            pending={!dartStep && !streamingDart}
             isEn={isEn}
           >
-            {/* ① 사업보고서 내러티브 — 과거→현재 흐름, 숨은 맥락 */}
             {dartStep ? (
               <ErrorBoundary fallback={null}>
                 <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
@@ -3539,54 +3707,78 @@ export default function AnalysisDetail() {
                 <span className="text-sm text-muted-foreground">{isEn ? "Reading DART filings…" : "사업보고서 분析 중…"}</span>
               </div>
             ) : null}
-
-            {/* ② 사업보고서 기반 실적 추이 차트 */}
-            {(dartStep || isComplete) && (
-              <div className="mt-6 pt-6 border-t border-border/40">
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
-                  {isEn ? "Earnings trend (filing-based)" : "사업보고서 기반 실적 추이"}
-                </p>
-                <div className="rounded-xl bg-muted/30 p-3">
-                  <FinancialChart ticker={analysis.ticker} isEn={isEn} />
-                </div>
-              </div>
-            )}
-
-            {/* ③ 재무 심층 분析 — 사업보고서 맥락과 연결된 수치 해석 */}
-            {compStep ? (
-              <div className="mt-6 pt-6 border-t border-border/40">
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
-                  {isEn ? "Financial deep-dive" : "수치로 보는 재무 심층 분析"}
-                </p>
-                <ErrorBoundary fallback={null}>
-                  <NarrativeStepContent step={compStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
-                </ErrorBoundary>
-              </div>
-            ) : streamingComp ? (
-              <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
-                <span className="text-sm text-muted-foreground">{isEn ? "Connecting numbers to filings…" : "재무 수치를 사업 흐름과 연결 중…"}</span>
-              </div>
-            ) : null}
-
-            {/* ④ 주가로 보는 사업 흐름 */}
-            {(isComplete || compStep) && (
-              <div className="mt-6 pt-6 border-t border-border/40">
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
-                  {isEn ? "Price action" : "주가에 반영된 사업 흐름"}
-                </p>
-                <ErrorBoundary fallback={null}>
-                  <StockChart
-                    ticker={analysis.ticker}
-                    companyName={analysis.companyName}
-                    currency={currency}
-                    isEn={isEn}
-                    validatedTargetPrice={(analysis as any).targetPrice ?? null}
-                  />
-                </ErrorBoundary>
-              </div>
-            )}
           </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 실적 분析 카드 ══ */}
+      {(() => {
+        const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
+        const streamingComp = streamingStep?.key === "company_analysis";
+        const showCard = isComplete || !!compStep || streamingComp ||
+          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        if (!showCard) return null;
+        const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.1 }}
+            className="rounded-2xl bg-card border border-border/50 overflow-hidden"
+          >
+            {/* 상단 accent 라인 */}
+            <div className="h-0.5 w-full bg-gradient-to-r from-emerald-500/30 via-emerald-400/70 to-emerald-500/30" />
+
+            {/* 헤더 */}
+            <div className="px-5 sm:px-6 pt-4 pb-4 flex items-center gap-3" style={{ borderBottom: "1px solid hsl(var(--border) / 0.3)" }}>
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <BarChart2 className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-[14px] font-bold text-foreground leading-tight">{isEn ? "Financial Analysis" : "실적 분析"}</p>
+                <p className="text-[11px] text-muted-foreground/55 mt-0.5">{isEn ? "Earnings trend · Deep-dive · Price action" : "실적 추이 · 재무 심층 · 주가 흐름"}</p>
+              </div>
+            </div>
+
+            <div className="divide-y divide-border/30">
+              {/* 실적 차트 */}
+              <div className="px-5 sm:px-6 py-5">
+                <FinancialChart ticker={analysis.ticker} isEn={isEn} />
+              </div>
+
+              {/* 재무 심층 분析 */}
+              {compStep ? (
+                <div className="px-5 sm:px-6 py-5">
+                  <ErrorBoundary fallback={null}>
+                    <NarrativeStepContent step={compStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+                  </ErrorBoundary>
+                </div>
+              ) : streamingComp ? (
+                <div className="px-5 sm:px-6 py-6 flex items-center gap-3 justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  <span className="text-sm text-muted-foreground">{isEn ? "Connecting numbers to filings…" : "재무 수치를 사업 흐름과 연결 중…"}</span>
+                </div>
+              ) : null}
+
+              {/* 주가 흐름 */}
+              {(isComplete || !!compStep) && (
+                <div className="px-5 sm:px-6 py-5">
+                  <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+                    {isEn ? "Price action" : "주가 흐름"}
+                  </p>
+                  <ErrorBoundary fallback={null}>
+                    <StockChart
+                      ticker={analysis.ticker}
+                      companyName={analysis.companyName}
+                      currency={currency}
+                      isEn={isEn}
+                      validatedTargetPrice={(analysis as any).targetPrice ?? null}
+                    />
+                  </ErrorBoundary>
+                </div>
+              )}
+            </div>
+          </motion.div>
         );
       })()}
 
@@ -3616,20 +3808,17 @@ export default function AnalysisDetail() {
               <StockNewsTimeline ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />
             </div>
 
-            {/* ② 촉매 심층 분析 */}
+            {/* ② 촉매 + 향후 타임라인 */}
             {catStep ? (
               <div className="mt-6 pt-6 border-t border-border/40">
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
-                  {isEn ? "What this means — catalysts & risks" : "이 뉴스들이 가져올 변화 — 촉매 심층 분析"}
-                </p>
                 <ErrorBoundary fallback={null}>
-                  <NarrativeStepContent step={catStep} isEn={isEn} ticker={analysis.ticker} accent="#F59E0B" />
+                  <CatalystView step={catStep} isEn={isEn} accent="#F59E0B" />
                 </ErrorBoundary>
               </div>
             ) : streamingCat ? (
               <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing catalysts…" : "촉매·리스크 분析 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Building catalyst timeline…" : "촉매 & 향후 타임라인 생성 중…"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
@@ -3647,7 +3836,7 @@ export default function AnalysisDetail() {
           <NarrativeSectionBlock
             num={4}
             title={isEn ? "Investment conclusion" : "투자 결론"}
-            subtitle={isEn ? "Verdict · Target price · Scenarios · Entry checklist" : "투자의견 · 적정주가 · 시나리오 · 매수 전 체크리스트"}
+            subtitle={isEn ? "3 core investment points" : "핵심 투자 포인트 3가지"}
             accent="#FF8A7A"
             pending={!stratStep && !streamingStrat}
             isEn={isEn}
@@ -3655,20 +3844,11 @@ export default function AnalysisDetail() {
             {streamingStrat && !stratStep ? (
               <div className="flex items-center gap-3 py-8 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Writing investment conclusion…" : "투자 결론 작성 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Writing investment conclusion…" : "핵심 투자 포인트 정리 중…"}</span>
               </div>
             ) : stratStep ? (
               <ErrorBoundary fallback={null}>
-                <InvestmentStrategyCard
-                  step={stratStep}
-                  agent={agent ?? fallbackAgent}
-                  delay={0}
-                  ticker={analysis.ticker}
-                  companyName={analysis.companyName}
-                  isEn={isEn}
-                  validatedTargetPrice={(analysis as any).targetPrice ?? undefined}
-                  validatedVerdict={(analysis as any).investmentVerdict ?? undefined}
-                />
+                <InvestmentPointsView step={stratStep} isEn={isEn} />
               </ErrorBoundary>
             ) : null}
           </NarrativeSectionBlock>
