@@ -1010,11 +1010,11 @@ export default function NewAnalysis() {
               ) : (
                 <>
                   <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                    <span className="font-bold" style={{ color: "#FF8A7A" }}>DART 사업보고서</span>부터<br />
-                    투자 결론까지 AI가 읽어드립니다.
+                    AI 에이전트들이 사업보고서와<br />
+                    <span className="font-bold" style={{ color: "#FF8A7A" }}>기업의 행간</span>을 읽기 시작합니다.
                   </p>
                   <p className="text-[11.5px] text-muted-foreground">
-                    평균 3분 소요 · 사업보고서 · 실적 · 뉴스 · 촉매 종합 분석
+                    평균 3분 · 사업보고서 · 실적 · 뉴스 · 촉매 분석
                   </p>
                 </>
               )}
