@@ -2493,37 +2493,33 @@ function NarrativeSectionBlock({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: num * 0.06 }}
-      className="rounded-2xl bg-card overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      transition={{ duration: 0.35, delay: num * 0.05 }}
+      className="rounded-2xl bg-card border border-border/50 overflow-hidden"
     >
-      {/* 섹션 상단 컬러 라인 */}
-      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${accent}cc 0%, ${accent}22 100%)` }} />
-
       {/* 챕터 헤더 */}
-      <div className="px-5 sm:px-7 pt-5 pb-4 border-b border-border/40">
+      <div className="px-5 sm:px-6 pt-4 pb-3.5" style={{ borderBottom: `1px solid ${accent}22` }}>
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center font-black text-[15px] text-white shrink-0"
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[13px] text-white shrink-0"
             style={{ background: accent }}
           >
             {num}
           </div>
-          <div>
-            <h2 className="text-[18px] font-black text-foreground leading-tight">{title}</h2>
-            <p className="text-[12px] text-muted-foreground mt-0.5">{subtitle}</p>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-foreground leading-tight tracking-tight">{title}</h2>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{subtitle}</p>
           </div>
         </div>
       </div>
 
       {/* 본문 */}
-      <div className="px-5 sm:px-7 py-6">
+      <div className="px-5 sm:px-6 py-5">
         {pending ? (
-          <div className="flex items-center gap-3 py-10 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
-            <span className="text-sm text-muted-foreground">{isEn ? "Analyzing…" : "분析 중…"}</span>
+          <div className="flex items-center gap-3 py-8 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분析 중…"}</span>
           </div>
         ) : children}
       </div>
@@ -2548,16 +2544,18 @@ function NarrativeStepContent({
   const accentColor = accent ?? "hsl(var(--primary))";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {leadPara && (
-        <div
-          className="px-4 py-3.5 rounded-xl bg-muted/50 text-[15px] leading-[1.95] text-foreground/90 border-l-[3px]"
-          style={{ borderLeftColor: accentColor }}
+        <p
+          className="text-[14.5px] leading-[1.9] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+          style={{ borderLeftColor: `${accentColor}80` }}
         >
           {leadPara}
-        </div>
+        </p>
       )}
-      <MdBlock src={body} isEn={isEn} />
+      <div className="prose-narrative">
+        <MdBlock src={body} isEn={isEn} />
+      </div>
       {step.stepKey === "dart_report_analysis" && ticker && (
         <DartFinancialCharts ticker={ticker} isEn={isEn} color={accentColor} />
       )}
@@ -3168,10 +3166,10 @@ export default function AnalysisDetail() {
         )}
       </AnimatePresence>
 
-      <div className="mt-5 sm:mt-6 space-y-5 sm:space-y-6">
+      <div className="mt-4 sm:mt-5 space-y-3.5 sm:space-y-4">
 
       {/* ── Report Hero ─────────────────────────────────────────────── */}
-      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden border border-border/50">
 
         {/* 상단 컬러 스트라이프 */}
         <div className={cn(
