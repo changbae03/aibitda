@@ -105,6 +105,6 @@ export const ANALYSIS_STEPS_ORDER = [
   "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
-  "investment_thesis",
   "investment_strategy",
+  "investment_thesis",
 ] as const;

@@ -62,8 +62,8 @@ export const STEP_ORDER: AgentKey[] = [
   "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
-  "investment_thesis",
   "investment_strategy",
+  "investment_thesis",
 ];
 
 // ─── 섹터별 분석 템플릿 ──────────────────────────────────────────────────────
@@ -2347,7 +2347,11 @@ export function buildPrompt(
   //   - investment_strategy 단계의 company_analysis / relative_valuation:
   //     CHAIN-HANDOFF(실적·적정주가 수치)가 끝에 있으므로 앞 400자 + 끝 1,800자 전달
   //   - 그 외 단계: 앞 700자 (맥락·방향성만)
-  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "dart_report_analysis", "catalyst_analysis", "investment_thesis"];
+  // 각 단계에서 앞 400자 + 뒤 1,800자로 충분히 전달할 핵심 선행 단계 목록
+  const CRITICAL_STEPS: Record<string, string[]> = {
+    investment_strategy: ["company_analysis", "dart_report_analysis", "catalyst_analysis"],
+    investment_thesis:   ["company_analysis", "dart_report_analysis", "investment_strategy"],
+  };
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
@@ -2355,11 +2359,9 @@ export function buildPrompt(
             const stepNum = STEP_ORDER.indexOf(s.stepKey as AgentKey);
             const label = stepNum === 0 ? "팀장 브리핑" : s.agentName;
             const isLastStep = i === previousSteps.length - 1;
-            // investment_strategy 단계에서 company_analysis·relative_valuation은
-            // CHAIN-HANDOFF 수치(실적·적정주가)가 끝에 있으므로 tail도 포함
+            // 핵심 선행 단계: 앞 400자 + 뒤 1,800자 전달
             const isCriticalForStrategy =
-              stepKey === "investment_strategy" &&
-              CRITICAL_STEPS_FOR_STRATEGY.includes(s.stepKey);
+              CRITICAL_STEPS[stepKey]?.includes(s.stepKey) ?? false;
             let trimmed: string;
             if (isLastStep) {
               // 직전 단계: 앞 500자(개요) + 뒤 2,500자(최종 수치·결론)
