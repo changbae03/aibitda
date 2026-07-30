@@ -43,6 +43,7 @@ import {
   Users,
   AlertTriangle,
   Star,
+  Minus,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -2095,6 +2096,160 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
   );
 }
 
+// ── catalyst_analysis 마크다운을 섹션별로 파싱해 시각화 ────────────────
+function parseCatalystSections(raw: string) {
+  const clean = raw.replace(/```[\s\S]*?```/g, "").replace(/\bVALUATION_DATA[\s\S]*?}/g, "");
+  const parts = clean.split(/\n(?=##\s)/);
+  const lead = parts[0]?.trim().startsWith("##") ? "" : parts[0]?.trim() ?? "";
+  const sections: { emoji: string; title: string; body: string }[] = [];
+  for (const part of parts) {
+    if (!part.trim().startsWith("##")) continue;
+    const nl = part.indexOf("\n");
+    const header = nl > 0 ? part.slice(2, nl).trim() : part.slice(2).trim();
+    const body = nl > 0 ? part.slice(nl + 1).trim() : "";
+    // emoji prefix if any
+    const emojiMatch = header.match(/^([\p{Emoji}\u200d]+)\s*/u);
+    sections.push({ emoji: emojiMatch?.[1] ?? "", title: header.replace(/^[\p{Emoji}\u200d]+\s*/u, ""), body });
+  }
+  return { lead, sections };
+}
+
+function ForwardTimeline({ body, accent }: { body: string; accent: string }) {
+  const lines = body.split("\n").filter(l => l.trim().startsWith("-") || l.trim().match(/^\d+\./));
+  if (lines.length === 0) return <p className="text-[13px] text-muted-foreground/70 leading-relaxed">{body}</p>;
+  return (
+    <div className="relative pl-5">
+      <div className="absolute left-[3px] top-1.5 bottom-3 w-px" style={{ background: `${accent}30` }} />
+      <div className="space-y-4">
+        {lines.map((line, i) => {
+          const text = line.replace(/^[-\d.]\s*/, "").trim();
+          const colonIdx = text.search(/[：:]/);
+          const date = colonIdx > 0 ? text.slice(0, colonIdx).trim() : null;
+          const event = colonIdx > 0 ? text.slice(colonIdx + 1).trim() : text;
+          return (
+            <div key={i} className="flex gap-3">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full mt-[6px] relative z-10" style={{ background: accent }} />
+              <div className="flex-1 min-w-0">
+                {date && <span className="text-[10.5px] font-mono font-semibold block mb-0.5" style={{ color: accent }}>{date}</span>}
+                <p className="text-[13px] text-foreground/80 leading-snug">{event}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CatalystBullets({ body }: { body: string }) {
+  const lines = body.split("\n").filter(l => l.trim().startsWith("-") || l.trim().match(/^\d+\./));
+  if (lines.length === 0) return <div className="prose-narrative"><MdBlock src={body} /></div>;
+  return (
+    <div className="space-y-3">
+      {lines.map((line, i) => {
+        const text = line.replace(/^[-\d.]\s*/, "").trim();
+        const isUp = /상승|긍정|호재|↑|강|상향|매수|개선|증가|확장/.test(text);
+        const isDown = /하락|부정|악재|↓|약|하향|매도|악화|감소|축소/.test(text);
+        const dotColor = isUp ? "#10B981" : isDown ? "#F87171" : "#F59E0B";
+        return (
+          <div key={i} className="flex gap-2.5 items-start">
+            <div className="w-1.5 h-1.5 rounded-full mt-[6px] shrink-0" style={{ background: dotColor }} />
+            <p className="text-[13px] text-foreground/80 leading-relaxed flex-1">{text}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent: string }) {
+  const { lead, sections } = parseCatalystSections(step.content ?? "");
+  // 섹션 키워드 매핑
+  const timelineSection = sections.find(s => /타임라인|timeline/i.test(s.title));
+  const catalystSection = sections.find(s => /촉매|catalyst/i.test(s.title));
+  const flowSection = sections.find(s => /수급|flow|smart|money/i.test(s.title));
+  const others = sections.filter(s => s !== timelineSection && s !== catalystSection && s !== flowSection);
+
+  return (
+    <div className="space-y-6">
+      {lead && (
+        <p className="text-[14px] leading-[1.85] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+          style={{ borderLeftColor: `${accent}70` }}>{lead}</p>
+      )}
+
+      {/* 향후 주목할 이벤트 (핵심 촉매 + 타임라인 통합) */}
+      {(catalystSection || timelineSection) && (
+        <div>
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+            {isEn ? "Events to watch" : "향후 주목할 이벤트"}
+          </p>
+          {catalystSection && <CatalystBullets body={catalystSection.body} />}
+        </div>
+      )}
+
+      {/* 수급 동향 */}
+      {flowSection && (
+        <div className="pt-5 border-t border-border/30">
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+            {isEn ? "💰 Smart money flow" : "💰 수급 동향"}
+          </p>
+          <div className="prose-narrative text-[13.5px]">
+            <MdBlock src={flowSection.body} isEn={isEn} />
+          </div>
+        </div>
+      )}
+
+      {/* 기타 섹션 fallback */}
+      {others.map((s, i) => (
+        <div key={i} className="pt-5 border-t border-border/30">
+          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">{s.title}</p>
+          <div className="prose-narrative text-[13.5px]"><MdBlock src={s.body} isEn={isEn} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── 투자 결론: 핵심 포인트 3개 렌더러 ────────────────────────────────────────
+function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
+  const content = step.content ?? "";
+
+  // ① ② ③ 파싱 — 한 줄 또는 여러 줄 모두 지원
+  const pointRegex = /[①②③]\s*([\s\S]*?)(?=[①②③]|$)/g;
+  const points: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = pointRegex.exec(content)) !== null) {
+    const text = m[1].trim();
+    if (text) points.push(text);
+  }
+
+  const COLORS = ["#6366F1", "#10B981", "#F59E0B"];
+
+  if (points.length === 0) {
+    return (
+      <div className="prose-narrative px-1">
+        <MdBlock src={content} isEn={isEn} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {points.slice(0, 3).map((text, i) => (
+        <div key={i} className="flex items-start gap-3">
+          <span
+            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 mt-0.5"
+            style={{ background: COLORS[i] }}
+          >
+            {i + 1}
+          </span>
+          <p className="text-[13.5px] text-foreground/80 leading-[1.75] flex-1">{text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
   const [events, setEvents] = useState<StockNewsEvent[]>([]);
   const [summary, setSummary] = useState<string>("");
@@ -2457,6 +2612,149 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Phase indicator (성장/정체/축소) ──────────────────────────────────────────
+function PhaseTag({ verdict, isEn }: { verdict: string | null; isEn: boolean }) {
+  if (!verdict) return null;
+  const v = verdict.toLowerCase();
+  if (v.includes("buy")) return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+      <TrendingUp className="w-3.5 h-3.5" /> {isEn ? "Growth Phase" : "성장 단계"}
+    </span>
+  );
+  if (v.includes("sell")) return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60">
+      <TrendingDown className="w-3.5 h-3.5" /> {isEn ? "Contraction Phase" : "축소 단계"}
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+      <Minus className="w-3.5 h-3.5" /> {isEn ? "Stabilization Phase" : "정체 단계"}
+    </span>
+  );
+}
+
+// ── Narrative section wrapper ─────────────────────────────────────────────────
+function NarrativeSectionBlock({
+  num, title, subtitle, accent, children, pending = false, isEn = false,
+}: {
+  num: number; title: string; subtitle: string; accent: string;
+  children?: React.ReactNode; pending?: boolean; isEn?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: num * 0.05 }}
+      className="rounded-2xl bg-card border border-border/50 overflow-hidden"
+    >
+      {/* 챕터 헤더 */}
+      <div className="px-5 sm:px-6 pt-4 pb-3.5" style={{ borderBottom: `1px solid ${accent}22` }}>
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[13px] text-white shrink-0"
+            style={{ background: accent }}
+          >
+            {num}
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-foreground leading-tight tracking-tight">{title}</h2>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{subtitle}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 본문 */}
+      <div className="px-5 sm:px-6 py-5">
+        {pending ? (
+          <div className="flex items-center gap-3 py-8 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분析 중…"}</span>
+          </div>
+        ) : children}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── 단일 스텝 컨텐츠 (어코디언 없이 산문체로) ────────────────────────────────
+function NarrativeStepContent({
+  step, isEn = false, ticker, accent, compact = false,
+}: {
+  step: any; isEn?: boolean; ticker?: string; accent?: string; compact?: boolean;
+}) {
+  const raw = (step.content ?? "")
+    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분析 요약")
+    .replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");  // 헤딩 숫자 번호 제거 (## 5. 제목 → ## 제목)
+  const processed = stripPromptInstructions(stripEstimationLabels(
+    step.stepKey === "company_analysis" ? stripValuationData(raw) : raw,
+  ));
+
+  const leadIdx = processed.search(/(?:^|\n)## /);
+  const leadPara = leadIdx > 0 ? processed.slice(0, leadIdx).trim() : "";
+  const body = leadIdx >= 0 ? processed.slice(leadIdx) : processed;
+  const accentColor = accent ?? "hsl(var(--primary))";
+
+  // compact 모드: 리드 문장 + 각 ## 섹션의 첫 단락만 digest로 표시
+  if (compact) {
+    // ## 섹션 단위로 분리
+    const sections = processed.split(/\n(?=## )/);
+    const lead = sections[0]?.trim() ?? "";
+
+    // 각 섹션에서 제목 + 첫 단락 추출 (최대 3개)
+    const digests = sections.slice(1).map(sec => {
+      const nlIdx = sec.indexOf('\n');
+      const header = nlIdx > 0 ? sec.slice(3, nlIdx).trim() : sec.slice(3).trim();
+      const rest = nlIdx > 0 ? sec.slice(nlIdx + 1).trim() : '';
+      // 첫 단락: 빈 줄이나 다음 헤더 전까지
+      const firstPara = rest.split(/\n\n|\n(?=#{1,3} )/)[0]?.trim() ?? '';
+      return { header, body: firstPara };
+    }).filter(d => d.body.length > 20).slice(0, 4);
+
+    return (
+      <div className="space-y-5">
+        {lead && (
+          <p
+            className="text-[14px] leading-[1.85] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+            style={{ borderLeftColor: `${accentColor}70` }}
+          >
+            {lead}
+          </p>
+        )}
+        {digests.length > 0 && (
+          <div className="divide-y divide-border/30">
+            {digests.map((d, i) => (
+              <div key={i} className={i === 0 ? "pb-4" : "py-4"}>
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-2">
+                  {d.header}
+                </p>
+                <div className="prose-narrative text-[13.5px] leading-relaxed">
+                  <MdBlock src={d.body} isEn={isEn} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {leadPara && (
+        <p
+          className="text-[14.5px] leading-[1.9] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+          style={{ borderLeftColor: `${accentColor}80` }}
+        >
+          {leadPara}
+        </p>
+      )}
+      <div className="prose-narrative">
+        <MdBlock src={body} isEn={isEn} />
       </div>
     </div>
   );
@@ -2956,8 +3254,8 @@ export default function AnalysisDetail() {
                 {/* 본문 */}
                 <p className="text-[13px] leading-relaxed text-muted-foreground">
                   {isEn
-                    ? "7 specialized AI agents collaborated — covering macro, financials, valuation, technicals, and catalysts — to generate this report. This is not investment advice. All investment decisions and their outcomes are solely your responsibility."
-                    : "매크로·재무·밸류에이션·기술적 분석·투자 촉매 전문 AI 에이전트 7명이 협업해 작성한 결과물입니다. 본 서비스는 투자 자문이 아니며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
+                    ? "AI agents read DART filings, earnings, news, and catalysts to surface what lies between the lines of a company’s disclosures. This is not investment advice. All investment decisions and their outcomes are solely your responsibility."
+                    : "DART 사업보고서와 기업의 행간을 AI 에이전트들이 읽고 분석한 결과물입니다. 투자 자문이 아니며, 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
                 </p>
 
                 {/* AI 정확도 안내 */}
@@ -3065,50 +3363,54 @@ export default function AnalysisDetail() {
         )}
       </AnimatePresence>
 
-      <div className="flex gap-6 items-start mt-5 sm:mt-6">
-        <StepNavSidebar steps={analysis.steps} isEn={isEn} />
-        <div className="flex-1 min-w-0 space-y-5 sm:space-y-6">
+      <div className="mt-4 sm:mt-5 space-y-3.5 sm:space-y-4">
 
       {/* ── Report Hero ─────────────────────────────────────────────── */}
-      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <div ref={headerRef} className="rounded-2xl overflow-hidden border border-border/50 relative bg-card">
+
+        {/* 방향성 글로우 배경 */}
+        {headerLivePrice && headerLivePrice.change != null && (
+          <div className={cn(
+            "absolute inset-0 pointer-events-none",
+            headerLivePrice.change >= 0
+              ? "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(142_76%_36%/0.07),transparent)]"
+              : "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(0_84%_60%/0.07),transparent)]"
+          )} />
+        )}
 
         {/* 상단 컬러 스트라이프 */}
         <div className={cn(
-          "h-1 w-full",
+          "h-[3px] w-full relative z-10",
           isComplete && effectiveVerdict
             ? ["strong buy", "buy"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+              ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500/20"
               : ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-rose-500 to-orange-400"
-              : "bg-gradient-to-r from-amber-400 to-yellow-300"
-            : "bg-gradient-to-r from-primary/40 to-primary/20"
+              ? "bg-gradient-to-r from-rose-500 via-orange-400 to-rose-500/20"
+              : "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400/20"
+            : "bg-gradient-to-r from-primary/60 via-primary/30 to-transparent"
         )} />
 
-        <div className="p-5 sm:p-6">
+        <div className="relative z-10 p-5 sm:p-6">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 sm:gap-6">
 
             {/* ── 왼쪽: 종목 정보 ── */}
             <div className="flex-1 min-w-0">
 
-              {/* 회사명 + 배지 */}
-              <div className="flex items-start justify-between gap-3 mb-1">
+              {/* 회사명 + 티커 인라인 + 상태 배지 */}
+              <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="min-w-0">
-                  {isEn ? (
-                    <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
-                      {analysis.englishName || analysis.companyName}
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <h1 className="text-[1.75rem] md:text-[2.1rem] font-display font-extrabold text-foreground leading-tight tracking-[-0.02em]">
+                      {isEn ? (analysis.englishName || analysis.companyName) : analysis.companyName}
                     </h1>
-                  ) : (
-                    <>
-                      <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
-                        {analysis.companyName}
-                      </h1>
-                      {analysis.englishName && (
-                        <p className="text-xs text-muted-foreground/70 mt-0.5 font-normal">{analysis.englishName}</p>
-                      )}
-                    </>
+                    <span className="font-mono text-[11px] font-bold text-primary/80 bg-primary/8 px-2 py-0.5 rounded-md border border-primary/15 self-end mb-0.5 shrink-0">
+                      {analysis.ticker}
+                    </span>
+                  </div>
+                  {!isEn && analysis.englishName && (
+                    <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-normal">{analysis.englishName}</p>
                   )}
                 </div>
-                {/* 상태 배지 */}
                 <span className={cn(
                   "shrink-0 mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full border",
                   isComplete
@@ -3119,18 +3421,18 @@ export default function AnalysisDetail() {
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 animate-pulse"
                         : "bg-warning/10 text-warning border-warning/20 animate-pulse"
                 )}>
-                  {isComplete ? (isEn ? 'Complete' : '분석 완료')
+                  {isComplete ? (isEn ? 'Complete' : '분析 완료')
                     : isError ? (isEn ? 'Failed' : '실패')
                     : analysis.status === 'queued' ? (isEn ? 'Queued' : '대기 중')
-                    : (isEn ? 'In Progress' : '분석 중')}
+                    : (isEn ? 'In Progress' : '분析 중')}
                 </span>
               </div>
 
-              {/* 현재가 + 등락률 */}
-              <div className="flex items-baseline gap-2.5 mt-3 mb-4">
+              {/* 현재가 + 등락률 pill */}
+              <div className="flex items-end gap-3 mb-5">
                 {headerLivePrice ? (
                   <>
-                    <span className="text-3xl md:text-4xl font-black tabular-nums tracking-tight text-foreground">
+                    <span className="text-[2.75rem] md:text-[3.25rem] font-black tabular-nums tracking-[-0.035em] leading-none text-foreground">
                       {headerLivePrice.currency === "USD"
                         ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : isEn
@@ -3139,34 +3441,68 @@ export default function AnalysisDetail() {
                     </span>
                     {headerLivePrice.change != null && (
                       <span className={cn(
-                        "text-base font-bold",
-                        headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                        "inline-flex items-center gap-1 text-[13px] font-bold px-2.5 py-1 rounded-full mb-1.5 shrink-0 border",
+                        headerLivePrice.change >= 0
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                          : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
                       )}>
                         {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
                       </span>
                     )}
                   </>
                 ) : (
-                  <div className="h-10 w-36 bg-muted/50 rounded-lg animate-pulse" />
+                  <div className="flex items-end gap-3">
+                    <div className="h-12 w-44 bg-muted/50 rounded-lg animate-pulse" />
+                    <div className="h-7 w-20 bg-muted/40 rounded-full animate-pulse mb-1.5" />
+                  </div>
                 )}
               </div>
 
-              {/* 지표 그리드 */}
+              {/* 52주 레인지 바 */}
               {(() => {
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-                const fmtPrice = (v: number | null) => {
+                const fmtP = (v: number | null) => {
                   if (v == null) return "—";
                   if (currency === "USD") return `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
                   return `₩${Math.round(v).toLocaleString("ko-KR")}`;
                 };
+                const st = headerTickerStats;
+                if (!st?.week52Low || !st?.week52High || !headerLivePrice) return null;
+                const lo = st.week52Low, hi = st.week52High, cur = headerLivePrice.price;
+                const pct = hi > lo ? Math.max(2, Math.min(98, ((cur - lo) / (hi - lo)) * 100)) : 50;
+                const isUp = headerLivePrice.change != null ? headerLivePrice.change >= 0 : true;
+                return (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-[10px] text-muted-foreground/50 mb-1.5 tabular-nums">
+                      <span>{isEn ? "52W Low " : "52주 저 "}<span className="font-semibold text-muted-foreground/70">{fmtP(lo)}</span></span>
+                      <span className="text-muted-foreground/35 hidden sm:block">{isEn ? "52-week range" : "52주 레인지"}</span>
+                      <span><span className="font-semibold text-muted-foreground/70">{fmtP(hi)}</span>{isEn ? " 52W High" : " 52주 고"}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/60 relative overflow-visible">
+                      <div className="h-full rounded-full" style={{
+                        width: `${pct}%`,
+                        background: isUp
+                          ? "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#10B981)"
+                          : "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#F87171)",
+                      }} />
+                      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-background shadow-sm"
+                        style={{ left: `${pct}%`, background: isUp ? "#10B981" : "#F87171" }} />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 지표 칩 */}
+              {(() => {
+                const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
                 const fmtVol = (v: number | null) => {
-                  if (v == null) return "—";
+                  if (v == null) return null;
                   if (v >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
                   if (v >= 1e4) return `${Math.round(v / 1e3)}K`;
                   return v.toLocaleString();
                 };
                 const fmtMC = (v: number | null, cur: string) => {
-                  if (v == null) return "—";
+                  if (v == null) return null;
                   if (cur === "USD") {
                     if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
                     if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
@@ -3177,53 +3513,51 @@ export default function AnalysisDetail() {
                 };
                 const st = headerTickerStats;
                 const mc = headerMarketCap;
-                const metrics = [
-                  { label: isEn ? "Mkt Cap" : "시가총액",  value: fmtMC(mc?.value ?? null, mc?.currency ?? "KRW") },
-                  { label: isEn ? "PER" : "PER",            value: st?.per != null ? `${st.per.toFixed(1)}x` : "—" },
-                  { label: isEn ? "PBR" : "PBR",            value: st?.pbr != null ? `${st.pbr.toFixed(2)}x` : "—" },
-                  { label: isEn ? "52W High" : "52주 고",   value: fmtPrice(st?.week52High ?? null) },
-                  { label: isEn ? "52W Low" : "52주 저",    value: fmtPrice(st?.week52Low ?? null) },
-                  ...(st?.volume != null ? [{ label: isEn ? "Volume" : "거래량", value: fmtVol(st.volume) }] : []),
-                ];
-                const isLoading = !st && !mc;
+                const chips = [
+                  { label: isEn ? "Mkt Cap" : "시총", value: fmtMC(mc?.value ?? null, mc?.currency ?? currency) },
+                  { label: "PER", value: st?.per != null ? `${st.per.toFixed(1)}x` : null },
+                  { label: "PBR", value: st?.pbr != null ? `${st.pbr.toFixed(2)}x` : null },
+                  { label: isEn ? "Volume" : "거래량", value: st?.volume != null ? fmtVol(st.volume) : null },
+                ].filter(c => c.value != null) as { label: string; value: string }[];
+
+                if (!st && !mc) return (
+                  <div className="flex flex-wrap gap-1.5 mb-3.5">
+                    {[80, 60, 64, 72].map((w, i) => (
+                      <div key={i} className="h-7 rounded-lg bg-muted/50 animate-pulse" style={{ width: w }} />
+                    ))}
+                  </div>
+                );
                 return (
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border/40 rounded-xl overflow-hidden border border-border/40 mb-4">
-                    {isLoading
-                      ? Array.from({ length: 5 }).map((_, i) => (
-                          <div key={i} className="bg-card px-3 py-2.5 space-y-1.5 animate-pulse">
-                            <div className="h-2 w-10 bg-muted rounded" />
-                            <div className="h-3 w-14 bg-muted/70 rounded" />
-                          </div>
-                        ))
-                      : metrics.map((m) => (
-                          <div key={m.label} className="bg-card px-3 py-2.5">
-                            <p className="text-[10px] text-muted-foreground/60 font-medium mb-0.5">{m.label}</p>
-                            <p className="text-[11px] font-bold text-foreground tabular-nums whitespace-nowrap">{m.value}</p>
-                          </div>
-                        ))}
+                  <div className="flex flex-wrap gap-1.5 mb-3.5">
+                    {chips.map(c => (
+                      <div key={c.label} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/50">
+                        <span className="text-[10px] text-muted-foreground/55 font-medium">{c.label}</span>
+                        <span className="text-[11px] font-bold text-foreground tabular-nums">{c.value}</span>
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
 
               {/* 하단 메타 행 */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-                <span className="font-mono font-bold text-primary/80 bg-primary/8 px-2 py-0.5 rounded-md border border-primary/15">
-                  {analysis.ticker}
-                </span>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground/55">
                 <span className="flex items-center gap-1">
                   <Briefcase className="w-3 h-3 shrink-0" />
                   {isEn ? (analysis.industry ?? "—") : toKoreanIndustry(analysis.industry)}
                 </span>
+                <span className="text-border">·</span>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3 shrink-0" />
                   {isEn ? format(new Date(analysis.createdAt), 'MMM d, HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}
                 </span>
-                <span className="flex items-center gap-1 text-amber-600/70 dark:text-amber-400/70">
+                <span className="text-border">·</span>
+                <span className="flex items-center gap-1 text-amber-500/70">
                   <Zap className="w-3 h-3 shrink-0" />
-                  {isEn ? 'AI · For Reference' : 'AI 자동생성 · 참고용'}
+                  {isEn ? 'AI · Reference only' : 'AI 자동생성 · 참고용'}
                 </span>
               </div>
             </div>
+
 
             {/* ── 오른쪽: Verdict Card ── */}
             <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
@@ -3281,265 +3615,274 @@ export default function AnalysisDetail() {
       </div>
       </div>
 
-      {/* TL;DR 결론 카드 — 완료 시 최상단 표시 */}
-      {isComplete && effectiveVerdict && (
-        <TldrCard analysis={analysis} isEn={isEn} />
-      )}
-
-      {/* Bull / Base / Bear 시나리오 비교 카드 */}
-      {isComplete && (
-        <ScenarioCompareCard analysis={analysis} isEn={isEn} />
-      )}
-
-      {/* Financial Chart */}
-      <div className="bg-card rounded-2xl p-4 sm:p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
-        <FinancialChart ticker={analysis.ticker} isEn={isEn} />
-      </div>
-
-      {/* ETF 편입 현황 — 분석 진행과 동시에 표시 */}
-      <ETFSection
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        industry={analysis.industry ?? undefined}
-      />
-
-      {/* 주요 뉴스 타임라인 — 분석 진행과 동시에 표시 */}
-      <StockNewsTimeline
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        isEn={isEn}
-      />
-
-      {/* 주요 공시 — 뉴스 타임라인과 AI 파이프라인 사이 */}
-      <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
-
-      {/* 배당 정보 */}
-      <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
-
-      {/* 공매도 현황 */}
-      <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
-
-      {/* 애널리스트 컨센서스 */}
-      <AnalystConsensusPanel
-        ticker={analysis.ticker}
-        currentPrice={(analysis as any).startPrice ?? null}
-        isEn={isEn}
-      />
-
-      {/* 주요 주주 현황 */}
-      <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
-
-      {/* Peer Multiples Panel */}
-      <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
-
-      {/* Event Risk Score — 임시 비활성화 */}
-      {/* <EventRiskCard ticker={analysis.ticker} isEn={isEn} /> */}
-
-      {/* Version Timeline */}
-      <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
-
-      {/* Progress Track */}
-      <div className="bg-card rounded-2xl p-4 sm:p-5 print:hidden sticky top-12 z-20" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-base text-foreground">
-            {isEn ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
-          </h3>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {isComplete ? ANALYSIS_STEPS_ORDER.length : isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length}
+      {/* ── 분석 파이프라인 미니 진행바 ── */}
+      {!isComplete && !isError && (
+        <div className="print:hidden flex items-center gap-3 px-1">
+          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}%` }}
+            />
+          </div>
+          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+            {currentStepCount}/{ANALYSIS_STEPS_ORDER.length}{isEn ? " steps" : " 단계"}
+            {isStreaming && <span className="ml-1 text-primary/70 animate-pulse">{isEn ? " · analyzing…" : " · 분석 중…"}</span>}
           </span>
         </div>
-        
-        <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-          <div className="relative min-w-[480px]">
-            <div className="absolute top-4 left-4 right-4 h-0.5 bg-border z-0" />
-            <div 
-              className="absolute top-4 left-4 h-0.5 bg-primary z-0 transition-all duration-700 ease-out"
-              style={{ width: isComplete ? 'calc(100% - 2rem)' : `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
-            />
-            <div className="relative z-10 flex justify-between">
-              {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
-                const isDone = isComplete || idx < currentStepCount;
-                const isCurrent = !isComplete && idx === currentStepCount;
-                const agent = AGENTS[stepKey];
-                return (
-                  <button
-                    key={stepKey}
-                    disabled={!isDone}
-                    onClick={() => {
-                      const el = document.getElementById(`step-${stepKey}`);
-                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 transition-opacity",
-                      isDone ? "cursor-pointer hover:opacity-75" : "cursor-default"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
-                      isDone ? "bg-primary border-primary text-primary-foreground" : 
-                      isCurrent ? "bg-card border-primary text-primary animate-pulse" : 
-                      "bg-card border-border text-muted-foreground"
-                    )}>
-                      {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
-                    </div>
-                    <span className={cn(
-                      "text-[10px] font-medium leading-tight text-center max-w-[56px] break-keep",
-                      isDone ? "text-primary" : isCurrent ? "text-primary" : "text-muted-foreground"
-                    )}>
-                      {isEn ? (agent.nameEn ?? agent.name) : agent.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+      )}
+
+      {/* ── 큐 대기 중 ── */}
+      {analysis.status === 'queued' && (
+        <div className="print:hidden rounded-2xl bg-card border border-blue-500/20 p-5 flex items-center gap-4">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0" />
+          <div>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분析 대기 중"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "Will start when a slot opens." : "슬롯이 열리면 자동으로 시작됩니다."}</p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 빠른 요약 카드 — 데이터가 있는 만큼 표시 (진행 중에도 노출) */}
-      <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
-
-      {/* Analysis Steps Feed */}
-      <div className="space-y-4" style={{ overflowAnchor: "none" }}>
-        <AnimatePresence>
-          {[...analysis.steps]
-            .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
-            .map((step, idx) => (
-            <div key={step.id} id={`step-${step.stepKey}`}>
-              <ErrorBoundary fallback={null}>
-                <StepCard step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} companyNameEn={(analysis as any).englishName ?? undefined} startPrice={(analysis as any).startPrice ?? undefined} isEn={isEn} isSignedIn={isSignedIn} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
-              </ErrorBoundary>
-            </div>
-          ))}
-        </AnimatePresence>
-
-        {/* Streaming card + 대기 카드 — 단일 컨테이너로 높이 안정화 */}
-        <div className="print:hidden" style={{ overflowAnchor: "none", contain: "layout" }}>
-          <AnimatePresence mode="wait">
-            {streamingStep && (
-              <StreamingCard
-                key={streamingStep.key}
-                stepKey={streamingStep.key}
-                content={streamingStep.content}
-                qcStatus={streamingStep.qcStatus}
-                qcScore={streamingStep.qcScore}
-                qcFeedback={streamingStep.qcFeedback}
-                debateStatus={streamingStep.debateStatus}
-                isEn={isEn}
-              />
-            )}
-          </AnimatePresence>
+      {/* ── 분析 실패 ── */}
+      {isError && (
+        <div className="print:hidden rounded-2xl bg-card border border-red-500/20 p-5 flex items-center gap-4">
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+          <div>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분析 생성 실패"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "AI error — please re-run." : "AI 오류 — 다시 실행해 주세요."}</p>
+          </div>
         </div>
+      )}
 
-        {/* 큐 대기 중 UI */}
-        {analysis.status === 'queued' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="print:hidden bg-card border border-blue-500/20 rounded-xl p-5 flex items-center gap-4"
+      {/* ══ 섹션 1: 이 기업, 어떤 산업에서 어떻게 돈 버나요? ══ */}
+      {(() => {
+        const introStep = analysis.steps.find((s: any) => s.stepKey === "company_intro");
+        const indStep   = analysis.steps.find((s: any) => s.stepKey === "industry_analysis");
+        const streamingIntro = streamingStep?.key === "company_intro";
+        const streamingInd   = streamingStep?.key === "industry_analysis";
+        const hasAny = !!(introStep || indStep);
+        const activelyStreaming = streamingIntro || streamingInd;
+        if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
+        return (
+          <NarrativeSectionBlock
+            num={1}
+            title={isEn ? "What does this company do & what industry is it in?" : "이 기업, 어떤 산업에서 어떻게 돈 버나요?"}
+            subtitle={isEn ? "Business overview · Revenue model · Industry position" : "사업 개요 · 수익 구조 · 산업 내 포지션"}
+            accent="#6366F1"
+            pending={!hasAny && !activelyStreaming}
+            isEn={isEn}
           >
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Loader2 className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-spin" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-foreground">
-                {isEn ? 'Queued for Analysis' : '분석 대기 중'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {isEn
-                  ? 'Server is busy — your analysis will start automatically when a slot opens.'
-                  : '현재 서버가 분석 중입니다. 슬롯이 열리면 자동으로 시작됩니다.'}
-              </p>
-            </div>
-            <div className="text-xs text-blue-500 dark:text-blue-400 font-mono animate-pulse shrink-0">
-              {isEn ? 'Waiting…' : '대기 중…'}
-            </div>
-          </motion.div>
-        )}
-
-        {/* AI API 오류로 분석 실패 UI */}
-        {isError && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="print:hidden bg-card border border-red-500/20 rounded-xl p-5 flex items-center gap-4"
-          >
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-foreground">
-                {isEn ? 'Analysis Failed' : '분석 생성 실패'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {isEn
-                  ? 'AI service connection failed during analysis. Please re-run.'
-                  : 'AI 서비스 연결 오류로 분석을 완료하지 못했습니다. 분석을 다시 실행해 주세요.'}
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Pipeline running indicator */}
-        {!isComplete && !isError && analysis.status !== 'queued' && (
-          <div className="print:hidden">
-            {/* 스트리밍 중: 단계 번호 인라인 표시 */}
-            {isStreaming && (
-              <div className="flex items-center gap-2 px-3 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
-                <span className="text-xs text-muted-foreground">
-                  {currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length} {isEn ? "analyzing..." : "분석 중..."}
-                </span>
+            {/* 기업 소개 */}
+            {streamingIntro && !introStep ? (
+              <div className="flex items-center gap-3 py-10 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Reading company profile…" : "기업 개요 작성 중…"}</span>
               </div>
-            )}
-            {/* 단계 사이 대기 중: 다음 단계의 재치 있는 멘트 표시 */}
-            {!isStreaming && currentStepCount < ANALYSIS_STEPS_ORDER.length && (() => {
-              const nextKey = ANALYSIS_STEPS_ORDER[currentStepCount];
-              const agent = AGENTS[nextKey];
-              const color = AGENT_COLORS[nextKey] ?? "hsl(218, 67%, 44%)";
-              if (!agent) return null;
-              return (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="bg-card rounded-2xl overflow-hidden"
-                  style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
-                >
-                  <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
-                    <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-[16px] text-foreground leading-tight">{agent.role}</h4>
-                      <span className="text-[13px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
-                        <agent.icon className="w-3.5 h-3.5" style={{ color }} />
-                      </div>
-                      <span className="text-[11px] text-muted-foreground tabular-nums">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center justify-center py-8 px-5">
-                    <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
-                      <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
-                      <span>{isEn ? 'Writing analysis report...' : '분석 리포트 작성 중...'}</span>
-                    </div>
-                    {agent.description && (
-                      <p className="mt-2 text-[11px] text-muted-foreground/80 text-center font-mono tracking-wide">
-                        {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
-                      </p>
-                    )}
-                    <div className="mt-3 min-h-[36px] flex items-center justify-center px-4 w-full">
-                      <RotatingAnalysisMessage stepKey={nextKey} />
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })()}
-          </div>
-        )}
-      </div>
+            ) : introStep ? (
+              <ErrorBoundary fallback={null}>
+                <NarrativeStepContent step={introStep} isEn={isEn} ticker={analysis.ticker} accent="#6366F1" />
+              </ErrorBoundary>
+            ) : null}
+
+            {/* 산업 소개 — compact 다이제스트 */}
+            {indStep ? (
+              <div className={introStep ? "mt-6 pt-6 border-t border-border/40" : ""}>
+                <ErrorBoundary fallback={null}>
+                  <NarrativeStepContent step={indStep} isEn={isEn} ticker={analysis.ticker} accent="#6366F1" compact />
+                </ErrorBoundary>
+              </div>
+            ) : streamingInd ? (
+              <div className={`flex items-center gap-3 py-6 justify-center ${introStep ? "mt-6 pt-6 border-t border-border/40" : ""}`}>
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing industry…" : "업황 분析 중…"}</span>
+              </div>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 섹션 2 (핵심): 사업보고서로 읽는 이 기업의 진짜 이야기 ══ */}
+      {(() => {
+        const dartStep  = analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis");
+        const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
+        const streamingDart = streamingStep?.key === "dart_report_analysis";
+        const streamingComp = streamingStep?.key === "company_analysis";
+        const showSection = !!(dartStep || compStep) || streamingDart || streamingComp ||
+          (isComplete && analysis.steps.some((s: any) => s.stepKey === "industry_analysis"));
+        if (!showSection) return null;
+        const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+        return (
+          <NarrativeSectionBlock
+            num={2}
+            title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
+            subtitle={isEn ? "DART filings · Historical flow · Hidden context · Management signals" : "과거 흐름 · 숨은 맥락 · 사업 변화 · 경영진 신호"}
+            accent="#10B981"
+            pending={!dartStep && !streamingDart}
+            isEn={isEn}
+          >
+            {dartStep ? (
+              <ErrorBoundary fallback={null}>
+                <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+              </ErrorBoundary>
+            ) : streamingDart ? (
+              <div className="flex items-center gap-3 py-6 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Reading DART filings…" : "사업보고서 분析 중…"}</span>
+              </div>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 실적 분析 카드 ══ */}
+      {(() => {
+        const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
+        const streamingComp = streamingStep?.key === "company_analysis";
+        const showCard = isComplete || !!compStep || streamingComp ||
+          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        if (!showCard) return null;
+        const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+        return (
+          <NarrativeSectionBlock
+            num={3}
+            title={isEn ? "How are the numbers looking?" : "실적과 주가, 숫자로 보는 기업"}
+            subtitle={isEn ? "Earnings trend · Financial deep-dive · Price action" : "실적 추이 · 재무 심층 · 주가 흐름"}
+            accent="#10B981"
+            pending={false}
+            isEn={isEn}
+          >
+            <div className="divide-y divide-border/30 -mx-5 sm:-mx-6">
+              {/* 실적 차트 */}
+              <div className="px-5 sm:px-6 py-5">
+                <FinancialChart ticker={analysis.ticker} isEn={isEn} />
+              </div>
+
+              {/* 재무 심층 분析 */}
+              {compStep ? (
+                <div className="px-5 sm:px-6 py-5">
+                  <ErrorBoundary fallback={null}>
+                    <NarrativeStepContent step={compStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+                  </ErrorBoundary>
+                </div>
+              ) : streamingComp ? (
+                <div className="px-5 sm:px-6 py-6 flex items-center gap-3 justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  <span className="text-sm text-muted-foreground">{isEn ? "Connecting numbers to filings…" : "재무 수치를 사업 흐름과 연결 중…"}</span>
+                </div>
+              ) : null}
+
+              {/* 주가 흐름 */}
+              {(isComplete || !!compStep) && (
+                <div className="px-5 sm:px-6 py-5">
+                  <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+                    {isEn ? "Price action" : "주가 흐름"}
+                  </p>
+                  <ErrorBoundary fallback={null}>
+                    <StockChart
+                      ticker={analysis.ticker}
+                      companyName={analysis.companyName}
+                      currency={currency}
+                      isEn={isEn}
+                      validatedTargetPrice={(analysis as any).targetPrice ?? null}
+                    />
+                  </ErrorBoundary>
+                </div>
+              )}
+            </div>
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 섹션 3: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
+      {(() => {
+        const catStep = analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis");
+        const streamingCat = streamingStep?.key === "catalyst_analysis";
+        const hasAny = !!catStep;
+        // 뉴스 타임라인은 항상 표시 (캐시 기반 독립 fetch)
+        const showSection = isComplete || hasAny || streamingCat ||
+          analysis.steps.some((s: any) => s.stepKey === "company_analysis");
+        if (!showSection) return null;
+        return (
+          <NarrativeSectionBlock
+            num={4}
+            title={isEn ? "What's happening right now?" : "지금 이 기업에 무슨 일이 일어나고 있나"}
+            subtitle={isEn ? "Recent news · Business change signals · Catalysts & risks" : "최근 뉴스 · 사업 변화 신호 · 촉매와 리스크"}
+            accent="#F59E0B"
+            pending={!hasAny && !streamingCat && !isComplete}
+            isEn={isEn}
+          >
+            {/* ① 최근 뉴스 타임라인 */}
+            <div>
+              <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+                {isEn ? "Recent news" : "최근 뉴스"}
+              </p>
+              <StockNewsTimeline ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />
+            </div>
+
+            {/* ② 촉매 + 향후 타임라인 */}
+            {catStep ? (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <ErrorBoundary fallback={null}>
+                  <CatalystView step={catStep} isEn={isEn} accent="#F59E0B" />
+                </ErrorBoundary>
+              </div>
+            ) : streamingCat ? (
+              <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Building catalyst timeline…" : "촉매 & 향후 타임라인 생성 중…"}</span>
+              </div>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 섹션 4: 투자 결론 ══ */}
+      {(() => {
+        const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
+        const streamingStrat = streamingStep?.key === "investment_strategy";
+        if (!stratStep && !streamingStrat && (isComplete || isError)) return null;
+        const agent = AGENTS["investment_strategy"];
+        const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
+        return (
+          <NarrativeSectionBlock
+            num={5}
+            title={isEn ? "Investment conclusion" : "투자 결론"}
+            subtitle={isEn ? "3 core investment points" : "핵심 투자 포인트 3가지"}
+            accent="#FF8A7A"
+            pending={!stratStep && !streamingStrat}
+            isEn={isEn}
+          >
+            {streamingStrat && !stratStep ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Writing investment conclusion…" : "핵심 투자 포인트 정리 중…"}</span>
+              </div>
+            ) : stratStep ? (
+              <ErrorBoundary fallback={null}>
+                <InvestmentPointsView step={stratStep} isEn={isEn} />
+              </ErrorBoundary>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ── 추가 데이터 패널 ── */}
+      <details className="group rounded-2xl bg-card border border-border/60 overflow-hidden print:hidden"
+               style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.04)" }}>
+        <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-muted/30 transition-colors list-none">
+          <span className="text-[13px] font-semibold text-muted-foreground">{isEn ? "More data (ETF, peers, shareholders…)" : "추가 데이터 더 보기 (ETF · 동종업체 · 주주 현황 등)"}</span>
+          <ChevronDown className="w-4 h-4 text-muted-foreground/50 group-open:rotate-180 transition-transform" />
+        </summary>
+        <div className="px-3 pb-4 space-y-3 border-t border-border/40 pt-4">
+          <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
+          <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
+          <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
+          <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
+          <AnalystConsensusPanel ticker={analysis.ticker} currentPrice={(analysis as any).startPrice ?? null} isEn={isEn} />
+          <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
+          <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
+          <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
+        </div>
+      </details>
 
 
       {/* 보관하기 · 공유하기 + Disclaimer — 분석 완료 후 페이드인 */}
@@ -3752,53 +4095,47 @@ export default function AnalysisDetail() {
                 {isEn ? (
                   <>
                     <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                      This report is <span className="font-semibold">for informational purposes only</span>, automatically generated by AiBITDA (operated by CBST) using publicly available financial data, market information, and corporate disclosures. This service does not constitute investment advisory or discretionary investment management.
+                      This report is <span className="font-semibold">for reference only</span>. AI agents read DART filings, earnings data, news, and catalysts to surface insights from a company's disclosures. This service does not constitute investment advisory or discretionary investment management under applicable law.
                     </p>
                     <div className="space-y-2 mt-1">
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">Investment responsibility:</span> Price levels, scenarios, and analytical figures in this report do not constitute a recommendation to buy or sell any security. All content is for informational purposes only. The final responsibility for any investment decision rests solely with the investor.
+                        <span className="font-semibold text-foreground/70">Your responsibility:</span> Nothing in this report constitutes a recommendation to buy or sell any security. All investment decisions and their outcomes are solely your responsibility.
                       </p>
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">AI limitations:</span> Target prices and financial estimates are predictions based on specific algorithms and assumptions. Actual results may differ materially due to data limitations, model errors, and market volatility. We make no warranty regarding the accuracy, completeness, or timeliness of this information.
+                        <span className="font-semibold text-foreground/70">AI limitations:</span> AI-generated analysis may contain factual errors, misinterpretations, or omissions. Target prices and forward estimates are AI judgments, not guaranteed outcomes. Always verify key figures against primary sources.
                       </p>
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">Risk of loss:</span> Past performance or AI simulation results do not guarantee future returns. Financial instruments may result in partial or total loss of principal.
-                      </p>
-                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">Independent verification recommended:</span> Before relying on this material, independently verify information through trusted sources such as official exchange filings, company press releases, and regulatory databases.
+                        <span className="font-semibold text-foreground/70">Primary sources:</span> Before acting on this report, verify information through DART (dart.fss.or.kr), official exchange filings, and company press releases.
                       </p>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
                       Unauthorized reproduction or redistribution is prohibited. &nbsp;·&nbsp; AI-generated content disclosed per applicable regulation.
                     </p>
                     <p className="text-[10.5px] text-muted-foreground mt-1">
-                      Generated: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("en-US") : "—"} &nbsp;·&nbsp; © CBST (AiBITDA AI). All rights reserved.
+                      Generated: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("en-US") : "—"} &nbsp;·&nbsp; © CBST (애빛다). All rights reserved.
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                      본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
+                      본 리포트는 「CBST」가 운영하는 AI 서비스 「애빛다」가 DART 사업보고서, 실적 데이터, 뉴스, 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 투자자문업·투자일임업에 해당하지 않으며, 특정 투자 행위를 권유하지 않습니다.
                     </p>
                     <div className="space-y-2 mt-1">
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
+                        <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트의 모든 내용은 정보 제공 목적이며, 투자 판단과 그 결과에 대한 책임은 전적으로 투자자 본인에게 귀속됩니다.
                       </p>
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                        <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 사업보고서·공시·뉴스를 해석하는 과정에서 사실 오류, 누락, 오해석이 포함될 수 있습니다. 적정주가 및 실적 전망은 AI의 판단으로, 보장된 수치가 아닙니다.
                       </p>
                       <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
-                      </p>
-                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground/70">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
+                        <span className="font-semibold text-foreground/70">원본 확인 권장:</span> 투자 결정 전 금융감독원 전자공시시스템(DART), 거래소 공시, 기업 공식 보도자료를 통해 핵심 내용을 직접 확인하시기 바랍니다.
                       </p>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
                       본 리포트의 무단 복제·배포·재가공은 금지됩니다. &nbsp;·&nbsp; 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
                     </p>
                     <p className="text-[10.5px] text-muted-foreground mt-1">
-                      분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
+                      분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다). All rights reserved.
                     </p>
                   </>
                 )}
@@ -3864,7 +4201,6 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </AnimatePresence>
-        </div>
       </div>
 
       {/* 맨 위로 가기 버튼 */}
@@ -4275,7 +4611,12 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
         )}
       </div>
 
-      {json ? (() => {
+      {/* markdown prose fallback (investment_strategy는 JSON 아닌 마크다운 산문) */}
+      {!json && step.content && !step.content.startsWith("분析 오류:") && !step.content.startsWith("분析 결과를 생성하지 못했습니다") ? (
+        <div className="p-4 sm:p-6">
+          <MdBlock src={step.content} isEn={isEn} />
+        </div>
+      ) : json ? (() => {
         const vm = verdictMeta(validatedVerdict ?? json.verdict ?? "");
         return (
           <div className="divide-y divide-border">
@@ -4629,27 +4970,8 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
     "데이터가 많아요. 커피 한 잔 더 드세요 ☕",
     "마지막 검토 중이에요! 거의 다 왔어요 🏁",
   ],
-  relative_valuation: [
-    "DCF 10년치 가동... 이 스프레드시트 감정 있어요 📈",
-    "WACC 계산 중... 과학처럼 보이려 노력 중인 숫자예요",
-    "피어 멀티플 수집 중. 비싼 건지 싼 건지, 영원한 논쟁",
-    "Terminal Value가 모델을 잡아먹지 않게 확인 중 😅",
-    "Reverse DCF: 지금 주가가 맞으려면 뭘 믿어야 하는가",
-    "절대가치 vs 상대가치, 싸우게 두는 중이에요 ⚔️",
-    "FCFF 정합성 최종 점검. 믿되 검증해요",
-    "두 밸류에이션 하나로 압축하는 중이에요 🎯",
-  ],
-  market_analysis: [
-    "차트 소환 완료. 오를지 내릴지는 차트도 몰라요 📉📈",
-    "지지선 그리는 중이에요. 장식이 아니라고요 📏",
-    "지지·저항 구간 정밀 계산. 희망과 현실의 교차점",
-    "큰 손들 수급 추적 중이에요. 쟤네가 움직이나 봐요 🕵️",
-    "이 가격에 사도 되는지... 계산 중이에요 💭",
-    "손절선 설정 중... 제일 스트레스 받는 부분이에요",
-    "진입 타점 확정! 이제부터 긴장하세요 🔒",
-  ],
   investment_strategy: [
-    "6개 보고서를 의견 하나로 압축 중이에요. 부담 없어요 🧠",
+    "5개 보고서를 종합 중이에요. 거의 다 왔어요 🧠",
     "상승여력 계산... 이 주식이 데이트 상대 자격이 있는지 💘",
     "투자 논거 한 문장으로 우겨넣는 중이에요 ✍️",
     "리스크 vs 기회, 최종 라운드 ⚖️",
@@ -4692,27 +5014,8 @@ const SLOW_STEP_MESSAGES_EN: Record<string, string[]> = {
     "So much data. So little time. Hang tight 🙏",
     "Final lap — finishing strong!",
   ],
-  relative_valuation: [
-    "Firing up 10 years of DCF... this spreadsheet has feelings 📈",
-    "WACC: the number that pretends to be science",
-    "Comps gathering: cheap vs. expensive — eternal debate",
-    "Making sure Terminal Value doesn't eat the whole model 😅",
-    "Reverse DCF: asking what price means market is right",
-    "Intrinsic vs. relative value — let them fight ⚔️",
-    "FCFF sanity check: trust but verify",
-    "Squeezing two valuations into one number 🎯",
-  ],
-  market_analysis: [
-    "Chart time. Bulls, bears, and confused sideways 📉📈",
-    "Drawing support lines. Purely decorative. (Kidding) 📏",
-    "Support & resistance: where hope meets reality",
-    "Following the smart money — or whoever is moving this thing 🕵️",
-    "Is this a buy, or is this a trap? Calculating... 💭",
-    "Stop loss placement: the most stressful part",
-    "Entry zone locked. Time to sweat! 🔒",
-  ],
   investment_strategy: [
-    "Turning six reports into one opinion — no pressure 🧠",
+    "Turning five reports into one — final stretch 🧠",
     "Upside math: does this stock deserve a date? 💘",
     "Fitting the whole thesis into one sentence ✍️",
     "Risk vs. reward: final round ⚖️",
@@ -4830,8 +5133,7 @@ const AGENT_COLORS: Record<string, string> = {
   company_intro: BRAND_BLUE,
   industry_analysis: BRAND_BLUE,
   company_analysis: BRAND_BLUE,
-  relative_valuation: BRAND_BLUE,
-  market_analysis: BRAND_BLUE,
+  dart_report_analysis: "hsl(158, 60%, 35%)",
   catalyst_analysis: BRAND_AMBER,
   investment_strategy: BRAND_BLUE,
 };
@@ -5378,6 +5680,9 @@ function stripPromptInstructions(content: string): string {
       if (/^→\s*이 한 문장을 모든 소제목/.test(t)) return false;
       if (/체인\s*인계/.test(t)) return false;
 
+      // ── 리서치 진행 순서 안내 문장 ───────────────────────────────
+      if (/본 리서치는.*(실적 전망|적정주가|기술적|최종 결론).*순으로 진행됩니다/.test(t)) return false;
+
       // ── 단계 범위 선언 ────────────────────────────────────────────
       if (/이 단계의 담당 범위/.test(t)) return false;
       if (/이 범위 밖 내용은 타 단계에서/.test(t)) return false;
@@ -5691,7 +5996,7 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
   );
 }
 
-const BLUR_GATED_STEPS = ["company_analysis", "relative_valuation", "market_analysis", "investment_strategy"];
+const BLUR_GATED_STEPS = ["company_analysis", "dart_report_analysis", "investment_strategy"];
 
 const MD_BODY_COMPONENTS = {
   h2: ({ children }: any) => (
@@ -5791,6 +6096,134 @@ function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: 
   );
 }
 
+// ── DART 사업보고서 재무 차트 컴포넌트 ──────────────────────────────────────
+const FMT_EO = (v: number | null, isEn: boolean) => {
+  if (v == null) return "—";
+  const abs = Math.abs(v);
+  if (isEn) {
+    if (abs >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+    if (abs >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+    return `$${(v / 1e6).toFixed(0)}M`;
+  }
+  if (abs >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (abs >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
+  return v.toLocaleString("ko-KR");
+};
+
+function DartFinancialCharts({ ticker, isEn, color }: { ticker: string; isEn: boolean; color: string }) {
+  const [data, setData] = useState<{ annual: any[]; quarterly: any[] } | null>(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null); setErr(false);
+    fetch(getApiUrl(`/api/market-data/financials/${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled && j) setData({ annual: j.annual ?? [], quarterly: j.quarterly ?? [] }); })
+      .catch(() => { if (!cancelled) setErr(true); });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (err || !data || (data.annual.length === 0 && data.quarterly.length === 0)) return null;
+
+  const annualRows = data.annual.filter((r: any) => r.revenue || r.operatingIncome).slice(-4);
+  const qRows = data.quarterly.filter((r: any) => r.revenue || r.operatingIncome).slice(-6);
+
+  const DIVIDER = isUSTicker(ticker) ? 1e9 : 1e8; // USD→십억, KRW→억
+  const UNIT_LABEL = isEn ? "B USD" : "억원";
+
+  const toChart = (rows: any[]) => rows.map((r: any) => ({
+    name: r.period?.replace(/\d{4}-/, "").replace(/\.\d{2}$/, "") || r.period,
+    fullName: r.period,
+    revenue: r.revenue != null ? Math.round(r.revenue / DIVIDER) : null,
+    opIncome: r.operatingIncome != null ? Math.round(r.operatingIncome / DIVIDER) : null,
+    netIncome: r.netIncome != null ? Math.round(r.netIncome / DIVIDER) : null,
+    opm: r.operatingMargin != null ? Math.round(r.operatingMargin * 10) / 10 : null,
+    isEstimate: r.isEstimate,
+  }));
+
+  const annualChart = toChart(annualRows);
+  const qChart = toChart(qRows);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-card border border-border rounded-lg px-3 py-2 text-[12px] shadow-lg">
+        <p className="font-semibold text-foreground mb-1">{payload[0]?.payload?.fullName || label}</p>
+        {payload.map((p: any) => (
+          <div key={p.dataKey} className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+            <span className="text-muted-foreground">{p.name}</span>
+            <span className="font-mono text-foreground ml-auto pl-4">
+              {p.value != null ? `${p.value.toLocaleString()} ${UNIT_LABEL}` : "—"}
+            </span>
+          </div>
+        ))}
+        {payload[0]?.payload?.opm != null && (
+          <div className="mt-1 pt-1 border-t border-border/50 text-muted-foreground">
+            OPM <span className="text-foreground font-mono">{payload[0].payload.opm}%</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-5 mb-1 flex flex-col gap-5">
+      {annualChart.length >= 2 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {isEn ? "Annual P&L" : "연간 실적 추이"}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={annualChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%">
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={38}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted)/0.4)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+              <Bar dataKey="revenue" name={isEn ? "Revenue" : "매출"} fill={`${color}55`} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="opIncome" name={isEn ? "Op. Income" : "영업이익"} fill={color} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {qChart.length >= 2 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {isEn ? "Quarterly P&L" : "분기 실적 추이"}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={qChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%">
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={38}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted)/0.4)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+              <Bar dataKey="revenue" name={isEn ? "Revenue" : "매출"} fill={`${color}55`} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="opIncome" name={isEn ? "Op. Income" : "영업이익"} fill={color} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          {qChart.some((r: any) => r.isEstimate) && (
+            <p className="text-[10px] text-muted-foreground/50 mt-1 text-right">
+              {isEn ? "E = Analyst consensus estimate" : "E = 애널리스트 컨센서스 추정치"}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyNameEn, startPrice, isEn = false, isSignedIn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, companyNameEn?: string, startPrice?: number, isEn?: boolean, isSignedIn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -5808,26 +6241,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
   const isGated = !isSignedIn && BLUR_GATED_STEPS.includes(step.stepKey);
 
-  const isMarket = step.stepKey === "market_analysis";
   const isFundamental = step.stepKey === "company_analysis";
-  const isRelativeVal = step.stepKey === "relative_valuation";
   const content = step.content ?? "";
 
-  const chartLevels = useMemo(() => isMarket ? parseChartLevels(content) : null, [isMarket, content]);
-  const chartEvents = useMemo(() => isMarket ? parseChartEvents(content) : [], [isMarket, content]);
-  const marketSignals = useMemo(() => isMarket ? parseMarketSignals(content) : null, [isMarket, content]);
-  const priceScenario = useMemo(() => isMarket ? parsePriceScenario(content) : { pathType: null }, [isMarket, content]);
   const valuationData = useMemo(() => isFundamental ? parseValuationData(content) : null, [isFundamental, content]);
-  const finalValuationData = useMemo(() => isRelativeVal ? parseFinalValuationData(content) : null, [isRelativeVal, content]);
   const displayContent = useMemo(() => stripPromptInstructions(stripEstimationLabels(
-    isMarket
-      ? stripChartData(content)
-      : isFundamental
-        ? stripValuationData(content)
-        : isRelativeVal
-          ? stripFinalValuationData(content)
-          : content
-  )), [isMarket, isFundamental, isRelativeVal, content]);
+    isFundamental
+      ? stripValuationData(content)
+      : content
+  )), [isFundamental, content]);
 
   // 리드 문장 — 첫 번째 ## 소제목 이전의 텍스트
   const leadIdx = useMemo(() => displayContent.search(/(?:^|\n)## /), [displayContent]);
@@ -5849,69 +6271,13 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
     }
     return null;
   }, [isFundamental, bodyContent]);
-  // 적정주가 산출 카드: 핵심 밸류에이션 가정 요약 섹션 분리 (토글화)
-  // 이모지가 다양하게 출력될 수 있으므로 "핵심 밸류에이션 가정" 텍스트로만 탐지
-  const keyAssumptionsSplit = useMemo(() => {
-    if (!isRelativeVal) return null;
-    const midIdx = bodyContent.search(/\n## [^\n]*핵심 밸류에이션 가정/);
-    if (midIdx >= 0) {
-      return { before: bodyContent.slice(0, midIdx), section: bodyContent.slice(midIdx + 1) };
-    }
-    if (/^## [^\n]*핵심 밸류에이션 가정/.test(bodyContent)) {
-      return { before: '', section: bodyContent };
-    }
-    return null;
-  }, [isRelativeVal, bodyContent]);
+  const keyAssumptionsSplit = null; // relative_valuation removed
 
   const mainBodyContent = useMemo(() => {
     if (valuationMetricsSplit) return valuationMetricsSplit.before;
-    if (keyAssumptionsSplit) return keyAssumptionsSplit.before;
     return bodyContent;
-  }, [bodyContent, valuationMetricsSplit, keyAssumptionsSplit]);
+  }, [bodyContent, valuationMetricsSplit]);
 
-  const valuationMetricsContent = useMemo(() =>
-    valuationMetricsSplit ? valuationMetricsSplit.section : null,
-    [valuationMetricsSplit]
-  );
-  const keyAssumptionsContent = useMemo(() =>
-    keyAssumptionsSplit ? keyAssumptionsSplit.section : null,
-    [keyAssumptionsSplit]
-  );
-
-  // 적정주가 산출 카드: 모델 가정 수립 섹션 (중간 위치) — 앞/섹션/뒤 3분할
-  const modelAssumptionsSplit = useMemo(() => {
-    if (!isRelativeVal) return null;
-    const src = mainBodyContent;
-    const midIdx = src.search(/\n## 🔢 모델 가정 수립/);
-    if (midIdx >= 0) {
-      const afterStart = src.slice(midIdx + 1); // starts with "## 🔢 모델 가정..."
-      const nextMatch = afterStart.search(/\n## /);
-      return {
-        before: src.slice(0, midIdx),
-        section: nextMatch >= 0 ? afterStart.slice(0, nextMatch) : afterStart,
-        after: nextMatch >= 0 ? afterStart.slice(nextMatch) : '',
-      };
-    }
-    if (/^## 🔢 모델 가정 수립/.test(src)) {
-      const nextMatch = src.search(/\n## /);
-      return {
-        before: '',
-        section: nextMatch >= 0 ? src.slice(0, nextMatch) : src,
-        after: nextMatch >= 0 ? src.slice(nextMatch) : '',
-      };
-    }
-    return null;
-  }, [isRelativeVal, mainBodyContent]);
-
-  // WACC 토글에서 "선택 모델별 가정" 표 제거 — Part A에서 더 상세히 보여주므로 중복 제거
-  const waccOnlySection = useMemo(() => {
-    if (!modelAssumptionsSplit) return "";
-    return modelAssumptionsSplit.section
-      .replace(/\n+---\s*\n+###\s+선택 모델별 가정[\s\S]*/m, "") // --- + 선택 모델별 가정 이하 전부 제거
-      .replace(/\n+###\s+선택 모델별 가정[\s\S]*/m, "")           // --- 없이 바로 나오는 경우
-      .replace(/\n+---\s*$/m, "")                                  // 남은 trailing --- 제거
-      .trimEnd();
-  }, [modelAssumptionsSplit]);
 
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
@@ -5968,117 +6334,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           >
       <div className="p-4 sm:p-5">
 
-        {/* ① 주가 차트 — 기술적 분석 최상단 */}
-        {isMarket && ticker && (
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Chart" : "주가 차트"}</span>
-              {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
-                  {isEn ? "Incl. entry/target/stop" : "진입·목표·손절 레벨 포함"}
-                </span>
-              )}
-              {chartEvents.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
-                  {isEn ? `${chartEvents.length} key events` : `핵심 이슈 ${chartEvents.length}건`}
-                </span>
-              )}
-            </div>
-            <StockChart
-              ticker={ticker}
-              companyName={companyName}
-              companyNameEn={companyNameEn}
-              chartLevels={chartLevels ?? undefined}
-              validatedTargetPrice={
-                // finalValuationData.base(밸류에이션 패널 원본)가 있으면 우선 사용
-                // — DB targetPrice는 과거 2.5x 캡으로 잘린 경우가 있어 불일치 발생
-                (finalValuationData?.base && finalValuationData.base > 0)
-                  ? finalValuationData.base
-                  : (validatedTargetPrice ?? undefined)
-              }
-              events={chartEvents}
-              currency={priceCurrency}
-              isEn={isEn}
-              priceScenario={priceScenario}
-            />
-          </div>
-        )}
 
         {/* ③ 현재가 vs 적정주가 + 단기 방향 분석 */}
-        {isMarket && marketSignals && (() => {
-          const cp = (chartLevels?.currentPrice && chartLevels.currentPrice > 0) ? chartLevels.currentPrice : (startPrice ?? 0);
-          const tp = validatedTargetPrice;
-          const { trend, signal, rrRatio } = marketSignals;
-
-          type Dir = { label: string; sub: string; clr: string; bg: string; icon: string };
-          const dirKey = `${trend}-${signal}`;
-          const dirMap: Record<string, Dir> = {
-            "bullish-continuing": { icon: "▲", label: isEn ? "Uptrend Intact" : "상승 추세 지속",   sub: isEn ? "Momentum remains strong — trend likely continues short-term." : "모멘텀 유지 중. 단기 추가 상승 흐름 지속 예상.",        clr: "#10b981", bg: "#10b98112" },
-            "bullish-peaking":    { icon: "⚠", label: isEn ? "Near Peak — Caution" : "고점 경계 구간", sub: isEn ? "Extended rally approaching 52W high — short-term pullback likely." : "52주 고점권 접근. 단기 차익 실현·조정 가능성 높음.",  clr: "#f59e0b", bg: "#f59e0b12" },
-            "bullish-reversing":  { icon: "↘", label: isEn ? "Trend Weakening" : "상승 둔화",        sub: isEn ? "Uptrend losing momentum — watch for breakdown." : "상승 추세 내 모멘텀 약화. 추세 이탈 여부 주시 필요.",     clr: "#f59e0b", bg: "#f59e0b12" },
-            "bullish-wait":       { icon: "→", label: isEn ? "Uptrend — Hold" : "상승 추세, 관망",   sub: isEn ? "Uptrend intact but short-term direction unclear." : "추세는 상승이나 단기 방향성 불명확. 신호 확인 후 대응.", clr: "#10b981", bg: "#10b98112" },
-            "bullish-buy":        { icon: "▲", label: isEn ? "Buy on Dip" : "눌림목 매수",           sub: isEn ? "Pullback within uptrend — potential re-entry." : "상승 추세 내 일시 조정. 재진입 기회 포착 구간.",         clr: "#10b981", bg: "#10b98112" },
-            "bearish-reversing":  { icon: "↗", label: isEn ? "Reversal Attempt" : "반등 시도 중",    sub: isEn ? "Downtrend with technical rebound signals." : "하락 추세 내 기술적 반등 시도. 추세 전환 확인 필요.",    clr: "#f59e0b", bg: "#f59e0b12" },
-            "bearish-continuing": { icon: "▼", label: isEn ? "Downtrend Intact" : "하락 추세 지속",  sub: isEn ? "Downward pressure continues — avoid new longs short-term." : "하락 모멘텀 지속. 단기 신규 매수 자제 권고.",          clr: "#ef4444", bg: "#ef444412" },
-            "bearish-wait":       { icon: "↘", label: isEn ? "Bearish — Watch" : "하락 추세, 관망",  sub: isEn ? "Downtrend intact, await reversal confirmation." : "하락 추세 내 반전 신호 대기. 성급한 매수 자제.",         clr: "#ef4444", bg: "#ef444412" },
-            "neutral-buy":        { icon: "▲", label: isEn ? "Support Entry Zone" : "지지 매수 구간", sub: isEn ? "Near key support — potential entry if holds." : "주요 지지구간 접근. 지지 확인 시 단기 매수 기회.",       clr: "#10b981", bg: "#10b98112" },
-            "neutral-sell":       { icon: "▼", label: isEn ? "Resistance Zone" : "저항 매도 구간",   sub: isEn ? "Near resistance — consider trimming on strength." : "주요 저항구간 접근. 단기 비중 축소 고려.",              clr: "#ef4444", bg: "#ef444412" },
-            "neutral-wait":       { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망",       sub: isEn ? "Await clearer signal before acting." : "방향성 신호 확인 대기. 명확한 돌파 후 대응 권장.",            clr: "#94a3b8", bg: "#94a3b812" },
-          };
-          const dir: Dir = dirMap[dirKey] ?? { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망", sub: isEn ? "Await clearer signal." : "방향성 신호 확인 대기.", clr: "#94a3b8", bg: "#94a3b812" };
-
-          const upside = (cp > 0 && tp) ? ((Number(tp) - cp) / cp * 100) : null;
-          const isUp = upside !== null ? upside >= 0 : null;
-
-          return (
-            <div className="mb-5 pt-4 border-t border-border">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price vs Target · Short-term Outlook" : "현재가 · 적정주가 · 단기 전망"}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {cp > 0 && tp && (
-                  <div className="rounded-xl border border-border/60 p-3.5 bg-muted/20">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">{isEn ? "Price vs Target (12M)" : "현재가 vs 적정주가 (12개월)"}</p>
-                    <div className="flex items-end gap-3 flex-wrap">
-                      <div>
-                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Current" : "현재가"}</p>
-                        <p className="text-[16px] font-bold font-mono text-foreground leading-none">{formatPrice(cp, priceCurrency, isEn)}</p>
-                      </div>
-                      <span className="text-muted-foreground/40 text-sm mb-0.5">→</span>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Target" : "적정주가"}</p>
-                        <p className={`text-[16px] font-bold font-mono leading-none ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{formatPrice(Number(tp), priceCurrency, isEn)}</p>
-                      </div>
-                      {upside !== null && (
-                        <span className={`text-[13px] font-bold mb-0.5 ${isUp ? "text-emerald-500" : "text-rose-500"}`}>
-                          {isUp ? "+" : ""}{upside.toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="rounded-xl border p-3.5" style={{ borderColor: `${dir.clr}35`, background: dir.bg }}>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isEn ? "Short-term Outlook" : "단기 주가 전망"}</p>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[18px] leading-none font-bold" style={{ color: dir.clr }}>{dir.icon}</span>
-                    <span className="text-[14px] font-bold" style={{ color: dir.clr }}>{dir.label}</span>
-                  </div>
-                  <p className="text-[12px] text-foreground/70 leading-relaxed">{dir.sub}</p>
-                  {rrRatio > 0 && (
-                    <div className="mt-2 pt-2 border-t" style={{ borderColor: `${dir.clr}25` }}>
-                      <span className="text-[10px] text-muted-foreground">R/R {rrRatio.toFixed(1)} : 1</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
         {/* ④ Market & Technical Analyst: 기술적 신호 칩 */}
-        {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} isEn={isEn} />}
 
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
         {leadPara && (
@@ -6090,418 +6349,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           </div>
         )}
 
-        {(() => {
-          if (modelAssumptionsSplit) {
-            return (
-              <>
-                <MdBlock src={modelAssumptionsSplit.before} isEn={isEn} />
-                {/* 모델 가정 수립 — 토글 (WACC 결과값은 항상 노출) */}
-                {(() => {
-                  const waccMatch = modelAssumptionsSplit.section.match(/→\s*WACC:\s*([\d.]+\s*%)/);
-                  const waccVal = waccMatch?.[1]?.trim();
-                  return (
-                <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setShowModelAssumptions(v => !v)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-                  >
-                    <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-                    <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Model Assumptions" : "모델 가정 수립"}</span>
-                    {waccVal && (
-                      <span
-                        className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md mr-1 shrink-0"
-                        style={{ background: `${color}20`, color }}
-                      >
-                        WACC {waccVal}
-                      </span>
-                    )}
-                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {showModelAssumptions && (
-                      <motion.div
-                        key="model-assumptions"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                          <RoadmapEnContext.Provider value={isEn}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                            h2: ({ children }: any) => <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
-                            p: ({ children }: any) => <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>,
-                            ul: ({ children }: any) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                            li: ({ children }: any) => (
-                              <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                                <span className="flex-1 min-w-0">{children}</span>
-                              </li>
-                            ),
-                            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
-                            ...MD_TABLE_COMPONENTS,
-                          }}>
-                            {prepareMarkdown(waccOnlySection, isEn)}
-                          </ReactMarkdown>
-                          </RoadmapEnContext.Provider>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                  );
-                })()}
-                <MdBlock src={modelAssumptionsSplit.after} isEn={isEn} />
-              </>
-            );
-          }
-          return <MdBlock src={mainBodyContent} isEn={isEn} />;
-        })()}
-
-        {/* 밸류에이션 핵심 지표 — 토글 섹션 */}
-        {valuationMetricsContent && (
-          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setShowValuationMetrics(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-            >
-              <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Metrics" : "밸류에이션 핵심 지표"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
-            </button>
-            <AnimatePresence initial={false}>
-              {showValuationMetrics && (
-                <motion.div
-                  key="val-metrics"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                    <RoadmapEnContext.Provider value={isEn}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        h2: ({ children }) => (
-                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>
-                        ),
-                        p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
-                        ),
-                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                        li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                            <span className="flex-1 min-w-0">{children}</span>
-                          </li>
-                        ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                        ...MD_TABLE_COMPONENTS,
-                      }}
-                    >
-                      {prepareMarkdown(valuationMetricsContent, isEn)}
-                    </ReactMarkdown>
-                    </RoadmapEnContext.Provider>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {/* 적정주가 산출: 핵심 밸류에이션 가정 요약 — 토글 섹션 */}
-        {keyAssumptionsContent && (
-          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setShowKeyAssumptions(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
-            >
-              <Table2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Assumptions" : "핵심 밸류에이션 가정 요약"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showKeyAssumptions && "rotate-180")} />
-            </button>
-            <AnimatePresence initial={false}>
-              {showKeyAssumptions && (
-                <motion.div
-                  key="key-assumptions"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
-                    <RoadmapEnContext.Provider value={isEn}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        h2: ({ children }) => (
-                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
-                            {children}
-                          </h2>
-                        ),
-                        p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
-                        ),
-                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
-                        li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
-                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
-                            <span className="flex-1 min-w-0">{children}</span>
-                          </li>
-                        ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                        ...MD_TABLE_COMPONENTS,
-                      }}
-                    >
-                      {prepareMarkdown(keyAssumptionsContent, isEn)}
-                    </ReactMarkdown>
-                    </RoadmapEnContext.Provider>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {/* Valuation Analyst — 최종 조율 적정주가 (redesigned: clean & modern) */}
-        {isRelativeVal && finalValuationData && (() => {
-          const fv = finalValuationData;
-          const absModel = fv.abs_model ?? detectAbsModelFromContent(step.content ?? "");
-          const isUp = fv.base >= fv.current;
-          const upside = fv.current > 0 ? ((fv.base - fv.current) / fv.current * 100) : 0;
-          const absUp = fv.current > 0 ? ((fv.abs_base - fv.current) / fv.current * 100) : 0;
-          const relUp = fv.current > 0 ? ((fv.rel_base - fv.current) / fv.current * 100) : 0;
-
-          // 범위 바 계산
-          const allVals = [fv.bear, fv.bull, fv.current, fv.base].filter(v => v > 0);
-          const gMin = Math.min(...allVals) * 0.95;
-          const gMax = Math.max(...allVals) * 1.05;
-          const span = gMax - gMin || 1;
-          const toP = (v: number) => Math.max(2, Math.min(98, ((v - gMin) / span) * 100));
-          const bearP = toP(fv.bear);
-          const baseP = toP(fv.base);
-          const bullP = toP(fv.bull);
-          const curP  = toP(fv.current);
-
-          const targetColor = isUp ? "#10b981" : "#ef4444";
-
-          return (
-            <div className="mt-5 pt-5 border-t border-border space-y-4">
-
-              {/* ── Hero: 적정주가 + 업사이드 ── */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                    {isEn ? "Target Price" : "적정주가"}
-                  </p>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-[28px] font-bold font-mono leading-none text-foreground">
-                      {formatPrice(fv.base, priceCurrency, isEn)}
-                    </span>
-                    <span className="text-[17px] font-bold font-mono leading-none" style={{ color: targetColor }}>
-                      {isUp ? "+" : ""}{upside.toFixed(1)}%
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    {isEn ? "vs. current " : "현재가 "}<span className="font-mono font-medium text-foreground/75">{formatPrice(fv.current, priceCurrency, isEn)}</span>
-                  </p>
-                </div>
-
-                {/* Blend 구성 — 우측 compact */}
-                <div className="shrink-0 flex flex-col items-end gap-1.5 pt-0.5">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">{isEn ? "Blend" : "구성"}</p>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="text-muted-foreground/70">{absModel}</span>
-                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.abs_base, priceCurrency, isEn)}</span>
-                    <span className={cn("font-bold text-[10px]", absUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                      {absUp >= 0 ? "+" : ""}{absUp.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="text-muted-foreground/70">{isEn ? "Peers" : "피어"}</span>
-                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.rel_base, priceCurrency, isEn)}</span>
-                    <span className={cn("font-bold text-[10px]", relUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                      {relUp >= 0 ? "+" : ""}{relUp.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Range bar: Bear ─ Current | Base ─ Bull ── */}
-              <div className="px-1">
-                {/* Track */}
-                <div className="relative h-2 bg-muted/50 rounded-full">
-                  {/* Bear→Bull fill */}
-                  <div className="absolute inset-y-0 rounded-full opacity-20"
-                    style={{ left: `${bearP}%`, right: `${100 - bullP}%`, background: targetColor }} />
-                  {/* Bear dot */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-400 ring-2 ring-background"
-                    style={{ left: `${bearP}%` }} />
-                  {/* Current tick */}
-                  <div className="absolute -top-1 -bottom-1 w-[2px] -translate-x-1/2 bg-foreground/40 rounded-full"
-                    style={{ left: `${curP}%` }} />
-                  {/* Base dot — prominent */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full ring-2 ring-background shadow-md z-10"
-                    style={{ left: `${baseP}%`, background: targetColor }} />
-                  {/* Bull dot */}
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-background"
-                    style={{ left: `${bullP}%` }} />
-                </div>
-
-                {/* Price labels row */}
-                <div className="flex items-start justify-between mt-2.5 text-[10px] font-mono">
-                  <div className="flex flex-col items-start">
-                    <span className="text-rose-400 font-semibold">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">Bear</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="font-semibold text-foreground/70">{formatPrice(fv.current, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">{isEn ? "Now" : "현재"}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="font-bold" style={{ color: targetColor }}>{formatPrice(fv.base, priceCurrency, isEn)}</span>
-                    <span className="font-semibold text-[9px]" style={{ color: targetColor }}>{isEn ? "Target" : "적정"}</span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-blue-400 font-semibold">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
-                    <span className="text-muted-foreground/50 text-[9px]">Bull</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── 상세 보기 (collapsed by default) ── */}
-              <button
-                onClick={() => setShowDetailTable(v => !v)}
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", showDetailTable && "rotate-180")} />
-                {showDetailTable
-                  ? (isEn ? "Hide breakdown" : "상세 숨기기")
-                  : (isEn ? "Show breakdown" : "절대·상대가치 상세")}
-              </button>
-
-              <AnimatePresence initial={false}>
-                {showDetailTable && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    style={{ overflow: "hidden" }}
-                  >
-                    <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
-                      <table className="w-full min-w-[300px] text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-muted/60">
-                            <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "구분"}</th>
-                            <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
-                            <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                            <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/50">
-                          {[
-                            { label: isEn ? `Absolute (${absModel})` : `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
-                            { label: isEn ? "Relative (Peers)" : "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
-                            { label: isEn ? "Blended" : "최종 조율", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
-                          ].map(({ label, bear, base, bull, bold }) => {
-                            const up = fv.current > 0 ? ((base - fv.current) / fv.current * 100) : 0;
-                            return (
-                              <tr key={label} className={cn("transition-colors", bold ? "bg-muted/25" : "hover:bg-muted/10")}>
-                                <td className={cn("px-3 py-2 text-foreground/75", bold && "font-bold text-foreground")}>{label}</td>
-                                <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
-                                <td className="px-3 py-2 text-right font-mono">
-                                  <span className={cn(bold && "font-bold")}>{formatPrice(base, priceCurrency, isEn)}</span>
-                                  <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                                    {up >= 0 ? "+" : ""}{up.toFixed(1)}%
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-            </div>
-          );
-        })()}
+        <MdBlock src={mainBodyContent} isEn={isEn} />
 
 
-        {/* Fundamental & Valuation 적정주가 — 레인지 바 + 요약 테이블 */}
-        {isFundamental && valuationData && (() => {
-          const gMin = Math.min(valuationData.dcf_bear, valuationData.pe_bear, valuationData.ev_bear, valuationData.current) * 0.96;
-          const gMax = Math.max(valuationData.dcf_bull, valuationData.pe_bull, valuationData.ev_bull) * 1.04;
-          const avgBase = (valuationData.dcf_base + valuationData.pe_base + valuationData.ev_base) / 3;
-          const avgUpside = valuationData.current > 0 ? ((avgBase - valuationData.current) / valuationData.current * 100) : 0;
-          const isUp = avgBase >= valuationData.current;
-          return (
-            <div className="mt-5 pt-4 border-t border-border">
-              {/* 섹션 헤더 */}
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Valuation Fair Value" : "밸류에이션 적정주가"}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">{isEn ? "3-Method Blend" : "3-Method 종합"}</span>
-              </div>
 
-              {/* 현재가 + 평균 업사이드 요약 칩 */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[13px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency, isEn)}</span>
-                </div>
-                <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
-                  <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
-                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>{isEn ? "3-Method Avg." : "3방법론 평균"}</span>
-                  <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
-                    {isUp ? "+" : ""}{avgUpside.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
 
-              {/* 레인지 바 시각화 */}
-              <div className="bg-muted/60 dark:bg-muted/15 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/70">
-                {/* 범례 */}
-                <div className="flex items-center gap-4 mb-2 pb-2 border-b border-border/40">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-rose-400" />
-                    <span className="text-[10px] text-muted-foreground">Bear</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] text-muted-foreground">{isEn ? "Base (Fair)" : "Base (적정)"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-blue-400" />
-                    <span className="text-[10px] text-muted-foreground">Bull</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <div className="w-0.5 h-3 rounded-full bg-foreground/50" />
-                    <span className="text-[10px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  </div>
-                </div>
-                <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-                <ValuationScaleBar label="Fwd P/E" bear={valuationData.pe_bear} base={valuationData.pe_base} bull={valuationData.pe_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-                <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
-              </div>
-
-            </div>
-          );
-        })()}
 
       </div>
           </motion.div>

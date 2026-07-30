@@ -1,25 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { buildPrompt } from "../ai-agents.js";
+import { buildPrompt, type AgentKey } from "../ai-agents.js";
+
+/** 파이프라인에서 빠진 단계. 되살릴 때 AgentKey에 다시 넣는다 */
+const RETIRED_STEP = "relative_valuation" as AgentKey;
 
 /**
- * 업종 → 모델 배정을 끝에서 끝까지 확인한다.
+ * ⚠️ 2026-07-30부터 **전부 보류(skip)** 상태다.
  *
- * 예전에는 모델 지시 블록 17개가 **모든 종목**의 프롬프트에 들어갔다. 30종목을
- * 조사했더니 예외 없이 8개 블록이 함께 전달됐고, 삼성전자를 분석하면서 리츠
- * Cap Rate·은행 CCAR·광산 AISC 규칙을 함께 읽는 구조였다. 여기서는 정확히
- * 하나만 붙는지 확인한다.
+ * 제품 방향이 목표주가 산출에서 사업보고서 흐름 분석으로 바뀌면서 파이프라인의
+ * `relative_valuation` 단계가 빠졌다. 이 파일은 그 단계의 프롬프트를 검사하므로
+ * 지금은 돌릴 대상이 없다.
+ *
+ * **지우지 않는 이유**: lib/valuation/ 아래 모델 17개·검산 4종·실측 밴드는 그대로
+ * 살아 있고, 목표주가를 다시 낼 일이 생기면 이 테스트가 그때의 안전망이 된다.
+ * 여기서 지키던 것들 — 모델 블록이 정확히 하나만 붙는가, 한국 종목이 미국 전용
+ * 모델로 새지 않는가, 적자 임상 바이오가 rNPV를 받고 흑자 CDMO는 DCF를 받는가 —
+ * 은 전부 실제 사고에서 나온 회귀 방지선이다.
+ *
+ * **되살리는 법**: ai-agents.ts의 AgentKey·STEP_ORDER에 "relative_valuation"을 넣고
+ * 프롬프트를 복원한 뒤(커밋 fd5d56d6 이전 버전) 아래 describe.skip을 describe로 바꾼다.
  */
 
 const MODEL_HEADER = /## ⚖️ 밸류에이션 모델: (.+)/g;
 const MODEL_HEADER_ONE = /## ⚖️ 밸류에이션 모델: (.+)/;
 
 function modelsIn(ticker: string, name: string, industry: string): string[] {
-  const p = buildPrompt("relative_valuation", ticker, name, industry, null, []);
+  const p = buildPrompt(RETIRED_STEP, ticker, name, industry, null, []);
   const all = p.systemPrompt + "\n" + p.userPrompt;
   return [...all.matchAll(MODEL_HEADER)].map((m) => m[1].trim());
 }
 
-describe("모델 블록은 정확히 하나만 주입된다", () => {
+describe.skip("모델 블록은 정확히 하나만 주입된다", () => {
   const samples: Array<[string, string, string]> = [
     ["005930", "삼성전자", "Consumer Electronics"],
     ["000660", "SK하이닉스", "Semiconductors"],
@@ -34,7 +45,7 @@ describe("모델 블록은 정확히 하나만 주입된다", () => {
   });
 });
 
-describe("한국 종목이 미국 전용 모델로 새지 않는다", () => {
+describe.skip("한국 종목이 미국 전용 모델로 새지 않는다", () => {
   // 야후는 한국 조선사(한화오션·HD현대중공업)의 업종도 "Aerospace & Defense"로 준다.
   // 시장 구분 없이 키워드만 보면 미국 방산 모델(CCAR·EAC 정상화)이 붙어버린다.
   it("한국 조선사가 미국 방산 모델을 받지 않는다", () => {
@@ -57,7 +68,7 @@ describe("한국 종목이 미국 전용 모델로 새지 않는다", () => {
   });
 });
 
-describe("업종별로 의도한 모델이 배정된다", () => {
+describe.skip("업종별로 의도한 모델이 배정된다", () => {
   const cases: Array<[string, string, string, string]> = [
     // 한국
     ["005930", "삼성전자", "Consumer Electronics", "DCF"],
@@ -80,7 +91,7 @@ describe("업종별로 의도한 모델이 배정된다", () => {
   });
 });
 
-describe("보고서 서식도 고른 모델 것만 들어간다", () => {
+describe.skip("보고서 서식도 고른 모델 것만 들어간다", () => {
   // 예전에는 DCF·rNPV·EV/Sales·Gordon P/B 네 벌(640줄)이 전부 들어가고 "모델이 X인
   // 경우 이 섹션만 작성"이라는 문장으로 AI가 고르게 했다. 삼성전자 프롬프트에 임상
   // 파이프라인 rNPV 작성법 21k자가 실려 relative_valuation userPrompt의 54%를 차지했다.
@@ -95,7 +106,7 @@ describe("보고서 서식도 고른 모델 것만 들어간다", () => {
     ticker: string, name: string, industry: string, opm?: number | null,
   ): string[] {
     const p = buildPrompt(
-      "relative_valuation", ticker, name, industry, null, [], null, "ko", null, { opm },
+      RETIRED_STEP, ticker, name, industry, null, [], null, "ko", null, { opm },
     );
     const all = p.systemPrompt + p.userPrompt;
     return Object.entries(FMT).filter(([, h]) => all.includes(h)).map(([k]) => k);
@@ -116,7 +127,7 @@ describe("보고서 서식도 고른 모델 것만 들어간다", () => {
   });
 });
 
-describe("한국 바이오는 접미사가 없어도 감지된다", () => {
+describe.skip("한국 바이오는 접미사가 없어도 감지된다", () => {
   /**
    * 회귀 방지선. `needsKorBiotech`가 `ticker.includes(".KS")`로 한국을 판정하고 있었는데,
    * 티커를 접미사 없는 표준형(217730)으로 통일한 뒤로 이 조건이 어떤 한국 종목에도
@@ -135,7 +146,7 @@ describe("한국 바이오는 접미사가 없어도 감지된다", () => {
    */
   it("흑자 바이오(CDMO·바이오시밀러)는 rNPV가 아니다", () => {
     const p = (t: string, n: string, opm: number) =>
-      buildPrompt("relative_valuation", t, n, "Biotechnology", null, [], null, "ko", null, { opm });
+      buildPrompt(RETIRED_STEP, t, n, "Biotechnology", null, [], null, "ko", null, { opm });
     for (const [t, n, opm] of [["207940", "삼성바이오로직스", 46.2], ["068270", "셀트리온", 28.1]] as const) {
       const all = p(t, n, opm).systemPrompt + p(t, n, opm).userPrompt;
       expect(all.match(MODEL_HEADER_ONE)?.[1]?.trim(), n).not.toBe("rNPV");
@@ -148,7 +159,7 @@ describe("한국 바이오는 접미사가 없어도 감지된다", () => {
   });
 });
 
-describe("공통 조율 규칙이 어느 모델에나 들어간다", () => {
+describe.skip("공통 조율 규칙이 어느 모델에나 들어간다", () => {
   it("괴리율 처리와 3-way 금지가 항상 포함된다", () => {
     const targets: Array<[string, string, string]> = [
       ["005930", "삼성전자", "Consumer Electronics"],
@@ -157,7 +168,7 @@ describe("공통 조율 규칙이 어느 모델에나 들어간다", () => {
     ];
     for (const [t, n, i] of targets) {
       const all = (() => {
-        const p = buildPrompt("relative_valuation", t, n, i, null, []);
+        const p = buildPrompt(RETIRED_STEP, t, n, i, null, []);
         return p.systemPrompt + p.userPrompt;
       })();
       expect(all, n).toContain("괴리율 20% 이내");

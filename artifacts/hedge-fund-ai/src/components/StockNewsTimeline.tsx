@@ -94,9 +94,14 @@ export default function StockNewsTimeline({
       </div>
 
       {!loading && summary && (
-        <p className="text-[13px] text-muted-foreground leading-relaxed mb-5 pb-5 border-b border-border/50">
-          {summary}
-        </p>
+        <div className="mb-5 pb-5 border-b border-border/40">
+          <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30 px-4 py-3.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[13px] text-foreground/80 leading-[1.75]">
+              {summary}
+            </p>
+          </div>
+        </div>
       )}
 
       {loading && (

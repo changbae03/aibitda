@@ -230,50 +230,11 @@ async function executeStep(
     preFetchedPeerData.set(id, peerPromise);
   }
 
-  // relative_valuation 시작 → market_analysis용 주봉 MA를 백그라운드에서 미리 수집
-  if (stepKey === "relative_valuation" && !preFetchedWeeklyMA.has(id)) {
-    const snapTicker = analysis.ticker;
-    const wkPromise: Promise<string> = (async () => {
-      try {
-        const wkStart = new Date();
-        wkStart.setFullYear(wkStart.getFullYear() - 2);
-        const wkHistory = await yahooFinance
-          .historical(snapTicker, { period1: wkStart.toISOString().slice(0, 10), interval: "1wk" }, { validateResult: false })
-          .catch(() => null);
-        if (!wkHistory || wkHistory.length < 20) return "";
-        const closes = wkHistory.map((q: any) => q.adjClose ?? q.close).filter((c: any) => c != null && c > 0) as number[];
-        const calcMA = (arr: number[], n: number) => arr.length < n ? null : arr.slice(-n).reduce((a: number, b: number) => a + b, 0) / n;
-        const ma20w = calcMA(closes, 20);
-        const ma60w = calcMA(closes, 60);
-        const latestClose = closes[closes.length - 1];
-        const lines = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
-        lines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
-        if (ma20w != null) {
-          const d = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
-          lines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
-        }
-        if (ma60w != null) {
-          const d = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
-          lines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
-        }
-        if (ma20w != null && ma60w != null) {
-          lines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
-        }
-        lines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
-        console.log(`[pre-fetch-wkma] #${id} 완료 — ma20=${ma20w?.toFixed(0)}, ma60=${ma60w?.toFixed(0)}`);
-        return lines.join("\n");
-      } catch (err: any) {
-        console.warn(`[pre-fetch-wkma] #${id} 실패:`, err?.message?.slice(0, 80));
-        return "";
-      }
-    })();
-    preFetchedWeeklyMA.set(id, wkPromise);
-  }
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── 소프트 앵커: 동일 종목 직전 분석 결과를 참고 ────────────────────────────
   // 밸류에이션 단계는 더 긴 스니펫 + 더 강한 일관성 지시 사용
-  const isValuationStep = ["intrinsic_valuation", "relative_valuation"].includes(stepKey);
+  const isValuationStep = false; // intrinsic_valuation and relative_valuation have been removed
   try {
     const prevStepRef = await rawQuery(
       `SELECT s.content, a.created_at
@@ -288,11 +249,9 @@ async function executeStep(
     if (prevStepRef[0]?.content) {
       const prevContent = prevStepRef[0].content as string;
       const prevDate = new Date(prevStepRef[0].created_at).toISOString().slice(0, 10);
-      const snippetLen = isValuationStep ? 900 : 400;
+      const snippetLen = 400;
       const snippet = prevContent.slice(0, snippetLen).replace(/\n+/g, " ").trim();
-      const binding = isValuationStep
-        ? `⚠️ 밸류에이션 일관성 원칙: 아래 직전 분석 내용을 참고하여 동일한 모델 구조·할인율·핵심 가정을 유지하세요. 새로운 중요 정보(임상 결과, 대형 파트너십, 어닝 서프라이즈 등)가 없는 한, 이번 분석에서 도출되는 적정주가 Base 값은 직전 분석 대비 ±20% 이내를 목표로 하세요.`
-        : `아래는 가장 최근 분석의 이 단계 요약입니다. 방향성 참고 후 독자적 판단으로 분석하세요.`;
+      const binding = `아래는 가장 최근 분析의 이 단계 요약입니다. 방향성 참고 후 독자적 판단으로 분析하세요.`;
       const softAnchor = `\n\n[💡 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 참고]\n`
         + binding + `\n"${snippet}…"`;
       enrichedContext = enrichedContext ? enrichedContext + softAnchor : softAnchor;
@@ -405,6 +364,9 @@ async function executeStep(
             date: string; verdict: string; targetPrice: number;
             entryPrice: number; upsidePct: number;
             priceAtAnalysis?: number; predictedEps?: number | null;
+            directionMatch?: boolean | null;
+            actualReturn?: number;
+            daysElapsed?: number;
           };
           const learningData = learningRows[0]?.auto_learning as { history?: LearningEntry[] } | null;
           if (learningData?.history && learningData.history.length >= 2) {
@@ -498,11 +460,8 @@ async function executeStep(
           company_intro:        "기업 소개, 핵심 이슈 선언",
           industry_analysis:    "산업 구조·수익 모델, 시장 규모·성장률, 경쟁사 점유율·수익성 비교, 기업의 업계 내 경쟁 포지션(유리/불리), 정책·규제 환경",
           catalyst_analysis:    "핵심 이슈의 주가 반영도 판단, 투자 촉매·역촉매 이벤트(날짜·조건·주가영향), 이슈 전개 로드맵(단/중/장기), 수급 동향(외국인·기관 순매수)",
-          company_analysis:     "이 기업 재무 수치(매출·영업이익·순이익·EPS·마진율·ROE·FCF) 과거 이력·전망, 재무 건전성(부채비율·순현금), 실적 드라이버",
-          intrinsic_valuation:  "절대가치 밸류에이션(DCF·rNPV·SOTP·DDM) 계산, 적정주가 밴드 산출",
-          relative_valuation:   "피어 멀티플(EV/EBITDA·PER·PBR·EV/GWh 등) 비교, 최종 목표주가 결론",
-          market_analysis:      "기술적 분析(지지선·저항선·이동평균·모멘텀), 최적 진입·손절 구간",
-          investment_strategy:  "최종 투자 판정, 포지션 전략, 시나리오별 목표가·수익률",
+          company_analysis:     "이 기업 재무 수치(매출·영업이익·순이익·EPS·마진율·ROE·FCF) 과거 이력, 재무 건전성(부채비율·순현금), 컨센서스 전망치 소개",
+          investment_strategy:  "전 단계 종합 — 산업 포지션, 실적 함의, 투자 기회·리스크, 모니터링 체크리스트",
         };
         const STEP_LABEL: Record<string, string> = {
           company_intro: "팀장 브리핑",
@@ -510,8 +469,6 @@ async function executeStep(
           catalyst_analysis: "투자 촉매",
           company_analysis: "기업 재무 분析",
           intrinsic_valuation: "절대가치 밸류에이션",
-          relative_valuation: "상대가치 밸류에이션",
-          market_analysis: "기술적 분析",
           investment_strategy: "투자 전략",
         };
         const completedLines = existingSteps
@@ -524,285 +481,6 @@ async function executeStep(
             + `꼭 필요한 경우(현재 단계 논리 전개에 필수적인 수치 1개 인용 등) 1문장 이내로만 참조하고, 재분析·재설명은 하지 마세요.\n\n`
             + completedLines;
           enrichedContext = enrichedContext ? enrichedContext + dedupBlock : dedupBlock;
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      // ── 투자 판정 일관성 앵커 (investment_strategy 전용) ────────────────────
-      // ⚠️ 단, 아래 [서버 검증 목표주가] 블록이 주입되면 목표가·판정 제한은 해제됨
-      if (stepKey === "investment_strategy") {
-        const recentRow = await rawQuery(
-          `SELECT investment_verdict, target_price, entry_price, created_at
-           FROM analyses
-           WHERE ticker = $1 AND status = 'completed' AND id != $2
-             AND investment_verdict IS NOT NULL
-           ORDER BY created_at DESC LIMIT 1`,
-          [analysis.ticker, analysis.id]
-        );
-        if (recentRow[0]) {
-          const rec = recentRow[0];
-          const daysAgo = Math.floor(
-            (Date.now() - new Date(rec.created_at).getTime()) / (1000 * 3600 * 24)
-          );
-          const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
-
-          if (daysAgo <= 7) {
-            const anchorBlock = `\n\n[\uD83D\uDD12 투자 판정 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
-              + `  이전 판정: ${rec.investment_verdict} | 이전 목표가: ${fmt(rec.target_price)}원 | 이전 진입가: ${fmt(rec.entry_price)}원\n`
-              + `📌 참고 지시:\n`
-              + `- 아래 [서버 검증 목표주가]가 있으면 그 수치와 판정 방향을 최우선으로 따르세요. 이 앵커는 보조 참고용입니다.\n`
-              + `- [서버 검증 목표주가]가 없는 경우에만: 명백한 시장 변화가 없는 한 동일 판정(${rec.investment_verdict})을 유지하세요.\n`
-              + `- 판정을 바꿀 경우 "판정 변경 근거:" 항목을 별도 문단으로 명시하세요.`;
-            enrichedContext = enrichedContext ? enrichedContext + anchorBlock : anchorBlock;
-            console.log(`[verdict-anchor] 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
-          } else if (daysAgo <= 30) {
-            const softBlock = `\n\n[📌 투자 판정 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
-              + `  이전 판정: ${rec.investment_verdict} | 이전 목표가: ${fmt(rec.target_price)}원 | 이전 진입가: ${fmt(rec.entry_price)}원\n`
-              + `- [서버 검증 목표주가]가 있는 경우 그 수치가 이 앵커보다 우선합니다.\n`
-              + `- 위 판정과 다른 결론을 낼 경우 판정 섹션에 변경 이유를 반드시 명시하세요.`;
-            enrichedContext = enrichedContext ? enrichedContext + softBlock : softBlock;
-            console.log(`[verdict-anchor] 소프트 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
-          }
-        }
-      }
-
-      // ── investment_strategy 전용: 검증된 목표주가 하드 주입 ─────────────────
-      // ⚠️ 반드시 verdict-anchor 이후 실행 — AI 컨텍스트에서 마지막 지시가 최우선됨
-      // relative_valuation FINAL_VALUATION_DATA 추출 → 클램핑 → 판정 방향까지 주입
-      if (stepKey === "investment_strategy") {
-        try {
-          const rvStep = existingSteps.find(s => s.stepKey === "relative_valuation");
-          const rvContent = rvStep?.content ?? "";
-          // bracket-counting 파서로 중첩 JSON 안전 추출 (regex 방식 제거)
-          const fvd = extractFvdJson(rvContent);
-          if (fvd) {
-            // investment_strategy 프롬프트 1순위와 동일하게 'base' 필드를 우선 읽음
-            // (AI가 {target: X, base: Y} 형태로 출력 시 investment_strategy는 base=Y를 쓰는데
-            // tp-inject가 target=X를 읽으면 불일치 발생 → base 우선으로 통일)
-            let rawTp = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
-            const spRow = await rawQuery(`SELECT start_price, ticker, company_name, industry FROM analyses WHERE id=$1`, [id]);
-            const sp: number = spRow[0]?.start_price ?? 0;
-            const tkr: string = spRow[0]?.ticker ?? "";
-            const isKRtk = /^\d{6}$/.test(tkr);
-            const spCompany: string = spRow[0]?.company_name ?? "";
-            const spIndustry: string = spRow[0]?.industry ?? "";
-            const isFinancialTk = isKRtk && needsFinancialSector(spIndustry, spCompany, tkr);
-
-            // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인
-            // 상한 캡도 제거(DB 저장 로직과 일치): 하한 플로어만 유지
-            const originalTp = rawTp;
-            const medianCorrected = false;
-
-            if (rawTp > 0 && sp > 0) {
-              // 금융주(은행·보험·증권·금융지주)는 P/B-ROE 모델 → PBR 0.55x~1.8x 범위로 제한
-              // 일반 한국주: 0.45x~3.0x / 미국주: 0.25x~5.0x
-              const MIN_R = isFinancialTk ? 0.55 : (isKRtk ? 0.45 : 0.25);
-              const MAX_R = isFinancialTk ? 1.8  : (isKRtk ? 3.0  : 5.0);
-              if (isFinancialTk) console.log(`[tp-inject] 금융주 감지(${tkr} ${spCompany}) — 클램핑 ${MIN_R}x~${MAX_R}x 적용`);
-              const ratio = rawTp / sp;
-              const validated = ratio < MIN_R ? Math.round(sp * MIN_R)
-                             : ratio > MAX_R ? Math.round(sp * MAX_R)
-                             : Math.round(rawTp);
-              // corrected = true if ANY adjustment occurred (median clamp OR floor clamp)
-              const ratioCorrected = validated !== Math.round(rawTp);
-              const corrected = ratioCorrected || medianCorrected;
-              const valRatio = validated / sp;
-              const impliedVerdict = valRatio >= 1.15 ? "매수(BUY/Strong Buy)"
-                                   : valRatio >= 1.05 ? "매수(BUY)"
-                                   : valRatio <= 0.88 ? "매도(SELL)"
-                                   : "중립(HOLD)";
-              const upPct = ((valRatio - 1) * 100).toFixed(1);
-              const priceUnit = isKRtk ? "원" : "달러(USD)";
-              const fmtTp = (n: number) => isKRtk ? `${n.toLocaleString()}원` : `$${n.toLocaleString()}`;
-              const originalRatio = sp > 0 ? originalTp / sp : 1;
-              const correctionNote = medianCorrected
-                ? `※ 밸류에이션 섹션의 AI 산출값 ${fmtTp(Math.round(originalTp))}이 과거 분석 중앙값 대비 편차 과다로 ${fmtTp(validated)}으로 서버 보정됨. 최종 결론의 적정주가는 반드시 ${fmtTp(validated)}을 사용할 것. 밸류에이션 섹션 수치와 다를 수 있으나 이 지시를 따를 것.\n`
-                : ratioCorrected
-                  ? (originalRatio < 0.1
-                      ? `⚠️ 재무 데이터 미확보 경고: AI가 산출한 적정주가 ${fmtTp(Math.round(originalTp))}(현재가의 ${(originalRatio * 100).toFixed(1)}%)는 DART 재무 데이터 부재로 인한 오산출로 판단됨. 서버가 하한선(현재가 × ${MIN_R})인 ${fmtTp(validated)}으로 기계적 보정. 이 목표주가는 AI 밸류에이션이 아닌 최소 안전값이므로 실제 적정주가 도출을 위해 반드시 재무제표 기반 DCF/멀티플 분석을 수행할 것.\n`
-                      : `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 하한선(현재가 대비 ${MIN_R}x) 미만으로 ${fmtTp(validated)}으로 자동 보정됨\n`)
-                  : "";
-              const tpBlock = `\n\n[⛔ 밸류에이션 확정 목표주가 — 보고서 전체 일관성 필수]\n`
-                + `현재가(분석 시작 기준): ${fmtTp(sp)}\n`
-                + `밸류에이션 산출 목표주가(12M Base): **${fmtTp(validated)}** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
-                + correctionNote
-                + `\n⛔ 보고서 전체 일관성 규칙 (위반 금지):\n`
-                + `1. 이 목표주가는 위 밸류에이션 단계(FINAL_VALUATION_DATA)에서 산출된 값입니다.\n`
-                + `2. 결론 본문 텍스트에도 반드시 이 수치(${fmtTp(validated)})를 사용하세요. 다른 숫자 사용 금지.\n`
-                + `3. FINAL_JSON target_price = ${validated} (정수, 콤마 없이)\n`
-                + `4. scenarios Base target_price = ${validated} — JSON 최상위 target_price와 반드시 동일\n`
-                + `5. 권고 판정: **${impliedVerdict}** — 목표가/현재가 괴리율 ${Number(upPct) >= 0 ? "+" : ""}${upPct}% 기준\n`
-                + `6. entry_price ≤ ${fmtTp(sp)} (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
-                + `7. 시나리오 Base upside = (${validated} - 현재가) / 현재가 × 100 으로 재계산\n`
-                + `8. 위의 [판정 일관성 앵커]의 판정·목표가 제한은 이 지시로 완전 해제됨`;
-              enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
-              console.log(`[tp-inject] ${tkr} validated=${validated} original=${Math.round(originalTp)} ratio=${valRatio.toFixed(2)}x verdict=${impliedVerdict} medianCorrected=${medianCorrected} ratioCorrected=${ratioCorrected}`);
-            } else {
-              console.log(`[tp-inject] ${id} — 조건 미충족: rawTp=${rawTp} sp=${sp}`);
-            }
-          } else {
-            console.log(`[tp-inject] ${id} — FINAL_VALUATION_DATA 미탐지 (rvContent.length=${rvContent.length})`);
-          }
-        } catch (e) {
-          console.warn("[tp-inject] failed:", e);
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      // ── 밸류에이션 단계 적정주가 범위 앵커 ───────────────────────────────────
-      // intrinsic_valuation / relative_valuation 단계에서 직전 분석의 목표가 기반
-      // 수치 범위를 강하게 제한 → 동일 종목 반복 분석 시 결과 편차를 최소화
-      if (isValuationStep) {
-        try {
-          const prevValRow = await rawQuery(
-            `SELECT target_price, created_at, investment_verdict
-             FROM analyses
-             WHERE ticker = $1 AND status = 'completed' AND id != $2
-               AND target_price IS NOT NULL
-             ORDER BY created_at DESC LIMIT 1`,
-            [analysis.ticker, id]
-          );
-          if (prevValRow[0]?.target_price) {
-            const prevTarget = Number(prevValRow[0].target_price);
-            const prevVerdict = prevValRow[0].investment_verdict ?? "N/A";
-            const prevDate = new Date(prevValRow[0].created_at).toISOString().slice(0, 10);
-            const lower = Math.round(prevTarget * 0.8).toLocaleString();
-            const upper = Math.round(prevTarget * 1.2).toLocaleString();
-            const valAnchorBlock = `\n\n[📌 밸류에이션 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${prevDate} 기준]\n`
-              + `직전 분석 적정주가(Base): ${prevTarget.toLocaleString()}원 | 판정: ${prevVerdict}\n`
-              + `- 참고용입니다. 이번 분석의 독자적 판단이 우선합니다.\n`
-              + `- 직전 분석과 크게 다른 결론이 나오면 그 이유(펀더멘털 변화, 가정 수정 등)를 밸류에이션 섹션에 한 문장으로 명시하세요.\n`
-              + `- 할인율·성공확률·피크세일즈 등 핵심 가정을 바꾸는 경우에도 변경 이유를 명시하세요.`;
-            enrichedContext = enrichedContext ? enrichedContext + valAnchorBlock : valAnchorBlock;
-            console.log(`[val-anchor] ${stepKey} for ${analysis.ticker} — target range ${lower}~${upper}`);
-          }
-        } catch {
-          // optional
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      // ── Feature 3: 섹터별 편향 보정 주입 (밸류에이션 단계) ──────────────────
-      if (isValuationStep) {
-        try {
-          const sectorRows = await rawQuery(
-            `SELECT
-               COUNT(*) as sample_count,
-               ROUND(AVG(price_return)::numeric, 1) as avg_return,
-               ROUND((AVG(CASE WHEN direction_match = true THEN 1.0 ELSE 0.0 END) * 100)::numeric, 0) as direction_accuracy,
-               ROUND(AVG(target_achievement_pct)::numeric, 0) as avg_target_pct,
-               MODE() WITHIN GROUP (ORDER BY valuation_method) as top_method
-             FROM model_insights
-             WHERE industry = $1
-               AND outcome != 'pending'
-               AND price_return IS NOT NULL`,
-            [analysis.industry]
-          );
-          const sr = sectorRows[0];
-          const n = Number(sr?.sample_count ?? 0);
-          if (n >= 3) {
-            const avgRet = Number(sr.avg_return);
-            const dirAcc = sr.direction_accuracy !== null ? Number(sr.direction_accuracy) : null;
-            const avgTgtPct = sr.avg_target_pct !== null ? Number(sr.avg_target_pct) : null;
-            const topMethod = sr.top_method ?? null;
-            let calibBlock = `\n\n[🔬 AI 섹터 보정 데이터 — ${analysis.industry} 업종 (${n}건 누적)]\n`;
-            calibBlock += `⚠️ 아래는 이 업종에서의 AI 모델 과거 성과입니다. 밸류에이션 산출 시 아래 편향을 반드시 보정하세요.\n`;
-            calibBlock += `· 평균 수익률 편차: ${avgRet > 0 ? "+" : ""}${avgRet}%`;
-            if (avgRet > 8) calibBlock += ` → AI가 이 업종에서 과도하게 낙관적. 목표주가를 보수적으로 하향 조정하세요.`;
-            else if (avgRet < -8) calibBlock += ` → AI가 이 업종 하락을 과소평가. 리스크 프리미엄을 상향하세요.`;
-            else calibBlock += ` → 비교적 중립적 성과.`;
-            calibBlock += `\n`;
-            if (dirAcc !== null) {
-              calibBlock += `· 방향성 정확도: ${dirAcc}%`;
-              if (dirAcc < 55) calibBlock += ` → 방향 예측 신뢰도 낮음. 상·하단 시나리오 가중치를 균등하게 설정하세요.`;
-              calibBlock += `\n`;
-            }
-            if (avgTgtPct !== null) {
-              calibBlock += `· 평균 목표주가 달성도: ${avgTgtPct}% (100%=완전달성)`;
-              if (avgTgtPct < 50) calibBlock += ` → 목표주가 달성 빈도 낮음. 보수적으로 설정하세요.`;
-              calibBlock += `\n`;
-            }
-            if (topMethod) calibBlock += `· 이 업종 최다 적용 밸류에이션 방법론: ${topMethod}\n`;
-            enrichedContext = enrichedContext ? enrichedContext + calibBlock : calibBlock;
-            console.log(`[sector-calib] ${analysis.industry} 업종 보정 주입 (${n}건)`);
-          }
-        } catch {
-          // optional
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      // ── Feature 4: 종목별 누적 정확도 주입 (밸류에이션 + 상대가치 단계) ──────
-      // 같은 종목을 2회 이상 분석한 경우, 과거 방향 정확도·목표달성도·수익률 편향을
-      // 구조화하여 AI에 직접 주입 → 종목 특화 보정 효과
-      if (isValuationStep || stepKey === "relative_valuation") {
-        try {
-          const tickerAccRows = await rawQuery(
-            `SELECT direction_match, price_return, target_achievement_pct, outcome, days_elapsed, reviewed_at
-             FROM model_insights
-             WHERE ticker = $1
-               AND outcome != 'pending'
-             ORDER BY reviewed_at DESC
-             LIMIT 10`,
-            [analysis.ticker]
-          );
-
-          if (tickerAccRows.length >= 2) {
-            const withDir = tickerAccRows.filter((r: any) => r.direction_match !== null);
-            const dirCorrect = withDir.filter((r: any) => r.direction_match === true).length;
-            const dirAcc = withDir.length > 0 ? Math.round(dirCorrect / withDir.length * 100) : null;
-
-            const withAch = tickerAccRows.filter((r: any) => r.target_achievement_pct !== null);
-            const avgAch = withAch.length > 0
-              ? Math.round(withAch.reduce((s: number, r: any) => s + Number(r.target_achievement_pct), 0) / withAch.length)
-              : null;
-
-            const withRet = tickerAccRows.filter((r: any) => r.price_return !== null);
-            const avgRet = withRet.length > 0
-              ? Math.round(withRet.reduce((s: number, r: any) => s + Number(r.price_return), 0) / withRet.length * 10) / 10
-              : null;
-
-            let tickerAccBlock = `\n\n[🎯 이 종목(${analysis.ticker}) AI 예측 누적 성과 — ${tickerAccRows.length}건 분석 기록]\n`;
-            tickerAccBlock += `⚠️ 이 종목에 대한 과거 AI 예측 성과입니다. 아래 편향을 반드시 이번 목표주가에 보정하세요.\n`;
-
-            if (dirAcc !== null) {
-              tickerAccBlock += `• 방향 예측 정확도: ${dirAcc}% (${withDir.length}건 기준)`;
-              if (dirAcc < 45) tickerAccBlock += ` → ⛔ 방향 신뢰도 매우 낮음. 투자의견 단정 금지, 중립 + 조건부 논리만 사용`;
-              else if (dirAcc < 60) tickerAccBlock += ` → ⚠️ 방향 신뢰도 보통. 상·하단 시나리오 가중치를 균등(50/50)으로 설정`;
-              else tickerAccBlock += ` → ✓ 방향 예측 양호`;
-              tickerAccBlock += `\n`;
-            }
-
-            if (avgAch !== null) {
-              tickerAccBlock += `• 목표주가 달성도: 평균 ${avgAch}% (100%=완전달성, 음수=역방향)`;
-              if (avgAch < 30) tickerAccBlock += ` → ⛔ 심각한 과대평가 경향. 이번 목표주가를 25~35% 하향 설정`;
-              else if (avgAch < 55) tickerAccBlock += ` → ⚠️ 목표주가 과대평가 경향. 이번 목표주가를 10~20% 보수적으로 하향`;
-              else if (avgAch < 80) tickerAccBlock += ` → ⚠️ 목표주가 달성 저조. 소폭(5~10%) 하향 권장`;
-              else if (avgAch > 150) tickerAccBlock += ` → ✓ 과소평가 경향 있음. 목표주가 상향 가능`;
-              tickerAccBlock += `\n`;
-            }
-
-            if (avgRet !== null) {
-              const retStr = avgRet >= 0 ? `+${avgRet}` : `${avgRet}`;
-              tickerAccBlock += `• 분석 이후 평균 실제 주가 수익률: ${retStr}% — 이 종목의 과거 실제 움직임 참고\n`;
-            }
-
-            // 최근 결과 요약 (2건)
-            const recentSummary = tickerAccRows.slice(0, 2).map((r: any) => {
-              const ret = r.price_return !== null ? `${Number(r.price_return) >= 0 ? "+" : ""}${Number(r.price_return).toFixed(1)}%` : "N/A";
-              const dir = r.direction_match === true ? "방향✓" : r.direction_match === false ? "방향✗" : "";
-              const days = r.days_elapsed ? `${r.days_elapsed}일` : "";
-              return `  · ${days} 경과, 실제 ${ret}${dir ? " " + dir : ""}`;
-            });
-            if (recentSummary.length > 0) {
-              tickerAccBlock += `• 최근 결과:\n${recentSummary.join("\n")}\n`;
-            }
-
-            enrichedContext = enrichedContext ? enrichedContext + tickerAccBlock : tickerAccBlock;
-            console.log(`[ticker-acc] ${analysis.ticker} 누적 성과 주입 — ${tickerAccRows.length}건, 방향정확도 ${dirAcc ?? "N/A"}%, 달성도 ${avgAch ?? "N/A"}%`);
-          }
-        } catch {
-          // optional — 오류 시 무시
         }
       }
       // ─────────────────────────────────────────────────────────────────────
@@ -893,294 +571,84 @@ async function executeStep(
     }
   }
 
-  // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
-  if (stepKey === "relative_valuation") {
+  // ── dart_report_analysis: 사업보고서 원문 + 다기간 재무 데이터 주입 ────────
+  if (stepKey === "dart_report_analysis") {
     try {
-      onEvent?.({ t: "" }); // keep connection alive
+      const dartBlocks: string[] = [];
 
-      // 사전 수집 캐시 우선 사용 (company_analysis 실행 중 미리 수집한 결과)
-      let peers: Array<{ ticker: string; name: string; exchange: string; reason?: string }> = [];
-      let preFetchedData = "";
-      const preFetchPromise = preFetchedPeerData.get(id);
-      if (preFetchPromise) {
-        preFetchedPeerData.delete(id); // 사용 후 즉시 cleanup
-        const prefetch = await preFetchPromise;
-        peers = prefetch.peers;
-        preFetchedData = prefetch.data;
-        console.log(`[peer-select] 사전 수집 결과 사용 — ${peers.length}개 피어`);
-      }
-
-      // 사전 수집 실패·미수집 시 폴백: 직접 수집
-      if (peers.length === 0 && !preFetchedData) {
-        const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
-        peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext, analysis.ticker);
-        console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
-        if (peers.length === 0) {
-          console.warn("[peer-select] 1st attempt returned 0 peers — retrying with full context");
-          const fullContext = existingSteps.map((s) => s.content).join("\n").slice(0, 3000);
-          peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext, analysis.ticker);
-          console.log(`[peer-select] Retry selected ${peers.length} peers`);
-        }
-      }
-
-      // 한국 주식: KRX 업종 PBR + DART 직접 경쟁사 병렬 조회
-      const tickerKrxCode = normalizeTicker(analysis.ticker);
-      const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
-      if (isKoreanTicker) {
-        // 병렬 수집: KRX 업종 전체 + DART 명시 경쟁사
-        const krxCacheKey  = `krx_peer_ctx:${tickerKrxCode}`;
-        const dartCacheKey = `dart_peer_ctx:${tickerKrxCode}`;
-
-        const [krxCtxRaw, dartCtxRaw] = await Promise.allSettled([
-          (async () => {
-            let ctx: string | null = cache.get<string>(krxCacheKey) ?? null;
-            if (!ctx) { ctx = await getKRXSectorPeerContext(tickerKrxCode); if (ctx) cache.set(krxCacheKey, ctx, TTL.HOUR); }
-            return ctx;
-          })(),
-          (async () => {
-            let ctx: string | null = cache.get<string>(dartCacheKey) ?? null;
-            if (!ctx) { ctx = await getDartCompetitorPeerContext(tickerKrxCode); if (ctx) cache.set(dartCacheKey, ctx, TTL.HOUR); }
-            return ctx;
-          })(),
-        ]);
-
-        const krxCtx  = krxCtxRaw.status  === "fulfilled" ? krxCtxRaw.value  : null;
-        const dartCtx = dartCtxRaw.status === "fulfilled" ? dartCtxRaw.value : null;
-
-        // DART 경쟁사 먼저 주입 (AI가 가장 먼저 읽도록) → KRX 업종 전체 이어 붙임
-        if (dartCtx) {
-          enrichedContext = enrichedContext ? enrichedContext + "\n\n" + dartCtx : dartCtx;
-          console.log(`[dart-peer] Injected DART competitor peer context for ${tickerKrxCode}`);
+      // 1) 사업의 내용 원문
+      if (isKoreanTicker(analysis.ticker)) {
+        const bizContent = await fetchDartBusinessContent(analysis.ticker).catch(() => null);
+        if (bizContent && bizContent.length > 100) {
+          dartBlocks.push(`[📄 DART 사업보고서 — 사업의 내용 원문]\n${bizContent.slice(0, 12000)}`);
         } else {
-          console.log(`[dart-peer] No DART competitor data for ${tickerKrxCode}`);
-        }
-        if (krxCtx) {
-          enrichedContext = enrichedContext ? enrichedContext + "\n\n" + krxCtx : krxCtx;
-          console.log(`[krx-peer] Injected KRX sector PBR context for ${tickerKrxCode}`);
-        } else {
-          console.warn(`[krx-peer] No KRX data found for ${tickerKrxCode} — using hardcoded benchmark`);
-        }
-      }
-
-      // ── 업종 실측 배수 밴드 주입 ──────────────────────────────────────────────
-      // 예전에는 여기서 업종을 자체 정규식으로 다시 판정하고(ai-agents의 감지와
-      // 완전히 별개였다) 손으로 적어둔 배수 범위를 붙였다. 세 가지가 문제였다.
-      //
-      // ① 판정이 엇갈렸다 — 삼성바이오로직스·셀트리온은 여기서 "rNPV 필수"를
-      //    받는데 모델 선택기는 DCF를 배정했다.
-      // ② 숫자가 서로를 위반했다 — 바이오 할인율이 여기선 "8~12%, 15% 초과 금지"
-      //    인데 rNPV 모델은 "Phase 1 = 18% 고정"이었다.
-      // ③ 무엇보다 숫자가 낡고 틀렸다 — isNewSpace 정규식이 'aerospace'만 보고
-      //    한국 방산주에 "EV/Sales 20~60x(스페이스X 비교군)"를 지시했다. 한화시스템의
-      //    실제 EV/Sales는 3.4x다. 20x만 적용해도 시총이 76조(실제 12.8조)가 된다.
-      //    야후가 한국 방산을 스페이스X와 같은 칸에 넣은 것을 그대로 믿은 결과다.
-      //
-      // 이제 업종별 방법론은 lib/valuation의 모델 하나가 전담하고, 여기서는 그 모델이
-      // 쓸 **오늘의 실측 배수**만 넘긴다. 숫자는 stocks 뷰에서 매일 다시 집계되므로
-      // 낡지 않는다. 업종 판정도 KIS 분류를 함께 보는 classifySector 하나로 통일했다.
-      {
-        const guideLines: string[] = [];
-
-        const bandBlock = await buildSectorBandBlock(
-          tickerKrxCode,
-          analysis.industry ?? "",
-          isKoreanTicker ? "KR" : "US",
-        );
-        if (bandBlock) guideLines.push(bandBlock);
-
-        // ── 확보하지 못한 입력을 명시한다 ────────────────────────────────────
-        // 예전에는 데이터가 비어도 프롬프트가 아무 말을 하지 않아, AI가 조용히 추정으로
-        // 메웠다. 순부채를 추정한 분석에서 목표주가가 실제의 6배로 나온 적이 있다.
-        // 무엇이 없는지 알려주고 "지어내지 말라"고 못박는다. 로그에도 남겨,
-        // 어떤 분석이 무엇 없이 돌았는지 나중에 되짚을 수 있게 한다.
-        try {
-          const vInputs = await collectValuationInputs(
-            analysis.ticker,
-            analysis.companyName,
-            analysis.industry ?? "",
-            needsSOTP(analysis.industry ?? "", analysis.companyName ?? "", analysis.ticker),
-          );
-          console.log(`[val-inputs] ${describeInputs(vInputs)}`);
-          const gapBlock = renderInputGaps(vInputs);
-          if (gapBlock) guideLines.push(gapBlock);
-
-          // 저장해둔 직전 결과를 되읽어 넣는다.
-          // 예전에는 analysis_valuations에 남기기만 하고 **되읽는 코드가 없었다.**
-          // 그래서 같은 종목을 다시 분석하면 목표가가 크게 튀어도 아무도 몰랐다 —
-          // 한화시스템은 같은 날 5건이 1,590원 ~ 57,900원으로 갈렸다.
-          const [prior, segs] = await Promise.all([
-            getPriorValuation(analysis.ticker),
-            getPriorSegments(analysis.ticker),
-          ]);
-          const priorBlock = renderPriorBlock(prior, segs);
-          if (priorBlock) {
-            guideLines.push(priorBlock);
-            console.log(
-              `[val-prior] ${analysis.ticker} 직전 정본 주입 — ` +
-              `${prior ? `Base ${Math.round(prior.base ?? 0).toLocaleString()}원(#${prior.analysisId})` : "밸류에이션 없음"}` +
-              `, 부문전망 ${segs.length}행`,
-            );
-          }
-        } catch (e) {
-          console.warn(`[val-inputs] 입력 점검 실패 — 생략하고 진행:`, (e as Error)?.message);
-        }
-
-        guideLines.push(`\n[🎯 밸류에이션 공통 규칙]`);
-        guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);
-        guideLines.push(`· ⛔ 단위 오류 경고: 주당가치 = 총기업가치(원) ÷ 발행주식수(주). 발행주식수(주/천주)나 기업가치(원/억원/조원) 단위를 섞으면 목표가가 1/10~1/1000으로 오산됩니다.`);
-        guideLines.push(`· ⛔ BPS 단위: 자본총계(원) ÷ 발행주식수(주) = BPS(원/주). 자본총계가 백만원 단위면 ×1,000,000 변환 후 계산하세요.`);
-        guideLines.push(`· ⛔ 서버가 계산해 컨텍스트에 넣어준 BPS·순부채가 있으면 그 값을 우선 사용하세요. 직접 계산값이 서버값과 50% 이상 다르면 단위 오류를 의심하고 재계산하세요.`);
-        guideLines.push(`· 목표주가가 현재가의 10% 미만으로 나오면 단위 오류(억원↔원 혼용) 가능성 — 즉시 재검토.`);
-        guideLines.push(`· 피어 배수 선택 시 현재 시장 내재 멀티플(위 컨텍스트 참조)의 25% 미만 배수 사용 금지.`);
-        guideLines.push(`· 최종 목표주가(Base)는 현재가의 30% 미만 산출 시 QC 불승인 — 가정 재검토 필수.`);
-        guideLines.push(`\n⛔ 수치 일관성 필수 (위반 시 QC 불승인):`);
-        guideLines.push(`· 본문 결론에 기재한 Base 목표주가(숫자)와 FINAL_VALUATION_DATA.base 값이 반드시 동일한 숫자여야 합니다.`);
-        guideLines.push(`· 예: 본문에 "적정주가 350,000원"이라고 썼다면 FINAL_VALUATION_DATA.base = 350000. 두 값이 다르면 QC 불승인.`);
-
-        const guideBlock = guideLines.join("\n");
-        enrichedContext = enrichedContext ? enrichedContext + "\n" + guideBlock : guideBlock;
-        console.log(`[model-guide] 공통 규칙 주입 (실측 밴드 ${bandBlock ? "포함" : "없음"})`);
-      }
-
-      // ── 테마 프리미엄 보정 (이전 스텝 텍스트에서 핫 테마 감지 → 멀티플 상향) ───────
-      {
-        const prevStepsText = existingSteps.map(s => (s.content ?? "")).join(" ").toLowerCase();
-        const fullSignal = `${(analysis.companyName ?? "").toLowerCase()} ${(analysis.industry ?? "").toLowerCase()} ${prevStepsText.slice(0, 6000)}`;
-
-        const hotThemes: { label: string; premiumPct: number; sotp: boolean }[] = [];
-
-        if (/boston dynamics|보스턴다이나믹스|로보틱스|robotics|humanoid|인간형\s*로봇/.test(fullSignal)) {
-          hotThemes.push({ label: "로보틱스/휴머노이드(보스턴다이나믹스)", premiumPct: 20, sotp: true });
-        }
-        if (/자율주행|autonomous driving|sdv|소프트웨어 정의 자동차|software.defined vehicle/.test(fullSignal)) {
-          hotThemes.push({ label: "SDV/자율주행", premiumPct: 15, sotp: true });
-        }
-        if (/ai.반도체|ai chip|hbm|high bandwidth memory|ai 가속기|npu/.test(fullSignal)) {
-          hotThemes.push({ label: "AI반도체/HBM", premiumPct: 25, sotp: false });
-        }
-        if (/k.방산|방위산업|방산수출|defense export|k.defense/.test(fullSignal)) {
-          hotThemes.push({ label: "K-방산", premiumPct: 20, sotp: false });
-        }
-        if (/우주|space launch|발사체|위성통신|sat.?com|뉴스페이스/.test(fullSignal)) {
-          hotThemes.push({ label: "우주항공/뉴스페이스", premiumPct: 30, sotp: true });
-        }
-
-        if (hotThemes.length > 0) {
-          const needsSotp = hotThemes.some(t => t.sotp);
-          const avgPremium = Math.round(hotThemes.reduce((s, t) => s + t.premiumPct, 0) / hotThemes.length);
-          const themeLabels = hotThemes.map(t => t.label).join(", ");
-
-          let themeBlock = `\n\n[🚀 테마 노출 감지: ${themeLabels}]\n`;
-          themeBlock += `이 종목은 시장에서 고배수를 받는 테마에 노출됩니다. 상대가치 평가 시 아래를 적용하세요:\n`;
-          themeBlock += `① ⛔ 업종 배수에 테마 프리미엄을 일괄 가산하지 마세요 — 이중 계상입니다.\n`;
-          themeBlock += `   위에 제시된 '업종 실측 배수'는 오늘 시장 가격에서 뽑은 값이라, 업종 전체가\n`;
-          themeBlock += `   이미 재평가됐다면 그 재평가가 밴드에 반영돼 있습니다(예: 한국 방산 PER 중앙값).\n`;
-          themeBlock += `   여기에 다시 +${avgPremium}%를 얹으면 같은 프리미엄을 두 번 세는 셈입니다.\n`;
-          themeBlock += `   이 종목이 **업종 평균보다 더** 테마에 노출됐다는 근거(매출 기여도·수주·고객사\n`;
-          themeBlock += `   발표)를 정량으로 제시할 수 있을 때만, 밴드 중앙값 대신 상위25% 쪽을 쓰세요.\n`;
-          if (needsSotp) {
-            themeBlock += `② SOTP(Sum-of-the-Parts) 분석 권장:\n`;
-            themeBlock += `   · [전통 사업부] 동종 피어 배수로 평가\n`;
-            themeBlock += `   · [테마 사업부 — ${hotThemes.filter(t => t.sotp).map(t => t.label).join(", ")}] 성장주 EV/Sales 또는 프리미엄 EV/EBITDA로 별도 평가\n`;
-            themeBlock += `   · 두 가치 합산 → 주당 SOTP 가치를 목표주가로 제시\n`;
-          }
-          themeBlock += `③ 피어 참고: 전통 섹터 피어 외에 테마 선도 기업을 보조 벤치마크로 추가\n`;
-          themeBlock += `④ 테마 냉각(실적 미달·규제 리스크 현실화) 시 프리미엄 절반 이하로 축소`;
-
-          enrichedContext = enrichedContext ? enrichedContext + "\n" + themeBlock : themeBlock;
-          console.log(`[thematic-premium] 감지: ${themeLabels} | 평균 프리미엄: +${avgPremium}%`);
-        }
-      }
-
-      // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
-      if (peers.length === 0 && !isKoreanTicker) {
-        const mappedPeers = US_PEER_MAP[analysis.ticker.toUpperCase()];
-        if (mappedPeers?.length) {
-          peers = mappedPeers;
-          console.log(`[peer-select] Using hardcoded US peer map for ${analysis.ticker}: ${peers.map(p => p.ticker).join(", ")}`);
-        }
-      }
-
-      // 사전 수집 데이터가 이미 있으면 그대로 주입, 없으면 직접 fetchPeerFinancials 호출
-      if (preFetchedData) {
-        enrichedContext = enrichedContext ? enrichedContext + preFetchedData : preFetchedData;
-        console.log(`[peer-fetch] 사전 수집 데이터 주입 완료 (${preFetchedData.length}chars)`);
-      } else if (peers.length > 0) {
-        const peerData = await fetchPeerFinancials(peers);
-        if (peerData) {
-          enrichedContext = enrichedContext ? enrichedContext + peerData : peerData;
+          dartBlocks.push("[📄 DART 사업보고서] 수집 실패 또는 미수집 — 이전 단계 컨텍스트 기반으로 분석하세요.");
         }
       } else {
-        // 피어 수집 완전 실패 시 — 수치 없이 구조만 유지하도록 지시 (추정 금지)
-        const fallbackNote = `\n\n=== 피어 그룹 실시간 데이터 수집 실패 ===\n`
-          + `Yahoo Finance에서 피어 기업 실시간 데이터를 가져오지 못했습니다.\n`
-          + `⛔ 피어 비교 표에 수치를 AI가 임의로 채우거나 "(추정)" 표기를 사용하는 것을 엄격히 금지합니다.\n`
-          + `대신 ${analysis.companyName}(${analysis.industry ?? "해당 업종"}) 업종 내 대표 경쟁사 4~5개의 이름만 나열하고,\n`
-          + `모든 수치 셀은 "N/A (데이터 미수집)"으로 표기하세요. 피어 비교표는 구조만 유지하세요.\n`;
-        enrichedContext = enrichedContext ? enrichedContext + fallbackNote : fallbackNote;
-        console.warn("[peer-fetch] All peer attempts failed — injected no-estimate fallback note");
+        dartBlocks.push("[📄 미국 종목] SEC 10-K/10-Q 기반 분석. 아래 재무 데이터를 활용해 사업 흐름을 분석하세요.");
       }
+
+      // 2) 다기간 재무 데이터 (연간 3개년 + 분기 4개)
+      try {
+        const [annualRows, quarterRows] = await Promise.all([
+          rawQuery(
+            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
+                    total_assets, equity, cash, total_debt, operating_margin
+             FROM ticker_financials
+             WHERE ticker = $1 AND reprt_code = '11011'
+             ORDER BY bsns_year DESC LIMIT 4`,
+            [analysis.ticker]
+          ),
+          rawQuery(
+            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
+                    total_assets
+             FROM ticker_financials
+             WHERE ticker = $1 AND reprt_code != '11011'
+             ORDER BY bsns_year DESC, reprt_code DESC LIMIT 5`,
+            [analysis.ticker]
+          ),
+        ]);
+
+        if (annualRows.length > 0) {
+          const fmt = (v: any) => (v == null ? "—" : Number(v).toLocaleString("ko-KR"));
+          const pct = (v: any) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
+          const reprtLabel: Record<string, string> = { "11011": "연간", "11012": "반기", "11013": "1분기", "11014": "3분기" };
+
+          let annualTable = "\n[📊 연간 재무 추이 (억원)]\n";
+          annualTable += "| 연도 | 매출 | 영업이익 | 순이익 | OPM | 자산 | 자본 |\n";
+          annualTable += "|------|------|---------|--------|-----|------|------|\n";
+          for (const r of annualRows) {
+            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(r.operating_margin)} | ${fmt(r.total_assets)} | ${fmt(r.equity)} |\n`;
+          }
+          dartBlocks.push(annualTable);
+
+          if (quarterRows.length > 0) {
+            let qTable = "\n[📊 최근 분기 재무 추이 (억원)]\n";
+            qTable += "| 기간 | 매출 | 영업이익 | 순이익 |\n";
+            qTable += "|------|------|---------|--------|\n";
+            for (const r of quarterRows) {
+              const label = `${r.bsns_year}년 ${reprtLabel[r.reprt_code] ?? r.reprt_code}`;
+              qTable += `| ${label} | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} |\n`;
+            }
+            dartBlocks.push(qTable);
+          }
+        }
+      } catch (e) {
+        console.warn("[dart_report_analysis] 재무 데이터 조회 실패:", (e as Error)?.message?.slice(0, 80));
+        dartBlocks.push("[📊 재무 데이터] 조회 실패 — 이전 단계 컨텍스트 기반으로 추론하세요.");
+      }
+
+      const dartContext = dartBlocks.join("\n\n");
+      const injected = `\n\n${dartContext}`;
+      enrichedContext = enrichedContext ? enrichedContext + injected : injected;
+      console.log(`[dart_report_analysis] 컨텍스트 주입 완료 — ${dartContext.length}chars`);
     } catch (err) {
-      console.error("[peer-fetch] Failed:", err);
+      console.error("[dart_report_analysis] 컨텍스트 주입 실패:", (err as Error)?.message?.slice(0, 80));
     }
   }
 
 
   // ── 기술적 분析 전용: 주봉 이동평균(20주선·60주선) — 사전 수집 캐시 우선 사용 ──
-  if (stepKey === "market_analysis") {
-    try {
-      const wkPromise = preFetchedWeeklyMA.get(id);
-      let wkBlock = "";
-      if (wkPromise) {
-        preFetchedWeeklyMA.delete(id); // 사용 후 cleanup
-        wkBlock = await wkPromise;
-        if (wkBlock) console.log(`[weekly-ma] 사전 수집 데이터 주입 (${wkBlock.length}chars)`);
-      }
-      // 사전 수집 실패 시 폴백: 직접 계산
-      if (!wkBlock) {
-        const wkStart = new Date();
-        wkStart.setFullYear(wkStart.getFullYear() - 2);
-        const wkPeriod1 = wkStart.toISOString().slice(0, 10);
-        const wkHistory = await yahooFinance
-          .historical(analysis.ticker, { period1: wkPeriod1, interval: "1wk" }, { validateResult: false })
-          .catch(() => null);
-        if (wkHistory && wkHistory.length >= 20) {
-          const closes = wkHistory
-            .map((q: any) => (q as any).adjClose ?? (q as any).close)
-            .filter((c: any) => c != null && c > 0) as number[];
-          const calcMA = (arr: number[], period: number): number | null => {
-            if (arr.length < period) return null;
-            return arr.slice(-period).reduce((a, b) => a + b, 0) / period;
-          };
-          const ma20w = calcMA(closes, 20);
-          const ma60w = calcMA(closes, 60);
-          const latestClose = closes[closes.length - 1];
-          const wkLines: string[] = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
-          wkLines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
-          if (ma20w != null) {
-            const d = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
-            wkLines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
-          }
-          if (ma60w != null) {
-            const d = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
-            wkLines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
-          }
-          if (ma20w != null && ma60w != null) {
-            wkLines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
-          }
-          wkLines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
-          wkBlock = wkLines.join("\n");
-          console.log(`[weekly-ma] 폴백 계산 완료 (${wkBlock.length}chars)`);
-        } else {
-          console.warn(`[weekly-ma] 주봉 데이터 부족 (${wkHistory?.length ?? 0}주) — 주봉 MA 주입 생략`);
-        }
-      }
-      if (wkBlock) enrichedContext = enrichedContext ? enrichedContext + wkBlock : wkBlock;
-    } catch (err: any) {
-      console.warn("[weekly-ma] 주봉 MA 처리 실패:", err?.message?.slice(0, 80));
-    }
-  }
-  // ─────────────────────────────────────────────────────────────────────────
 
   // 현재 단계 이전에 완료된 단계만 context로 전달 (순서 보장)
   const currentStepIndex = STEP_ORDER.indexOf(stepKey);
@@ -1223,7 +691,7 @@ async function executeStep(
     previousStepsForContext,
     sectorCalibration,
     ((analysis as any).language ?? "ko") as "ko" | "en",
-    analysis.startPrice ?? null,
+    (analysis as any).startPrice ?? null,
     { opm: masterRow?.opm ?? null }
   );
 
@@ -1252,11 +720,10 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 한도: company_analysis만 32k (긴 재무 테이블), relative_valuation은 10k (debate로 품질 보장, 속도 최적화)
+    // 토큰 한도: company_analysis는 32k (긴 재무 테이블), 나머지는 8k
     const maxOutputTokens =
       stepKey === "company_analysis" ? 32768
-      : stepKey === "relative_valuation" ? 10240
-      : 6144;
+      : 8192;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃, 429 Rate Limit) 여부 판별
     const isTransient = (err: unknown) => {
@@ -1283,8 +750,7 @@ async function executeStep(
           await new Promise((r) => setTimeout(r, waitMs));
         }
 
-        // 밸류에이션 단계는 수치 일관성을 위해 더 낮은 temperature 사용
-        const stepTemperature = isValuationStep ? 0.12 : 0.15;
+        const stepTemperature = 0.15;
 
         // Gemini 세마포어 획득 후 스트림 소비 완료까지 유지
         await geminiSemaphore.acquire();
@@ -1324,26 +790,7 @@ async function executeStep(
 
           if (lastFinishReason === "MAX_TOKENS") {
             console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
-            if (stepKey === "relative_valuation" && !content.includes("FINAL_VALUATION_DATA")) {
-              try {
-                console.log(`[${stepKey}] FINAL_VALUATION_DATA 누락 — 복구 시도`);
-                const recoveryPrompt = (analysis as any).language === 'en'
-                  ? `The valuation report below was truncated due to token limits. Based on the target price and bands presented in this report, generate ONLY the FINAL_VALUATION_DATA JSON block. Output the JSON block only — no explanation.\n\n[Truncated report tail]\n${content.slice(-3000)}`
-                  : `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
-                const recoveryResp = await ai.models.generateContent({
-                  model: "gemini-2.5-flash",
-                  contents: [{ role: "user", parts: [{ text: recoveryPrompt }] }],
-                  config: { maxOutputTokens: 512, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
-                });
-                const recoveryText = recoveryResp.text ?? "";
-                if (recoveryText.includes("FINAL_VALUATION_DATA")) {
-                  content = content + "\n\n" + recoveryText;
-                  console.log(`[${stepKey}] FINAL_VALUATION_DATA 복구 성공`);
-                }
-              } catch (recoveryErr) {
-                console.warn(`[${stepKey}] FINAL_VALUATION_DATA 복구 실패:`, recoveryErr);
-              }
-            }
+
           }
           console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}, attempt: ${attempt}`);
         } finally {
@@ -1371,7 +818,7 @@ async function executeStep(
         // Round 2: Challenger 반론 생성 (내부 처리 — 스트리밍 없음)
         onEvent?.({ debate: "challenging" });
         const challengerFeedback = await runDebateChallenge(
-          stepKey as "company_analysis" | "relative_valuation",
+          stepKey as "company_analysis",
           content,
           analysis.companyName,
           analysis.ticker
@@ -1460,9 +907,7 @@ async function executeStep(
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Lead Portfolio Strategist QC ──────────────────────────────────────────
-    let finalContent = stepKey === "investment_strategy"
-      ? repairInvestmentStrategyContent(content)
-      : content;
+    let finalContent = content;
     let validationNotes: string | null = null;
 
     if (QC_STEPS.has(stepKey) && content && !content.startsWith("분석 오류")) {
@@ -1486,7 +931,7 @@ async function executeStep(
             ((analysis as any).language === 'en'
               ? `\n\n---\n[Lead Strategist Review — Mandatory Revision]\n${qcResult.feedback}\nAddress the above points clearly and rewrite the analysis to a higher standard of completeness. Write the ENTIRE revised report in English only.`
               : `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`);
-          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
+          const revisedMaxTokens = stepKey === "company_analysis" ? 32768 : 8192;
           await geminiSemaphore.acquire();
           let revisedContent = "";
           try {
@@ -1544,227 +989,20 @@ async function executeStep(
     );
     const step = stepRows[0] ? mapStepRow(stepRows[0]) : null;
 
-    // 밸류에이션 근거 수치를 구조화해 보관한다.
-    // 예전에는 이 단계 본문에서 목표가(base) 하나만 꺼내 쓰고 시나리오 밴드와
-    // 절대·상대 평가, 부문별 실적 전망을 통째로 버렸다. 여기서 저장해 두면
-    // 나중에 목표가 변화 추적과 "예상 vs 실제" 대조가 가능해진다.
-    // 저장 실패가 분석을 막으면 안 되므로 예외는 삼킨다.
-    if (stepKey === "relative_valuation") {
-      storeValuationArtifacts(id, finalContent).catch((e) =>
-        console.warn(`[valuation-store] #${id} 저장 실패:`, e?.message?.slice(0, 80))
-      );
-    }
 
     const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
     const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
     const isLast = stepKey === "investment_strategy";
 
     if (isLast) {
-      let investmentVerdict: string | null = null;
-      let targetPrice: number | null = null;
-      let entryPrice: number | null = null;
-      let stopLoss: number | null = null;
-      let riskRewardRatio: number | null = null;
-
-      const json = extractJsonSafe(content);
-      let savedStartPrice: number | null = null;
-      let savedTicker: string = "";
-      try {
-        if (!json) throw new Error("JSON parse failed");
-        investmentVerdict = json.verdict ?? null;
-
-        const parsePrice = (val: string | undefined) => {
-          if (!val) return null;
-          const num = parseFloat(String(val).replace(/[^0-9.]/g, ""));
-          return isNaN(num) ? null : num;
-        };
-
-        entryPrice = parsePrice(json.entry_price);
-        stopLoss = parsePrice(json.stop_loss);
-
-        // ── 목표가·진입가·손절가 이상값 가드 ─────────────────────────────────
-        const startPriceRow = await rawQuery(
-          `SELECT start_price, ticker, company_name, industry FROM analyses WHERE id=$1`,
-          [id]
-        );
-        savedStartPrice = startPriceRow[0]?.start_price ?? null;
-        savedTicker = startPriceRow[0]?.ticker ?? "";
-        const savedCompanyName: string = startPriceRow[0]?.company_name ?? "";
-        const savedIndustry: string = startPriceRow[0]?.industry ?? "";
-        const isKR = /^\d{6}$/.test(savedTicker);
-        const isFinancialStock = isKR && needsFinancialSector(savedIndustry, savedCompanyName, savedTicker);
-
-        // ── 1순위: relative_valuation FINAL_VALUATION_DATA.base 우선 사용 ──────
-        // investment_strategy AI가 지시를 무시하고 다른 값을 쓰는 경우를 서버에서 강제 보정
-        let rvBasePrice: number | null = null;
-        try {
-          const rvStepRow = await rawQuery(
-            `SELECT content FROM analysis_steps WHERE analysis_id=$1 AND step_key='relative_valuation' LIMIT 1`,
-            [id]
-          );
-          const rvContent: string = rvStepRow[0]?.content ?? "";
-          // bracket-counting 파서 사용 — 중첩 JSON에서 regex 방식(\{[\s\S]*?\})이 첫 }에 멈추는 버그 수정
-          const fvd = extractFvdJson(rvContent);
-          if (fvd) {
-            const parsed = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
-            if (!isNaN(parsed) && parsed > 0) rvBasePrice = parsed;
-          }
-        } catch { /* optional */ }
-
-        if (rvBasePrice && rvBasePrice > 0) {
-          // FINAL_VALUATION_DATA.base가 있으면 AI의 FINAL_JSON target_price 대신 사용
-          const aiTp = parsePrice(json.target_price);
-          if (aiTp && Math.abs(aiTp - rvBasePrice) / rvBasePrice > 0.02) {
-            console.warn(`[tp-override] AI wrote target_price=${aiTp} but FINAL_VALUATION_DATA.base=${rvBasePrice} — using valuation base`);
-          }
-          targetPrice = Math.round(rvBasePrice);
-        } else {
-          // FINAL_VALUATION_DATA 없으면 AI 출력값 사용 (fallback)
-          targetPrice = parsePrice(json.target_price);
-        }
-
-        // ── FINAL_VALUATION_DATA current price 검증 (AI가 wrong price 사용 시 조기 경보) ──
-        if (savedStartPrice && savedStartPrice > 0) {
-          const fvdMatch = content.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/);
-          if (fvdMatch) {
-            try {
-              const fvd = JSON.parse(fvdMatch[1]);
-              const fvdCurrent = parseFloat(String(fvd.current ?? fvd.current_price ?? "0").replace(/[^0-9.]/g, ""));
-              if (fvdCurrent > 0) {
-                const drift = Math.abs(fvdCurrent - savedStartPrice) / savedStartPrice;
-                if (drift > 0.2) {
-                  console.warn(
-                    `[analysis ${id}] FINAL_VALUATION_DATA current=${fvdCurrent} vs start_price=${savedStartPrice} (drift=${(drift * 100).toFixed(1)}%) — AI may have used wrong current price → target prices likely invalid`
-                  );
-                }
-              }
-            } catch (_) { /* JSON parse fail — ignore */ }
-          }
-        }
-
-        if (savedStartPrice && savedStartPrice > 0) {
-          // ── 하한 플로어 + 상한 캡 — LLM 오산출 방지 ──────────────────────
-          // 하한: DART 재무 데이터 부재 시 AI 오산출 방지
-          // 상한: LLM이 대형주에 황당한 목표가를 산출하는 사례 방지
-          //   (삼성전자 +370% 같은 케이스는 소형주·바이오 고배수 시나리오가 아님)
-          // 금융주(은행·보험·증권·금융지주): P/B-ROE 모델 기준으로 0.55x~1.8x 제한
-          // 일반 한국주: 0.45x~3.0x / 미국주: 0.25x~5.0x
-          const TARGET_MIN_RATIO = isFinancialStock ? 0.55 : (isKR ? 0.45 : 0.25);
-          const TARGET_MAX_RATIO = isFinancialStock ? 1.8  : (isKR ? 3.0  : 5.0);
-          if (isFinancialStock) console.log(`[tp-save] 금융주 감지(${savedTicker} ${savedCompanyName}) — 클램핑 ${TARGET_MIN_RATIO}x~${TARGET_MAX_RATIO}x 적용`);
-          if (targetPrice) {
-            const tRatio = targetPrice / savedStartPrice;
-            if (tRatio < TARGET_MIN_RATIO) {
-              const floored = Math.round(savedStartPrice * TARGET_MIN_RATIO);
-              console.warn(
-                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — raised to ${floored}`
-              );
-              if (tRatio < 0.1) {
-                console.error(
-                  `[analysis ${id}] DART 재무 부재 의심: AI target ${targetPrice}원은 현재가의 ${(tRatio * 100).toFixed(1)}% — 재무 데이터 없이 오산출된 것으로 판단. 기계적 floor(${floored})로 대체됨`
-                );
-              }
-              targetPrice = floored;
-            } else if (tRatio > TARGET_MAX_RATIO) {
-              const capped = Math.round(savedStartPrice * TARGET_MAX_RATIO);
-              console.warn(
-                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} ceiling) — capped to ${capped}`
-              );
-              targetPrice = capped;
-            } else {
-              console.log(`[analysis ${id}] target_price ${targetPrice} (${tRatio.toFixed(2)}x startPrice ${savedStartPrice}) — 범위 내 정상`);
-            }
-          }
-
-          // ── 진입가·손절가 3.5배 가드 ────────────────────────────────────
-          const MAX_RATIO = 3.5;
-          const MIN_RATIO = 1 / MAX_RATIO;
-          if (entryPrice) {
-            const ratio = entryPrice / savedStartPrice;
-            if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
-              console.warn(`[analysis ${id}] entry_price ${entryPrice} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
-              entryPrice = null;
-            }
-          }
-          // ⚠️ `if (stopLoss)`로만 걸러내면 **0이 그대로 저장된다** — 0은 거짓이라
-          // 아래 검사를 통째로 건너뛴다. 실제로 메디포스트(분석 1132)의 손절가가
-          // 0원으로 저장돼 있었다. 손절 0원은 "손실을 무한히 감수한다"는 뜻이라
-          // 손절선이 아예 없는 것보다 나쁘다. 값이 있으되 유효하지 않으면 null로 만든다.
-          if (stopLoss !== null) {
-            const ratio = stopLoss / savedStartPrice;
-            if (stopLoss <= 0) {
-              console.warn(`[analysis ${id}] stop_loss ${stopLoss} — 0 이하라 무효 처리`);
-              stopLoss = null;
-            } else if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
-              console.warn(`[analysis ${id}] stop_loss ${stopLoss} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
-              stopLoss = null;
-            }
-          }
-
-          // ── entry_price null → start_price fallback ──────────────────
-          // AI가 entry_price를 누락하거나 가드에 걸려 null이 된 경우,
-          // 분석 시점 시장가(start_price)를 진입가 기준으로 사용한다.
-          if (entryPrice === null) {
-            entryPrice = savedStartPrice;
-            console.log(`[analysis ${id}] entry_price null → fallback to start_price: ${savedStartPrice}`);
-          }
-        } else if (entryPrice === null) {
-          // savedStartPrice 자체가 null인 경우에도 기록
-          console.warn(`[analysis ${id}] entry_price null, start_price도 null — 가격 조회 실패`);
-        }
-
-        if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
-          riskRewardRatio = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
-        }
-
-        const rr = json.risk_reward;
-        if (!riskRewardRatio && rr) {
-          const m = String(rr).match(/[\d.]+/g);
-          if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
-        }
-
-        // ── 서버 사이드 판정 강제 결정 (일관성 보장) ──────────────────────────────
-        // AI 프롬프트가 같은 목표가에 다른 판정을 내릴 수 있는 확률적 오류를 방지.
-        // 목표가(targetPrice)와 분석시점 주가(savedStartPrice)로 upside를 계산해
-        // 판정을 완전 결정론적으로 덮어씀 — AI 판정은 무시함.
-        if (targetPrice && savedStartPrice && savedStartPrice > 0) {
-          const upside = (targetPrice - savedStartPrice) / savedStartPrice * 100;
-          let deterministicVerdict: string;
-          if (upside >= 30)        deterministicVerdict = "Strong Buy";
-          else if (upside >= 15)   deterministicVerdict = "Buy";
-          else if (upside >= -10)  deterministicVerdict = "Hold";
-          else if (upside >= -25)  deterministicVerdict = "Sell";
-          else                     deterministicVerdict = "Strong Sell";
-
-          if (investmentVerdict !== deterministicVerdict) {
-            console.log(
-              `[verdict-override] ${savedTicker} | AI: "${investmentVerdict}" → 확정: "${deterministicVerdict}" | upside ${upside.toFixed(1)}% (target ${targetPrice} / start ${savedStartPrice})`
-            );
-          }
-          investmentVerdict = deterministicVerdict;
-        }
-      } catch {
-        // JSON parse failed
-      }
-
-      // AI API 실패로 오류 문자열이 저장된 경우 → 실패한 스텝 삭제 후 in_progress 유지 (재시도 가능)
-      const stepHasApiError = content.startsWith("분석 오류:") || content.startsWith("분석 결과를 생성하지 못했습니다");
-      if (stepHasApiError) {
-        console.warn(`[analysis ${id}] investment_strategy API error — deleting failed step, keeping in_progress for retry`);
-        await rawQuery(
-          `DELETE FROM analysis_steps WHERE analysis_id = $1 AND step_key = 'investment_strategy'`,
-          [id]
-        );
-        // in_progress 상태 유지 — run-pipeline 또는 background가 재시도
-      } else {
-        await rawQuery(
-          `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
-           target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5,
-           updated_at=NOW(), completed_at=NOW()
-           WHERE id=$6`,
-          [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
-        );
-      }
+      // investment_strategy는 이제 마크다운 산문 — JSON 파싱 불필요
+      // DB의 investment_verdict, target_price 등은 새 분析에선 null로 유지
+      await rawQuery(
+        `UPDATE analyses SET status='completed', investment_verdict=NULL,
+         target_price=NULL, entry_price=NULL, stop_loss=NULL,
+         updated_at=NOW(), completed_at=NOW() WHERE id=$1`,
+        [id]
+      );
 
       // ── 토큰 비용 추정 저장 ────────────────────────────────────────────────
       try {
@@ -1853,85 +1091,6 @@ async function executeStep(
         }
       })();
 
-      // ── 종목별 자동 학습 데이터 저장 (#3/#5: priceAtAnalysis + predictedEps 추가) ──
-      if (targetPrice && entryPrice && investmentVerdict) {
-        try {
-          const upsidePct = ((targetPrice - entryPrice) / entryPrice) * 100;
-
-          // 분석 시점 실제 주가 = start_price (DB에서 이미 읽어온 savedStartPrice 재사용)
-          const priceAtAnalysis: number | null = savedStartPrice ?? null;
-
-          // 예측 EPS 추출: company_analysis 단계 본문에서 "EPS: X" 또는 "EPS __원" 패턴 파싱 (#5)
-          let predictedEps: number | null = null;
-          try {
-            const caStep = existingSteps.find(s => s.stepKey === "company_analysis");
-            if (caStep?.content) {
-              const epsMatch = caStep.content.match(
-                /(?:EPS|주당순이익)[^\d\-]*([\-]?\d[\d,]*\.?\d*)\s*(?:원|₩|\$|달러)?/i
-              );
-              if (epsMatch) {
-                const raw = parseFloat(epsMatch[1].replace(/,/g, ""));
-                if (!isNaN(raw)) predictedEps = raw;
-              }
-            }
-          } catch { /* EPS 파싱 실패는 무시 */ }
-
-          const newEntry = {
-            analysisId: id,
-            date: new Date().toISOString().slice(0, 10),
-            verdict: investmentVerdict,
-            targetPrice,
-            entryPrice,
-            upsidePct: Math.round(upsidePct * 10) / 10,
-            priceAtAnalysis,
-            predictedEps,
-          };
-
-          // 기존 학습 데이터 가져오기
-          const existingLearningRows = await rawQuery(
-            `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
-            [analysis.ticker]
-          );
-
-          let existing: { history?: typeof newEntry[] } = {};
-          if (existingLearningRows[0]?.auto_learning) {
-            existing = existingLearningRows[0].auto_learning as typeof existing;
-          }
-          const history = (existing.history ?? []).slice(-9); // 최대 10건 유지
-          history.push(newEntry);
-
-          await rawQuery(
-            `INSERT INTO ticker_notes (ticker, memo, auto_learning, updated_at)
-             VALUES ($1, '', $2, NOW())
-             ON CONFLICT (ticker) DO UPDATE SET auto_learning = $2, updated_at = NOW()`,
-            [analysis.ticker, JSON.stringify({ history })]
-          );
-          console.log(`[learning] Updated auto_learning for ${analysis.ticker} — priceAtAnalysis=${priceAtAnalysis}, predictedEps=${predictedEps} (${history.length} entries)`);
-        } catch (e) {
-          console.error("[learning] Failed to save auto_learning:", e);
-        }
-      }
-
-      // ── 가설 자동 생성 (hypotheses 테이블 — 성과 추적을 위한 기준점 기록) ────
-      if (targetPrice && entryPrice && investmentVerdict && analysis.companyName) {
-        (async () => {
-          try {
-            const upsidePct = ((targetPrice - entryPrice) / entryPrice) * 100;
-            const hypothesisText = `${investmentVerdict} — 목표주가 ${targetPrice.toLocaleString()}원/달러, 진입가 ${entryPrice.toLocaleString()} 대비 ${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}% 업사이드. 12개월 내 목표가 달성 여부 추적.`;
-            await pool.query(
-              `INSERT INTO hypotheses
-                 (analysis_id, ticker, company_name, hypothesis_text, target_price, entry_price, time_horizon, outcome, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, '12months', 'pending', NOW(), NOW())
-               ON CONFLICT DO NOTHING`,
-              [id, analysis.ticker, analysis.companyName, hypothesisText, targetPrice, entryPrice]
-            );
-            console.log(`[hypothesis] #${id} ${analysis.ticker} 가설 생성 완료 (TP=${targetPrice}, EP=${entryPrice})`);
-          } catch (e) {
-            console.error(`[hypothesis] #${id} 가설 생성 실패:`, e);
-          }
-        })();
-      }
-      // ────────────────────────────────────────────────────────────────────────
     } else if (nextStep) {
       await rawQuery(
         `UPDATE analyses SET current_step=$1, updated_at=NOW() WHERE id=$2`,

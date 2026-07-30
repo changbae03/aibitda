@@ -359,10 +359,9 @@ const STEP_CFG: Record<string, { emoji: string; label: string; labelEn: string; 
   company_intro:      { emoji: "🏢", label: "브리핑",        labelEn: "Briefing",    hex: "#94A3FF", rgb: "148,163,255" },
   industry_analysis:  { emoji: "🌐", label: "산업 분석",     labelEn: "Industry",    hex: "#7AE8B4", rgb: "122,232,180" },
   catalyst_analysis:  { emoji: "⚡", label: "촉매 분석",     labelEn: "Catalysts",   hex: "#FFD97A", rgb: "255,217,122" },
-  company_analysis:   { emoji: "📊", label: "실적 전망",     labelEn: "Financials",  hex: "#C87AFF", rgb: "200,122,255" },
-  relative_valuation: { emoji: "💰", label: "적정주가",      labelEn: "Valuation",   hex: "#7AB8FF", rgb: "122,184,255" },
-  market_analysis:    { emoji: "📈", label: "기술적 분석",   labelEn: "Technical",   hex: "#FF9F7A", rgb: "255,159,122" },
-  investment_strategy:{ emoji: "🎯", label: "최종 결론",     labelEn: "Conclusion",  hex: "#FF8A7A", rgb: "255,138,122" },
+  company_analysis:       { emoji: "📊", label: "실적분석",         labelEn: "Financials",  hex: "#C87AFF", rgb: "200,122,255" },
+  dart_report_analysis:  { emoji: "📋", label: "사업보고서 분석", labelEn: "Biz Report",  hex: "#7AE8D4", rgb: "122,232,212" },
+  investment_strategy:{ emoji: "🎯", label: "결론",           labelEn: "Conclusion",  hex: "#FF8A7A", rgb: "255,138,122" },
 };
 
 function ab(rgb: string, a = 0.1) { return `rgba(${rgb},${a})`; }
@@ -400,120 +399,29 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
   const isUS = isUSTicker(analysis.ticker ?? "");
 
   if (stepKey === "investment_strategy") {
-    const j = parseStrategyJson(content);
-    const verdictRaw = (analysis.investmentVerdict ?? j?.verdict ?? "");
-    const verdict  = verdictRaw.toUpperCase();
-    const verdictLabel = isEn ? verdict : (toKoreanVerdictLabel(verdictRaw) || verdict);
-    const targetP  = analysis.targetPrice ?? j?.target_price ?? null;
-    const entryP   = (analysis as any).entryPrice ?? j?.entry_price ?? null;
-    const stopL    = (analysis as any).stopLoss   ?? j?.stop_loss   ?? null;
-    const startP   = (analysis as any).startPrice ?? null;
-    const upside   = targetP && startP ? (targetP - startP) / startP * 100 : null;
-    const rr       = j?.risk_reward_ratio ?? (targetP && entryP && stopL && entryP !== stopL
-      ? Math.abs(targetP - entryP) / Math.abs(entryP - stopL) : null);
+    // 새 investment_strategy는 마크다운 산문 → 핵심 요약 첫 단락 표시
+    const stripped = content
+      .replace(/```json[\s\S]*?```/g, "")
+      .replace(/FINAL_VALUATION_DATA:\{[^\n]+\}/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    // 첫 ## 섹션 이전 리드 단락 또는 첫 200자 표시
+    const leadMatch = stripped.match(/^([\s\S]{30,300}?)(?:\n##|\n\n\n|$)/);
+    const preview = leadMatch ? leadMatch[1].trim() : stripped.slice(0, 200).trim();
+    const cfg = STEP_CFG.investment_strategy;
     return (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-end justify-between gap-2">
-          <div>
-            <div className={`font-black leading-tight ${isEn ? "text-4xl" : "text-2xl"}`} style={{ color: STEP_CFG.investment_strategy.hex }}>
-              {verdictLabel || "—"}
-            </div>
-            <div className="text-muted-foreground text-xs mt-0.5">{isEn ? "12M Verdict" : "12개월 투자의견"}</div>
-          </div>
-          {upside !== null && (
-            <div className="text-right">
-              <div className="text-2xl font-bold text-foreground">{fmtP(targetP, isUS, isEn)}</div>
-              <div className="text-sm font-semibold" style={{ color: STEP_CFG.investment_strategy.hex }}>{fmtPct(upside)}</div>
-            </div>
-          )}
+      <div className="flex flex-col gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: cfg.hex }}>
+          {isEn ? "Summary" : "핵심 요약"}
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            [isEn ? "Entry" : "진입가", fmtP(entryP, isUS, isEn)],
-            [isEn ? "Stop" : "손절가", fmtP(stopL, isUS, isEn)],
-            [isEn ? "R/R" : "손익비", rr ? `${rr.toFixed(2)}:1` : "—"],
-          ] as [string, string][]).map(([l, v]) => (
-            <div key={l} className="rounded-xl p-2.5" style={{ background: ab(STEP_CFG.investment_strategy.rgb, 0.08) }}>
-              <div className="text-[10px] text-muted-foreground mb-0.5">{l}</div>
-              <div className="text-sm font-bold text-foreground">{v}</div>
-            </div>
-          ))}
-        </div>
-        {j?.scenarios?.length > 0 && (
-          <div className="flex gap-2">
-            {(j.scenarios as any[]).map((s: any) => {
-              const isBull = s.case === "Bull", isBear = s.case === "Bear";
-              const col = isBull ? "#7AE8B4" : isBear ? "#FF8A7A" : "#7AB8FF";
-              return (
-                <div key={s.case} className="flex-1 rounded-xl p-2 text-center" style={{ background: "rgba(0,0,0,0.04)" }}>
-                  <div className="text-[10px] text-muted-foreground">{s.case}</div>
-                  <div className="text-xs font-bold mt-0.5" style={{ color: col }}>
-                    {s.upside ? (typeof s.upside === "number" ? fmtPct(s.upside) : s.upside) : fmtP(s.target_price, isUS, isEn)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <p className="text-[13px] leading-relaxed text-foreground/85 line-clamp-5">
+          {preview || (isEn ? "Synthesizing analysis…" : "분석 종합 중…")}
+        </p>
       </div>
     );
   }
 
-  if (stepKey === "relative_valuation") {
-    const fv = parseFinalValuationData(content);
-    const bear = fv?.bear ?? null, base = fv?.base ?? null, bull = fv?.bull ?? null;
-    const cur  = fv?.current ?? (analysis as any).startPrice ?? null;
-    const range = bear && bull ? bull - bear : 0;
-    const curPct  = cur  && bear && bull ? Math.max(3, Math.min(97, (cur  - bear) / range * 100)) : 50;
-    const basePct = base && bear && bull ? Math.max(3, Math.min(97, (base - bear) / range * 100)) : 65;
-    const upside  = base && cur && cur > 0 ? (base - cur) / cur * 100 : null;
-    const cfg = STEP_CFG.relative_valuation;
-    return (
-      <div className="flex flex-col gap-3">
-        {base && (
-          <div className="flex items-end justify-between">
-            <div>
-              <div className="text-2xl font-bold text-foreground">{fmtP(base, isUS, isEn)}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{isEn ? "Base Target" : "목표주가 (Base)"}</div>
-            </div>
-            {upside !== null && (
-              <div className="rounded-xl px-2.5 py-1 text-sm font-bold"
-                style={{ background: ab(cfg.rgb, 0.15), color: cfg.hex }}>
-                {fmtPct(upside)}
-              </div>
-            )}
-          </div>
-        )}
-        {bear && bull && (
-          <div>
-            <div className="flex justify-between text-[10px] text-muted-foreground/70 mb-1.5">
-              <span>Bear {fmtP(bear, isUS, isEn)}</span>
-              <span>Bull {fmtP(bull, isUS, isEn)}</span>
-            </div>
-            <div className="relative h-2.5 rounded-full" style={{ background: "rgba(0,0,0,0.06)" }}>
-              <div className="absolute inset-0 rounded-full"
-                style={{ background: "linear-gradient(90deg,#FF5A5A,#FF8A7A 30%,#7AB8FF 70%,#7AE8B4)" }} />
-              {cur && <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${curPct}%` }}>
-                <div className="w-0.5 h-5 bg-foreground/60 rounded-full" />
-              </div>}
-              {base && <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${basePct}%` }}>
-                <div className="w-3 h-3 rounded-full border-2 border-foreground/60" style={{ background: cfg.hex }} />
-              </div>}
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-3 gap-2">
-          {([["Bear", bear, "#FF8A7A"], ["Base", base, cfg.hex], ["Bull", bull, "#7AE8B4"]] as [string,number|null,string][]).map(([l,v,c]) => (
-            <div key={l} className="rounded-xl p-2.5 text-center" style={{ background: "rgba(0,0,0,0.04)" }}>
-              <div className="text-[10px] text-muted-foreground mb-0.5">{l}</div>
-              <div className="text-xs font-bold" style={{ color: c }}>{fmtP(v, isUS, isEn)}</div>
-            </div>
-          ))}
-        </div>
-        {!base && <div className="text-sm text-muted-foreground">{extractLeadText(content)}</div>}
-      </div>
-    );
-  }
+
 
   // 실적 전망 카드: 촉매 → 2026E/2027E 핵심 지표
   if (stepKey === "company_analysis") {
