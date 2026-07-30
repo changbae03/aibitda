@@ -3916,7 +3916,7 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 6: 행간읽기 (애빛다 6렌즈 — 대미) ══ */
+      {/* ══ 섹션 6: 행간읽기 (애빛다 6렌즈 — 대미) ══ */}
       {(() => {
         const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
         const streamingThesis = streamingStep?.key === "investment_thesis";
