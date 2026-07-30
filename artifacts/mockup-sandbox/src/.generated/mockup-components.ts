@@ -11,9 +11,9 @@ export const modules: ModuleMap = {
   "./components/mockups/macro-design/Minimal.tsx": () => import("../components/mockups/macro-design/Minimal.tsx"),
   "./components/mockups/macro-design/Modern.tsx": () => import("../components/mockups/macro-design/Modern.tsx"),
   "./components/mockups/macro-design/Premium.tsx": () => import("../components/mockups/macro-design/Premium.tsx"),
+  "./components/mockups/summary-cards/VariantA.tsx": () => import("../components/mockups/summary-cards/VariantA.tsx"),
+  "./components/mockups/summary-cards/VariantB.tsx": () => import("../components/mockups/summary-cards/VariantB.tsx"),
   "./components/mockups/mobile-home/CleanLight.tsx": () => import("../components/mockups/mobile-home/CleanLight.tsx"),
   "./components/mockups/mobile-home/GradientDeep.tsx": () => import("../components/mockups/mobile-home/GradientDeep.tsx"),
-  "./components/mockups/mobile-home/PremiumDark.tsx": () => import("../components/mockups/mobile-home/PremiumDark.tsx"),
-  "./components/mockups/summary-cards/VariantA.tsx": () => import("../components/mockups/summary-cards/VariantA.tsx"),
-  "./components/mockups/summary-cards/VariantB.tsx": () => import("../components/mockups/summary-cards/VariantB.tsx")
+  "./components/mockups/mobile-home/PremiumDark.tsx": () => import("../components/mockups/mobile-home/PremiumDark.tsx")
 };

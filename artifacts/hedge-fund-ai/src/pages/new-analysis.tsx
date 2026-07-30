@@ -532,9 +532,9 @@ export default function NewAnalysis() {
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
             {isEn ? (
-              <>One read reveals<br />the hidden flow.</>
+              <>Reading between<br />the lines of<br />great companies.</>
             ) : (
-              <>한번 읽으면<br />드러나지 않은<br />흐름이 보입니다</>
+              <>빛나는 기업<br />행간읽기</>
             )}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed break-keep">
@@ -796,7 +796,7 @@ export default function NewAnalysis() {
                   return (
                     <button
                       key={a.id}
-                      onClick={() => showConfirm(a.ticker, label)}
+                      onClick={() => a.id ? setLocation(`/analysis/${a.id}`) : showConfirm(a.ticker, label)}
                       disabled={isPending}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-card/80 hover:border-primary/30 hover:bg-primary/5 transition-all disabled:opacity-40 group text-left"
                     >
