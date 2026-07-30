@@ -3847,17 +3847,17 @@ export default function AnalysisDetail() {
       {(() => {
         const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
         const streamingThesis = streamingStep?.key === "investment_thesis";
-        // 구 분析(스텝이 없는 완료/실패 상태)에서는 무한 pending을 방지하기 위해 숨김
-        const showSection = !!thesisStep || streamingThesis ||
-          (!isComplete && !isError && analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis"));
+        const hasDart = analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        const showSection = !!thesisStep || streamingThesis || hasDart;
         if (!showSection) return null;
+        const canRunThesis = !thesisStep && !streamingThesis && !isStreaming && hasDart;
         return (
           <NarrativeSectionBlock
             num={4}
             title={isEn ? "Reading Between the Lines" : "행간읽기"}
             subtitle={isEn ? "Narrative · Tide · Cycle · Multiple · Catalyst Depth · Alignment" : "내러티브 · 조류 · 사이클 · 배수 온도 · 재료의 깊이 · 정합 점수"}
             accent="#8B5CF6"
-            pending={!thesisStep && !streamingThesis}
+            pending={false}
             isEn={isEn}
           >
             {thesisStep ? (
@@ -3868,6 +3868,25 @@ export default function AnalysisDetail() {
               <div className="flex items-center gap-3 py-10 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
                 <span className="text-sm text-muted-foreground">{isEn ? "Reading between the lines…" : "행간을 읽는 중…"}</span>
+              </div>
+            ) : canRunThesis ? (
+              <div className="flex flex-col items-center gap-3 py-10">
+                <p className="text-sm text-muted-foreground text-center">
+                  {isEn ? "This analysis was created before 행간읽기 was available." : "이 분析은 행간읽기 기능 추가 전에 완료되었습니다."}
+                </p>
+                <button
+                  onClick={() => {
+                    if (!triggeredSteps.current.has("investment_thesis")) {
+                      triggeredSteps.current.add("investment_thesis");
+                      runStreamingStepRef.current?.("investment_thesis");
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                  style={{ background: "#8B5CF6" }}
+                >
+                  <span>🔭</span>
+                  {isEn ? "Analyze now" : "지금 분析하기"}
+                </button>
               </div>
             ) : null}
           </NarrativeSectionBlock>
