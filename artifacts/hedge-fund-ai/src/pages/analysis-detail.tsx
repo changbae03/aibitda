@@ -2543,14 +2543,46 @@ function NarrativeStepContent({
   const body = leadIdx >= 0 ? processed.slice(leadIdx) : processed;
   const accentColor = accent ?? "hsl(var(--primary))";
 
-  // compact 모드: 첫 단락(들)만 표시 — 섹션 1과 같은 호흡
+  // compact 모드: 리드 문장 + 각 ## 섹션의 첫 단락만 digest로 표시
   if (compact) {
-    const compactText = leadPara || processed.split(/\n\n/)[0]?.trim() || processed;
+    // ## 섹션 단위로 분리
+    const sections = processed.split(/\n(?=## )/);
+    const lead = sections[0]?.trim() ?? "";
+
+    // 각 섹션에서 제목 + 첫 단락 추출 (최대 3개)
+    const digests = sections.slice(1).map(sec => {
+      const nlIdx = sec.indexOf('\n');
+      const header = nlIdx > 0 ? sec.slice(3, nlIdx).trim() : sec.slice(3).trim();
+      const rest = nlIdx > 0 ? sec.slice(nlIdx + 1).trim() : '';
+      // 첫 단락: 빈 줄이나 다음 헤더 전까지
+      const firstPara = rest.split(/\n\n|\n(?=#{1,3} )/)[0]?.trim() ?? '';
+      return { header, body: firstPara };
+    }).filter(d => d.body.length > 20).slice(0, 4);
+
     return (
-      <div className="space-y-3">
-        <div className="prose-narrative">
-          <MdBlock src={compactText} isEn={isEn} />
-        </div>
+      <div className="space-y-5">
+        {lead && (
+          <p
+            className="text-[14px] leading-[1.85] text-foreground/80 border-l-2 pl-4 py-0.5 italic"
+            style={{ borderLeftColor: `${accentColor}70` }}
+          >
+            {lead}
+          </p>
+        )}
+        {digests.length > 0 && (
+          <div className="divide-y divide-border/30">
+            {digests.map((d, i) => (
+              <div key={i} className={i === 0 ? "pb-4" : "py-4"}>
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-2">
+                  {d.header}
+                </p>
+                <div className="prose-narrative text-[13.5px] leading-relaxed">
+                  <MdBlock src={d.body} isEn={isEn} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -3535,10 +3567,10 @@ export default function AnalysisDetail() {
               <p className="text-[11px] text-muted-foreground/50 mt-0.5">{isEn ? "Revenue · Margins · Earnings · Stock trend" : "매출 · 이익 · 수익성 추이 · 최근 주가 동향"}</p>
             </div>
 
-            <div className="px-5 sm:px-6 py-5 space-y-8">
+            <div className="divide-y divide-border/30">
               {/* 실적 차트 */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-3">
+              <div className="px-5 sm:px-6 py-5">
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
                   {isEn ? "Earnings Trend" : "실적 추이"}
                 </p>
                 <div className="rounded-xl bg-muted/30 p-3">
@@ -3548,13 +3580,13 @@ export default function AnalysisDetail() {
 
               {/* 종합 재무 분析 (company_analysis) */}
               {compStep ? (
-                <div className="pt-2 border-t border-border/40">
+                <div className="px-5 sm:px-6 py-5">
                   <ErrorBoundary fallback={null}>
                     <NarrativeStepContent step={compStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
                   </ErrorBoundary>
                 </div>
               ) : streamingComp ? (
-                <div className="flex items-center gap-3 py-4 justify-center border-t border-border/40">
+                <div className="px-5 sm:px-6 py-5 flex items-center gap-3 justify-center">
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
                   <span className="text-sm text-muted-foreground">{isEn ? "Analyzing financials…" : "재무 분析 중…"}</span>
                 </div>
@@ -3562,8 +3594,8 @@ export default function AnalysisDetail() {
 
               {/* 최근 주가 동향 */}
               {(isComplete || compStep) && (
-                <div className="pt-2 border-t border-border/40">
-                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-3">
+                <div className="px-5 sm:px-6 py-5">
+                  <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
                     {isEn ? "Recent Price Trend" : "최근 주가 동향"}
                   </p>
                   <ErrorBoundary fallback={null}>
