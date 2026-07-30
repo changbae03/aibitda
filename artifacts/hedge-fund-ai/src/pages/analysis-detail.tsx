@@ -3628,29 +3628,38 @@ export default function AnalysisDetail() {
         return (
           <NarrativeSectionBlock
             num={4}
-            title={isEn ? "Investment thesis & what to check before buying" : "투자 포인트 + 살 때 확인할 것들"}
-            subtitle={isEn ? "Catalysts · Entry conditions · Risk checklist" : "어떤 촉매가 있어야 오르는지 · 매수 전 체크리스트"}
+            title={isEn ? "Recent news & what changes next" : "최근 뉴스가 이 기업을 어떻게 바꿀까"}
+            subtitle={isEn ? "News signals · Catalysts · What investors should watch" : "뉴스 흐름 · 사업 변화 신호 · 투자자가 봐야 할 것"}
             accent="#FF8A7A"
             pending={!hasAny && !activelyStreaming}
             isEn={isEn}
           >
-            {/* 최근 뉴스 & 촉매 */}
-            {catStep ? (
-              <ErrorBoundary fallback={null}>
-                <NarrativeStepContent step={catStep} isEn={isEn} ticker={analysis.ticker} accent="#FF8A7A" />
-              </ErrorBoundary>
-            ) : streamingCat ? (
-              <div className="flex items-center gap-3 py-6 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Finding catalysts…" : "투자 촉매 분析 중…"}</span>
-              </div>
-            ) : null}
-            {/* 최근 뉴스 타임라인 */}
-            <div className={catStep ? "mt-5 pt-5 border-t border-border/40" : ""}>
-              <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-3">{isEn ? "Recent News" : "최근 뉴스"}</p>
+            {/* ① 최근 뉴스 타임라인 — 뉴스 원문 + AI 변화 전망 요약 */}
+            <div>
+              <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
+                {isEn ? "Recent News" : "최근 뉴스"}
+              </p>
               <StockNewsTimeline ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />
             </div>
-            {/* 투자 전략 카드 */}
+
+            {/* ② 촉매 분析 — 뉴스 기반 사업 변화 심층 분析 */}
+            {catStep ? (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
+                  {isEn ? "What this means for the company" : "이 뉴스들이 가져올 변화"}
+                </p>
+                <ErrorBoundary fallback={null}>
+                  <NarrativeStepContent step={catStep} isEn={isEn} ticker={analysis.ticker} accent="#FF8A7A" />
+                </ErrorBoundary>
+              </div>
+            ) : streamingCat ? (
+              <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing what the news means…" : "뉴스 영향 분析 중…"}</span>
+              </div>
+            ) : null}
+
+            {/* ③ 투자 전략 카드 */}
             {streamingStrat && !stratStep ? (
               <div className="flex items-center gap-3 py-8 justify-center mt-6 pt-6 border-t border-border/40">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
