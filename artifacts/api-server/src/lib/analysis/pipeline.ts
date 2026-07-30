@@ -20,6 +20,7 @@ import { runQACheck } from "../qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
+import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -592,10 +593,26 @@ async function executeStep(
           const body = timeline
             .map(t => `\n───────── ${periodLabel(t.bsnsYear, t.quarter)} (${t.reportNm}) ─────────\n${t.content}`)
             .join("\n");
+          // 숫자는 코드가 뽑아 표로 먼저 준다.
+          //
+          // 기간이 4개에서 16개로 늘자 LLM이 다른 해 값을 끌어왔다(근거 확인 100%→41%).
+          // 원문 16개를 놓고 숫자를 찾게 하면 섞인다 — 프롬프트로는 못 막는다.
+          // 순서를 바꿔서, 찾을 일 자체를 없앤다.
+          const metricTable = renderMetricTable(timeline.map(t => ({
+            periodLabel: periodLabel(t.bsnsYear, t.quarter),
+            bsnsYear: t.bsnsYear, quarter: t.quarter,
+            hits: extractMetrics(t.content),
+          })));
+          if (metricTable) {
+            dartBlocks.push(metricTable);
+            console.log(`[dart_report_analysis] 서버 추출 지표표 주입 (${metricTable.length}chars)`);
+          }
+
           dartBlocks.push(
             `[📄 DART 사업보고서 시계열 — ${timeline.length}개 기간, 오래된 순]\n` +
             `⚠️ 같은 항목이 기간마다 어떻게 달라졌는지 대조하세요. **처음 등장한 기간·사라진 기간**을 분기까지 짚을 것.\n` +
-            `⚠️ 어떤 기간의 수치를 인용할 때는 반드시 그 기간 원문에 있는 값만 쓰세요 — 다른 기간 값을 끌어오면 서버 검산에서 걸립니다.` +
+            `⚠️ 수치는 위 [서버가 뽑은 수치] 표를 쓰세요. 아래 원문은 **맥락을 읽기 위한 것**이지 숫자를 찾는 곳이 아닙니다.\n` +
+            `⚠️ 원문에서 숫자를 인용해야 한다면 반드시 그 기간 원문에 있는 값만 쓰세요 — 다른 기간 값을 끌어오면 서버 검산에서 걸립니다.` +
             body,
           );
           console.log(`[dart_report_analysis] 시계열 ${timeline.length}개 기간 주입 (${body.length}chars)`);
