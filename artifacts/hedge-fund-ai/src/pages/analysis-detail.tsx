@@ -3847,8 +3847,9 @@ export default function AnalysisDetail() {
       {(() => {
         const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
         const streamingThesis = streamingStep?.key === "investment_thesis";
-        const showSection = isComplete || !!thesisStep || streamingThesis ||
-          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        // 구 분析(스텝이 없는 완료/실패 상태)에서는 무한 pending을 방지하기 위해 숨김
+        const showSection = !!thesisStep || streamingThesis ||
+          (!isComplete && !isError && analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis"));
         if (!showSection) return null;
         return (
           <NarrativeSectionBlock
