@@ -1000,21 +1000,21 @@ export default function NewAnalysis() {
               {isEn ? (
                 <>
                   <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                    <span className="font-bold" style={{ color: "#FF8A7A" }}>AiBITDA's AI analyst team</span><br />
-                    will start a 7-step deep analysis.
+                    From <span className="font-bold" style={{ color: "#FF8A7A" }}>DART filings</span><br />
+                    to investment conclusion — AI reads it all.
                   </p>
                   <p className="text-[11.5px] text-muted-foreground">
-                    ~3 minutes · Auto-selects DCF/rNPV valuation
+                    ~3 min · Filings · Earnings · News · Catalysts
                   </p>
                 </>
               ) : (
                 <>
                   <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                    <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
-                    7단계 심층 분석을 시작합니다.
+                    <span className="font-bold" style={{ color: "#FF8A7A" }}>DART 사업보고서</span>부터<br />
+                    투자 결론까지 AI가 읽어드립니다.
                   </p>
                   <p className="text-[11.5px] text-muted-foreground">
-                    평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+                    평균 3분 소요 · 사업보고서 · 실적 · 뉴스 · 촉매 종합 분석
                   </p>
                 </>
               )}
