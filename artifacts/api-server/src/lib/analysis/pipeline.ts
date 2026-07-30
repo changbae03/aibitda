@@ -19,6 +19,7 @@ import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
+import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -576,13 +577,41 @@ async function executeStep(
     try {
       const dartBlocks: string[] = [];
 
-      // 1) 사업의 내용 원문
+      // 1) 사업의 내용 — **여러 기간을 나란히** 넣는다.
+      //
+      // 이 단계의 임무는 "무엇이 달라졌나"인데, 최신 1건만 주면 비교할 과거가 없어
+      // 프롬프트의 지시(사업 구성 이동·캐파 변화·매출처 집중도 추이)가 통째로 헛돈다.
+      // dart_biz_reports에 분기·반기·연간을 (종목, 연도, 분기)로 쌓아두고 꺼내 쓴다.
       if (isKoreanTicker(analysis.ticker)) {
-        const bizContent = await fetchDartBusinessContent(analysis.ticker).catch(() => null);
-        if (bizContent && bizContent.length > 100) {
-          dartBlocks.push(`[📄 DART 사업보고서 — 사업의 내용 원문]\n${bizContent.slice(0, 12000)}`);
+        // 아직 안 받은 기간이 있으면 이때 채운다(이미 있는 기간은 건너뛴다).
+        await collectBizTimeline(analysis.ticker, 4).catch((e) =>
+          console.warn(`[dart_report_analysis] 시계열 수집 실패:`, (e as Error)?.message?.slice(0, 80)));
+
+        const timeline = await getBizTimeline(analysis.ticker).catch(() => []);
+        if (timeline.length >= 2) {
+          const body = timeline
+            .map(t => `\n───────── ${periodLabel(t.bsnsYear, t.quarter)} (${t.reportNm}) ─────────\n${t.content}`)
+            .join("\n");
+          dartBlocks.push(
+            `[📄 DART 사업보고서 시계열 — ${timeline.length}개 기간, 오래된 순]\n` +
+            `⚠️ 같은 항목이 기간마다 어떻게 달라졌는지 대조하세요. **처음 등장한 기간·사라진 기간**을 분기까지 짚을 것.\n` +
+            `⚠️ 어떤 기간의 수치를 인용할 때는 반드시 그 기간 원문에 있는 값만 쓰세요 — 다른 기간 값을 끌어오면 서버 검산에서 걸립니다.` +
+            body,
+          );
+          console.log(`[dart_report_analysis] 시계열 ${timeline.length}개 기간 주입 (${body.length}chars)`);
         } else {
-          dartBlocks.push("[📄 DART 사업보고서] 수집 실패 또는 미수집 — 이전 단계 컨텍스트 기반으로 분석하세요.");
+          // 시계열이 없으면 최신 1건이라도 — 다만 비교 분석은 못 한다고 알린다.
+          const bizContent = await fetchDartBusinessContent(analysis.ticker).catch(() => null);
+          if (bizContent && bizContent.length > 100) {
+            dartBlocks.push(
+              `[📄 DART 사업보고서 — 최신 1건만 확보]\n` +
+              `⚠️ 과거 보고서를 확보하지 못해 **기간 비교가 불가능합니다.** 변화·추이를 지어내지 말고, ` +
+              `현재 시점의 사업 구조만 서술한 뒤 "과거 공시 미확보로 추이 분석 불가"라고 밝히세요.\n` +
+              bizContent.slice(0, 12000),
+            );
+          } else {
+            dartBlocks.push("[📄 DART 사업보고서] 수집 실패 또는 미수집 — 이전 단계 컨텍스트 기반으로 분석하세요.");
+          }
         }
       } else {
         dartBlocks.push("[📄 미국 종목] SEC 10-K/10-Q 기반 분석. 아래 재무 데이터를 활용해 사업 흐름을 분석하세요.");

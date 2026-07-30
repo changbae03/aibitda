@@ -17,6 +17,8 @@ import { auditSotp, formatSotpIssues } from "./sotp-audit.js";
 import { auditReconciliation, formatReconcileIssues } from "../valuation/reconcile-audit.js";
 import { auditRnpv, formatRnpvIssues } from "../valuation/rnpv-audit.js";
 import { auditQuarters, formatQuarterIssues } from "../valuation/quarter-audit.js";
+import { findUngrounded, groundingScore, formatUngrounded } from "../biz-timeline-ground.js";
+import { getBizTimeline } from "../biz-timeline.js";
 import { getConfirmedQuarters } from "../dart-store.js";
 import { extractValuation } from "./valuation-extract.js";
 import { pickModel } from "../valuation/pick-model.js";
@@ -37,7 +39,11 @@ import { rawQuery } from "./store.js";
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>(["company_analysis"]); // 팀장 QC 검증
+// 팀장 QC 검증 대상.
+// dart_report_analysis를 넣은 이유: 이 단계는 출력의 숫자가 **원문에 있는지 기계로
+// 대조된다.** 기간이 늘수록 LLM이 다른 해 값을 끌어오므로(실측 4→16개 기간에서
+// 근거 확인 100%→41%) 검산 없이는 이 방향의 전제가 무너진다.
+const QC_STEPS = new Set<AgentKey>(["company_analysis", "dart_report_analysis"]);
 
 async function runQCCheck(
   stepKey: AgentKey,
@@ -48,14 +54,32 @@ async function runQCCheck(
   /** 조율 검산에서 모델 가중치를 고르는 데 쓴다 — 모델 선택과 같은 판정을 써야 한다 */
   industry?: string | null,
 ): Promise<{ approved: boolean; score: number; feedback: string }> {
+  // 밸류에이션 단계(relative_valuation)의 검산 3종(SOTP·조율·rNPV)은 그 단계가
+  // 파이프라인에서 빠지면서 호출부만 뺐다. 코드는 lib/valuation/에 그대로 있다 —
+  // 목표주가를 다시 낼 일이 생기면 STEP_ORDER에 단계를 넣고 여기서 부르면 된다.
+
+  // 사업보고서 시계열 분석은 **원문 대조가 가능하다** — 이 방향의 핵심 자산이다.
+  // 목표주가가 맞는지는 1년을 기다려야 알지만, "2025년 원문에 136,795가 있나"는
+  // 지금 확인된다. 실제로 기간이 4개에서 16개로 늘자 LLM이 다른 해 숫자를 끌어왔고
+  // 근거 확인 비율이 100% → 41%로 떨어졌다. 프롬프트로는 못 막는다.
+  if (stepKey === "dart_report_analysis") {
+    const sources = (await getBizTimeline(ticker).catch(() => []))
+      .map(t => ({ bsnsYear: t.bsnsYear, content: t.content }));
+    if (sources.length >= 2) {
+      const claims = findUngrounded(content, sources);
+      const score = groundingScore(content, sources);
+      console.log(`[qc] ${ticker} 사업보고서 근거 확인 ${(score * 100).toFixed(0)}% (${claims.length}건 미확인)`);
+      const text = formatUngrounded(claims);
+      if (text) {
+        return { approved: false, score: 3, feedback: text };
+      }
+    }
+  }
+
   // 확정 분기가 연간 전망을 구속해야 한다. 분기가 하나씩 확정될수록 연간은
   // 정확해져야 하는데, LLM은 연간을 먼저 정해놓고 분기를 끼워 맞추거나 확정된
   // 분기 값을 슬쩍 바꾼다. 메디포스트는 "743.7억원 → 743.7억원으로 상향 조정"이라고
   // 썼다 — 같은 숫자를 놓고 조정했다고 한 것이다.
-  //
-  // 밸류에이션 단계(relative_valuation)의 검산 3종(SOTP·조율·rNPV)은 그 단계가
-  // 파이프라인에서 빠지면서 호출부만 뺐다. 코드는 lib/valuation/에 그대로 있다 —
-  // 목표주가를 다시 낼 일이 생기면 STEP_ORDER에 단계를 넣고 여기서 부르면 된다.
   if (stepKey === "company_analysis") {
     const confirmed = await getConfirmedQuarters(ticker).catch(() => []);
     const qIssues = auditQuarters({ content, confirmed });
