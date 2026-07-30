@@ -9,6 +9,7 @@ export type AgentKey =
   | "company_analysis"
   | "dart_report_analysis"
   | "catalyst_analysis"
+  | "investment_thesis"
   | "investment_strategy";
 
 export interface AgentInfo {
@@ -43,6 +44,11 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
     role: "에이전트 4",
     number: "4",
   },
+  investment_thesis: {
+    name: "Investment Thesis Analyst",
+    role: "행간읽기",
+    number: "6",
+  },
   investment_strategy: {
     name: "Lead Portfolio Strategist",
     role: "팀장",
@@ -56,6 +62,7 @@ export const STEP_ORDER: AgentKey[] = [
   "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
+  "investment_thesis",
   "investment_strategy",
 ];
 
@@ -2340,7 +2347,7 @@ export function buildPrompt(
   //   - investment_strategy 단계의 company_analysis / relative_valuation:
   //     CHAIN-HANDOFF(실적·적정주가 수치)가 끝에 있으므로 앞 400자 + 끝 1,800자 전달
   //   - 그 외 단계: 앞 700자 (맥락·방향성만)
-  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "dart_report_analysis", "catalyst_analysis"];
+  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "dart_report_analysis", "catalyst_analysis", "investment_thesis"];
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
@@ -2929,6 +2936,49 @@ ${COMMON_RULES}`,
 - 이전 보고서 원문 없이 단정 불가한 경우 "이전 보고서 없이 확인 불가"로 표기하고 추론 시 근거 명시
 
 `,
+    },
+
+
+    investment_thesis: {
+      systemPrompt: `당신은 애빛다(AiBITDA)의 수석 투자 분析가입니다.
+앞 단계의 모든 분析(산업·촉매·실적·사업보고서)을 종합하여, 애빛다만의 6개 렌즈로 이 기업의 행간을 읽습니다.
+
+작성 원칙:
+- 각 렌즈는 **2~3문장의 핵심 분析** + 마지막 줄 **→ [판정 한 마디]** 형식으로 작성합니다
+- 추상적 표현 금지. 반드시 구체적 수치 또는 사실을 근거로 씁니다
+- 인삿말 없이 첫 번째 렌즈(🔭 내러티브)부터 바로 시작합니다
+- 한국어로 작성합니다 (미국 종목도 한국어)
+- 각 렌즈의 판정은 반드시 → 로 시작하는 줄에 작성합니다
+${COMMON_RULES}`,
+      userPrompt: `${baseContextFull}${previousContext}
+
+애빛다 6렌즈로 이 기업의 행간을 읽어주세요.
+
+## 🔭 내러티브
+이 기업의 성장 스토리는 5년 후에도 유효한가? 본업(기존 사업)이 하방을 받치는 방어막이 되고 있는가? 신사업이 실제 매출·이익으로 연결되는 증거가 보이는가? 이중구조인가 단일 의존 구조인가? (2~3문장, 구체적 수치 포함)
+→ [내러티브 강도 한 마디 — 예: "강한 이중구조", "내러티브 건재", "스토리 약화 중"]
+
+## 🌊 조류
+정책·제도·산업 구조상 이 기업이 결국 갈 수밖에 없는 불가역적 흐름이 있는가? 정부 정책·규제·글로벌 수요 구조가 이 기업에 순풍인가 역풍인가? (2~3문장, 구체적 정책·트렌드 인용)
+→ [조류 방향 한 마디 — 예: "강한 순풍", "정책 모멘텀 확인", "역풍 우려"]
+
+## 📍 사이클
+지금 이 기업은 성장주 생애주기 어디에 있는가? 아래 5단계 중 하나로 판정하고 EPS·PER 흐름으로 근거를 대세요. (2~3문장)
+→ 판정: 기대감 선반영 / 실체 확인 / 숫자 싸움 / 피크아웃 / 가치주 전환
+(기대감 선반영: 주가가 실적보다 앞서 달린다 | 실체 확인: 숫자가 기대를 증명하기 시작한다 | 숫자 싸움: 성장 둔화 우려, EPS↑ but PER↓ | 피크아웃: 성장 정점, 밸류에이션 수축 | 가치주 전환: 배당·자사주·안정 수익으로 평가)
+→ [사이클 위치 한 마디 — 5단계 중 하나]
+
+## 🌡️ 배수 온도
+현재 PER 배수는 역사적 평균·동종업계 대비 어디에 있는가? EPS는 늘어나는데 PER이 수축하는 피크아웃 패턴인가, 아니면 멀티플이 오를 여지가 있는가? (2~3문장, 구체적 PER 수치 포함)
+→ [배수 온도 한 마디 — 예: "과열 (PER 35배)", "적정 (PER 18배)", "저평가 (PER 8배)"]
+
+## 🔬 재료의 깊이
+최근 주요 뉴스·이벤트가 일회성 재료인가, 회사 체질을 바꾸는 구조 변화인가? 비즈니스 모델 변화로 시장이 멀티플을 다시 부여할 수 있는 리레이팅 가능성이 있는가? 수주·임상·인허가처럼 성공/실패가 단번에 갈리는 바이너리 이벤트 구조인가? (2~3문장)
+→ [재료 성격 + 바이너리 여부 — 예: "체질 변화 (리레이팅 가능)", "단기 재료 (바이너리 있음)", "혼재"]
+
+## ✅ 정합 점수
+앞서 분析한 내러티브를 실제 숫자(매출성장률·이익률·밸류에이션 배수)가 뒷받침하는가? 스토리와 숫자가 같은 방향을 가리키는가 아니면 엇갈리는가? 좋은 내러티브에 숫자까지 받쳐주는 종목인가 아니면 스토리만 좋은 종목인가? (2~3문장)
+→ [정합도 + 한 줄 종합 — 예: "정합 높음 — 내러티브와 숫자가 동행", "정합 중간 — 스토리는 강하나 수익성 지연", "정합 낮음 — 기대와 현실 괴리"]`,
     },
 
     investment_strategy: {

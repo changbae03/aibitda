@@ -3,6 +3,7 @@ import {
   Globe2,
   PieChart,
   Zap,
+  Eye,
   LucideIcon
 } from "lucide-react";
 
@@ -74,6 +75,17 @@ export const AGENTS: Record<string, AgentInfo> = {
     description: "사업 구성 변화·매출처 집중도·투자 방향·성장 단계·캐파 변화 분석",
     descriptionEn: "Business mix shifts, revenue concentration, investment direction, growth stage, capacity changes",
   },
+  investment_thesis: {
+    id: "investment_thesis",
+    name: "행간읽기",
+    nameEn: "Investment Thesis",
+    role: "Investment Thesis Analyst",
+    icon: Eye,
+    color: "text-violet-700",
+    bgColor: "bg-violet-50",
+    description: "애빛다 6렌즈 — 내러티브·조류·사이클·배수 온도·재료의 깊이·정합 점수",
+    descriptionEn: "AiBITDA 6-lens — Narrative, Tide, Cycle, Temperature, Catalyst Depth, Alignment",
+  },
   investment_strategy: {
     id: "investment_strategy",
     name: "결론",
@@ -93,5 +105,6 @@ export const ANALYSIS_STEPS_ORDER = [
   "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
+  "investment_thesis",
   "investment_strategy",
 ] as const;

@@ -2211,6 +2211,57 @@ function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent
 }
 
 // ── 투자 결론: 핵심 포인트 3개 렌더러 ────────────────────────────────────────
+// ── 애빛다 6렌즈 행간읽기 ────────────────────────────────────────────────────
+function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
+  const raw = (step.content ?? "").replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");
+
+  const sectionParts = raw.split(/\n(?=## )/).filter((s: string) => s.trim().startsWith("##"));
+
+  const LENS_STYLES = [
+    { border: "border-indigo-400/50", bg: "bg-indigo-500/[0.04]", badge: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
+    { border: "border-sky-400/50",    bg: "bg-sky-500/[0.04]",    badge: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+    { border: "border-violet-400/50", bg: "bg-violet-500/[0.04]", badge: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+    { border: "border-amber-400/50",  bg: "bg-amber-500/[0.04]",  badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    { border: "border-orange-400/50", bg: "bg-orange-500/[0.04]", badge: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
+    { border: "border-emerald-400/50",bg: "bg-emerald-500/[0.04]",badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  ];
+
+  const parsed = sectionParts.map((section: string, i: number) => {
+    const lines = section.split("\n");
+    const header = lines[0].replace(/^##\s*/, "").trim();
+    const verdictIdx = lines.findIndex((l: string, idx: number) => idx > 0 && l.trim().startsWith("→"));
+    const verdictLine = verdictIdx >= 0 ? lines[verdictIdx] : null;
+    const verdict = verdictLine?.replace(/^→\s*\*?\*?/, "").replace(/\*?\*?$/, "").trim();
+    const bodyLines = lines.slice(1, verdictIdx >= 0 ? verdictIdx : undefined);
+    const body = bodyLines.join("\n").trim();
+    return { header, body, verdict, style: LENS_STYLES[i % LENS_STYLES.length] };
+  });
+
+  if (parsed.length === 0) {
+    return <div className="prose-narrative"><MdBlock src={raw} isEn={isEn} /></div>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {parsed.map((lens: { header: string; body: string; verdict?: string; style: typeof LENS_STYLES[0] }, i: number) => (
+        <div key={i} className={`rounded-xl border ${lens.style.border} ${lens.style.bg} p-4 flex flex-col gap-2.5`}>
+          <p className="text-[13.5px] font-bold text-foreground leading-snug">{lens.header}</p>
+          {lens.body && (
+            <p className="text-[12.5px] leading-[1.85] text-foreground/70 flex-1">{lens.body}</p>
+          )}
+          {lens.verdict && (
+            <div className="pt-1.5 border-t border-border/25">
+              <span className={`inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full ${lens.style.badge}`}>
+                {lens.verdict}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
   const content = step.content ?? "";
 
@@ -3792,7 +3843,37 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 3: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
+      {/* ══ 섹션 4: 행간읽기 (애빛다 6렌즈) ══ */}
+      {(() => {
+        const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
+        const streamingThesis = streamingStep?.key === "investment_thesis";
+        const showSection = isComplete || !!thesisStep || streamingThesis ||
+          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        if (!showSection) return null;
+        return (
+          <NarrativeSectionBlock
+            num={4}
+            title={isEn ? "Reading Between the Lines" : "행간읽기"}
+            subtitle={isEn ? "Narrative · Tide · Cycle · Multiple · Catalyst Depth · Alignment" : "내러티브 · 조류 · 사이클 · 배수 온도 · 재료의 깊이 · 정합 점수"}
+            accent="#8B5CF6"
+            pending={!thesisStep && !streamingThesis}
+            isEn={isEn}
+          >
+            {thesisStep ? (
+              <ErrorBoundary fallback={null}>
+                <ThesisView step={thesisStep} isEn={isEn} />
+              </ErrorBoundary>
+            ) : streamingThesis ? (
+              <div className="flex items-center gap-3 py-10 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Reading between the lines…" : "행간을 읽는 중…"}</span>
+              </div>
+            ) : null}
+          </NarrativeSectionBlock>
+        );
+      })()}
+
+      {/* ══ 섹션 5: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
       {(() => {
         const catStep = analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis");
         const streamingCat = streamingStep?.key === "catalyst_analysis";
@@ -3803,7 +3884,7 @@ export default function AnalysisDetail() {
         if (!showSection) return null;
         return (
           <NarrativeSectionBlock
-            num={4}
+            num={5}
             title={isEn ? "What's happening right now?" : "지금 이 기업에 무슨 일이 일어나고 있나"}
             subtitle={isEn ? "Recent news · Business change signals · Catalysts & risks" : "최근 뉴스 · 사업 변화 신호 · 촉매와 리스크"}
             accent="#F59E0B"
@@ -3844,7 +3925,7 @@ export default function AnalysisDetail() {
         const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
         return (
           <NarrativeSectionBlock
-            num={5}
+            num={6}
             title={isEn ? "Investment conclusion" : "투자 결론"}
             subtitle={isEn ? "3 core investment points" : "핵심 투자 포인트 3가지"}
             accent="#FF8A7A"
