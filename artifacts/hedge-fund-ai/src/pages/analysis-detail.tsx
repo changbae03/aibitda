@@ -2177,23 +2177,13 @@ function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent
           style={{ borderLeftColor: `${accent}70` }}>{lead}</p>
       )}
 
-      {/* 핵심 촉매 */}
-      {catalystSection && (
+      {/* 향후 주목할 이벤트 (핵심 촉매 + 타임라인 통합) */}
+      {(catalystSection || timelineSection) && (
         <div>
           <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
-            {isEn ? "Key catalysts (3–6M)" : "⚡ 핵심 촉매 (3-6개월)"}
+            {isEn ? "Events to watch" : "향후 주목할 이벤트"}
           </p>
-          <CatalystBullets body={catalystSection.body} />
-        </div>
-      )}
-
-      {/* 향후 이벤트 타임라인 */}
-      {timelineSection && (
-        <div className={catalystSection ? "pt-5 border-t border-border/30" : ""}>
-          <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
-            {isEn ? "📅 Event timeline (12M)" : "📅 향후 12개월 이벤트 타임라인"}
-          </p>
-          <ForwardTimeline body={timelineSection.body} accent={accent} />
+          {catalystSection && <CatalystBullets body={catalystSection.body} />}
         </div>
       )}
 
@@ -2224,20 +2214,18 @@ function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent
 function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
   const content = step.content ?? "";
 
-  // ① ② ③ 파싱
-  const pointRegex = /([①②③])\s*([^\n]+)\n([\s\S]*?)(?=[①②③]|$)/g;
-  const points: { num: string; title: string; body: string }[] = [];
+  // ① ② ③ 파싱 — 한 줄 또는 여러 줄 모두 지원
+  const pointRegex = /[①②③]\s*([\s\S]*?)(?=[①②③]|$)/g;
+  const points: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = pointRegex.exec(content)) !== null) {
-    points.push({ num: m[1], title: m[2].trim(), body: m[3].trim() });
+    const text = m[1].trim();
+    if (text) points.push(text);
   }
 
   const COLORS = ["#6366F1", "#10B981", "#F59E0B"];
-  const BG = ["bg-indigo-500/10", "bg-emerald-500/10", "bg-amber-500/10"];
-  const BORDER = ["border-indigo-500/20", "border-emerald-500/20", "border-amber-500/20"];
 
   if (points.length === 0) {
-    // 파싱 실패 시 마크다운 그대로
     return (
       <div className="prose-narrative px-1">
         <MdBlock src={content} isEn={isEn} />
@@ -2246,19 +2234,16 @@ function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
   }
 
   return (
-    <div className="space-y-4">
-      {points.slice(0, 3).map((pt, i) => (
-        <div key={i} className={`rounded-xl border p-4 sm:p-5 ${BG[i]} ${BORDER[i]}`}>
-          <div className="flex items-center gap-3 mb-2.5">
-            <span
-              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[13px] font-bold shrink-0"
-              style={{ background: COLORS[i] }}
-            >
-              {i + 1}
-            </span>
-            <p className="font-bold text-[14px] text-foreground leading-tight">{pt.title}</p>
-          </div>
-          <p className="text-[13.5px] text-foreground/75 leading-[1.8] pl-10">{pt.body}</p>
+    <div className="space-y-2.5">
+      {points.slice(0, 3).map((text, i) => (
+        <div key={i} className="flex items-start gap-3">
+          <span
+            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 mt-0.5"
+            style={{ background: COLORS[i] }}
+          >
+            {i + 1}
+          </span>
+          <p className="text-[13.5px] text-foreground/80 leading-[1.75] flex-1">{text}</p>
         </div>
       ))}
     </div>
@@ -2702,7 +2687,9 @@ function NarrativeStepContent({
 }: {
   step: any; isEn?: boolean; ticker?: string; accent?: string; compact?: boolean;
 }) {
-  const raw = step.content ?? "";
+  const raw = (step.content ?? "")
+    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분析 요약")
+    .replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");  // 헤딩 숫자 번호 제거 (## 5. 제목 → ## 제목)
   const processed = stripPromptInstructions(stripEstimationLabels(
     step.stepKey === "company_analysis" ? stripValuationData(raw) : raw,
   ));
@@ -2769,9 +2756,6 @@ function NarrativeStepContent({
       <div className="prose-narrative">
         <MdBlock src={body} isEn={isEn} />
       </div>
-      {step.stepKey === "dart_report_analysis" && ticker && (
-        <DartFinancialCharts ticker={ticker} isEn={isEn} color={accentColor} />
-      )}
     </div>
   );
 }
@@ -3382,45 +3366,51 @@ export default function AnalysisDetail() {
       <div className="mt-4 sm:mt-5 space-y-3.5 sm:space-y-4">
 
       {/* ── Report Hero ─────────────────────────────────────────────── */}
-      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden border border-border/50">
+      <div ref={headerRef} className="rounded-2xl overflow-hidden border border-border/50 relative bg-card">
+
+        {/* 방향성 글로우 배경 */}
+        {headerLivePrice && headerLivePrice.change != null && (
+          <div className={cn(
+            "absolute inset-0 pointer-events-none",
+            headerLivePrice.change >= 0
+              ? "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(142_76%_36%/0.07),transparent)]"
+              : "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(0_84%_60%/0.07),transparent)]"
+          )} />
+        )}
 
         {/* 상단 컬러 스트라이프 */}
         <div className={cn(
-          "h-1 w-full",
+          "h-[3px] w-full relative z-10",
           isComplete && effectiveVerdict
             ? ["strong buy", "buy"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+              ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500/20"
               : ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-rose-500 to-orange-400"
-              : "bg-gradient-to-r from-amber-400 to-yellow-300"
-            : "bg-gradient-to-r from-primary/40 to-primary/20"
+              ? "bg-gradient-to-r from-rose-500 via-orange-400 to-rose-500/20"
+              : "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400/20"
+            : "bg-gradient-to-r from-primary/60 via-primary/30 to-transparent"
         )} />
 
-        <div className="p-5 sm:p-6">
+        <div className="relative z-10 p-5 sm:p-6">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 sm:gap-6">
 
             {/* ── 왼쪽: 종목 정보 ── */}
             <div className="flex-1 min-w-0">
 
-              {/* 회사명 + 배지 */}
-              <div className="flex items-start justify-between gap-3 mb-1">
+              {/* 회사명 + 티커 인라인 + 상태 배지 */}
+              <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="min-w-0">
-                  {isEn ? (
-                    <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
-                      {analysis.englishName || analysis.companyName}
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <h1 className="text-[1.75rem] md:text-[2.1rem] font-display font-extrabold text-foreground leading-tight tracking-[-0.02em]">
+                      {isEn ? (analysis.englishName || analysis.companyName) : analysis.companyName}
                     </h1>
-                  ) : (
-                    <>
-                      <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
-                        {analysis.companyName}
-                      </h1>
-                      {analysis.englishName && (
-                        <p className="text-xs text-muted-foreground/70 mt-0.5 font-normal">{analysis.englishName}</p>
-                      )}
-                    </>
+                    <span className="font-mono text-[11px] font-bold text-primary/80 bg-primary/8 px-2 py-0.5 rounded-md border border-primary/15 self-end mb-0.5 shrink-0">
+                      {analysis.ticker}
+                    </span>
+                  </div>
+                  {!isEn && analysis.englishName && (
+                    <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-normal">{analysis.englishName}</p>
                   )}
                 </div>
-                {/* 상태 배지 */}
                 <span className={cn(
                   "shrink-0 mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full border",
                   isComplete
@@ -3431,18 +3421,18 @@ export default function AnalysisDetail() {
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 animate-pulse"
                         : "bg-warning/10 text-warning border-warning/20 animate-pulse"
                 )}>
-                  {isComplete ? (isEn ? 'Complete' : '분석 완료')
+                  {isComplete ? (isEn ? 'Complete' : '분析 완료')
                     : isError ? (isEn ? 'Failed' : '실패')
                     : analysis.status === 'queued' ? (isEn ? 'Queued' : '대기 중')
-                    : (isEn ? 'In Progress' : '분석 중')}
+                    : (isEn ? 'In Progress' : '분析 중')}
                 </span>
               </div>
 
-              {/* 현재가 + 등락률 */}
-              <div className="flex items-baseline gap-2.5 mt-3 mb-4">
+              {/* 현재가 + 등락률 pill */}
+              <div className="flex items-end gap-3 mb-5">
                 {headerLivePrice ? (
                   <>
-                    <span className="text-3xl md:text-4xl font-black tabular-nums tracking-tight text-foreground">
+                    <span className="text-[2.75rem] md:text-[3.25rem] font-black tabular-nums tracking-[-0.035em] leading-none text-foreground">
                       {headerLivePrice.currency === "USD"
                         ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : isEn
@@ -3451,34 +3441,68 @@ export default function AnalysisDetail() {
                     </span>
                     {headerLivePrice.change != null && (
                       <span className={cn(
-                        "text-base font-bold",
-                        headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                        "inline-flex items-center gap-1 text-[13px] font-bold px-2.5 py-1 rounded-full mb-1.5 shrink-0 border",
+                        headerLivePrice.change >= 0
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                          : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
                       )}>
                         {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
                       </span>
                     )}
                   </>
                 ) : (
-                  <div className="h-10 w-36 bg-muted/50 rounded-lg animate-pulse" />
+                  <div className="flex items-end gap-3">
+                    <div className="h-12 w-44 bg-muted/50 rounded-lg animate-pulse" />
+                    <div className="h-7 w-20 bg-muted/40 rounded-full animate-pulse mb-1.5" />
+                  </div>
                 )}
               </div>
 
-              {/* 지표 그리드 */}
+              {/* 52주 레인지 바 */}
               {(() => {
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-                const fmtPrice = (v: number | null) => {
+                const fmtP = (v: number | null) => {
                   if (v == null) return "—";
                   if (currency === "USD") return `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
                   return `₩${Math.round(v).toLocaleString("ko-KR")}`;
                 };
+                const st = headerTickerStats;
+                if (!st?.week52Low || !st?.week52High || !headerLivePrice) return null;
+                const lo = st.week52Low, hi = st.week52High, cur = headerLivePrice.price;
+                const pct = hi > lo ? Math.max(2, Math.min(98, ((cur - lo) / (hi - lo)) * 100)) : 50;
+                const isUp = headerLivePrice.change != null ? headerLivePrice.change >= 0 : true;
+                return (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-[10px] text-muted-foreground/50 mb-1.5 tabular-nums">
+                      <span>{isEn ? "52W Low " : "52주 저 "}<span className="font-semibold text-muted-foreground/70">{fmtP(lo)}</span></span>
+                      <span className="text-muted-foreground/35 hidden sm:block">{isEn ? "52-week range" : "52주 레인지"}</span>
+                      <span><span className="font-semibold text-muted-foreground/70">{fmtP(hi)}</span>{isEn ? " 52W High" : " 52주 고"}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/60 relative overflow-visible">
+                      <div className="h-full rounded-full" style={{
+                        width: `${pct}%`,
+                        background: isUp
+                          ? "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#10B981)"
+                          : "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#F87171)",
+                      }} />
+                      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-background shadow-sm"
+                        style={{ left: `${pct}%`, background: isUp ? "#10B981" : "#F87171" }} />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 지표 칩 */}
+              {(() => {
+                const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
                 const fmtVol = (v: number | null) => {
-                  if (v == null) return "—";
+                  if (v == null) return null;
                   if (v >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
                   if (v >= 1e4) return `${Math.round(v / 1e3)}K`;
                   return v.toLocaleString();
                 };
                 const fmtMC = (v: number | null, cur: string) => {
-                  if (v == null) return "—";
+                  if (v == null) return null;
                   if (cur === "USD") {
                     if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
                     if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
@@ -3489,53 +3513,51 @@ export default function AnalysisDetail() {
                 };
                 const st = headerTickerStats;
                 const mc = headerMarketCap;
-                const metrics = [
-                  { label: isEn ? "Mkt Cap" : "시가총액",  value: fmtMC(mc?.value ?? null, mc?.currency ?? "KRW") },
-                  { label: isEn ? "PER" : "PER",            value: st?.per != null ? `${st.per.toFixed(1)}x` : "—" },
-                  { label: isEn ? "PBR" : "PBR",            value: st?.pbr != null ? `${st.pbr.toFixed(2)}x` : "—" },
-                  { label: isEn ? "52W High" : "52주 고",   value: fmtPrice(st?.week52High ?? null) },
-                  { label: isEn ? "52W Low" : "52주 저",    value: fmtPrice(st?.week52Low ?? null) },
-                  ...(st?.volume != null ? [{ label: isEn ? "Volume" : "거래량", value: fmtVol(st.volume) }] : []),
-                ];
-                const isLoading = !st && !mc;
+                const chips = [
+                  { label: isEn ? "Mkt Cap" : "시총", value: fmtMC(mc?.value ?? null, mc?.currency ?? currency) },
+                  { label: "PER", value: st?.per != null ? `${st.per.toFixed(1)}x` : null },
+                  { label: "PBR", value: st?.pbr != null ? `${st.pbr.toFixed(2)}x` : null },
+                  { label: isEn ? "Volume" : "거래량", value: st?.volume != null ? fmtVol(st.volume) : null },
+                ].filter(c => c.value != null) as { label: string; value: string }[];
+
+                if (!st && !mc) return (
+                  <div className="flex flex-wrap gap-1.5 mb-3.5">
+                    {[80, 60, 64, 72].map((w, i) => (
+                      <div key={i} className="h-7 rounded-lg bg-muted/50 animate-pulse" style={{ width: w }} />
+                    ))}
+                  </div>
+                );
                 return (
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border/40 rounded-xl overflow-hidden border border-border/40 mb-4">
-                    {isLoading
-                      ? Array.from({ length: 5 }).map((_, i) => (
-                          <div key={i} className="bg-card px-3 py-2.5 space-y-1.5 animate-pulse">
-                            <div className="h-2 w-10 bg-muted rounded" />
-                            <div className="h-3 w-14 bg-muted/70 rounded" />
-                          </div>
-                        ))
-                      : metrics.map((m) => (
-                          <div key={m.label} className="bg-card px-3 py-2.5">
-                            <p className="text-[10px] text-muted-foreground/60 font-medium mb-0.5">{m.label}</p>
-                            <p className="text-[11px] font-bold text-foreground tabular-nums whitespace-nowrap">{m.value}</p>
-                          </div>
-                        ))}
+                  <div className="flex flex-wrap gap-1.5 mb-3.5">
+                    {chips.map(c => (
+                      <div key={c.label} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/50">
+                        <span className="text-[10px] text-muted-foreground/55 font-medium">{c.label}</span>
+                        <span className="text-[11px] font-bold text-foreground tabular-nums">{c.value}</span>
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
 
               {/* 하단 메타 행 */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-                <span className="font-mono font-bold text-primary/80 bg-primary/8 px-2 py-0.5 rounded-md border border-primary/15">
-                  {analysis.ticker}
-                </span>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground/55">
                 <span className="flex items-center gap-1">
                   <Briefcase className="w-3 h-3 shrink-0" />
                   {isEn ? (analysis.industry ?? "—") : toKoreanIndustry(analysis.industry)}
                 </span>
+                <span className="text-border">·</span>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3 shrink-0" />
                   {isEn ? format(new Date(analysis.createdAt), 'MMM d, HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}
                 </span>
-                <span className="flex items-center gap-1 text-amber-600/70 dark:text-amber-400/70">
+                <span className="text-border">·</span>
+                <span className="flex items-center gap-1 text-amber-500/70">
                   <Zap className="w-3 h-3 shrink-0" />
-                  {isEn ? 'AI · For Reference' : 'AI 자동생성 · 참고용'}
+                  {isEn ? 'AI · Reference only' : 'AI 자동생성 · 참고용'}
                 </span>
               </div>
             </div>
+
 
             {/* ── 오른쪽: Verdict Card ── */}
             <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
@@ -3735,7 +3757,7 @@ export default function AnalysisDetail() {
                 <BarChart2 className="w-4 h-4 text-emerald-500" />
               </div>
               <div>
-                <p className="text-[14px] font-bold text-foreground leading-tight">{isEn ? "Financial Analysis" : "실적 분析"}</p>
+                <p className="text-[14px] font-bold text-foreground leading-tight">{isEn ? "Financial Analysis" : "실적 분석"}</p>
                 <p className="text-[11px] text-muted-foreground/55 mt-0.5">{isEn ? "Earnings trend · Deep-dive · Price action" : "실적 추이 · 재무 심층 · 주가 흐름"}</p>
               </div>
             </div>
@@ -6344,10 +6366,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
 
         <MdBlock src={mainBodyContent} isEn={isEn} />
 
-        {/* DART 사업보고서: 재무 차트 (dart_report_analysis 전용) */}
-        {step.stepKey === "dart_report_analysis" && ticker && (
-          <DartFinancialCharts ticker={ticker} isEn={isEn} color={color} />
-        )}
 
 
 
