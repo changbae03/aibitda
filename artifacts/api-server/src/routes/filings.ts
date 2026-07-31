@@ -23,6 +23,15 @@ import {
   SECTION_KEYS,
   type SectionKey,
 } from "../lib/dart-filing-store.js";
+import {
+  syncAllEdgarFilings,
+  getEdgarFilingHistory,
+  getEdgarSection,
+  generateEdgarDiff,
+  generateAllEdgarDiffs,
+  getEdgarFilingDiffs,
+  type EdgarSectionKey,
+} from "../lib/edgar-filing-store.js";
 
 const router = Router();
 
@@ -161,6 +170,101 @@ router.post("/filings/:ticker/sync-diffs", async (req, res) => {
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// US EDGAR 라우트 (/api/filings/us/...)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/filings/us/sync/:ticker
+ * SEC EDGAR submissions에서 10-K/20-F/10-Q 목록을 가져와 섹션까지 저장합니다.
+ * body: { sections?: string[], maxFilings?: number }
+ */
+router.post("/filings/us/sync/:ticker", async (req, res) => {
+  const { ticker } = req.params;
+  const { sections = ["business", "risk_factors", "mda"], maxFilings = 15 } = req.body ?? {};
+  try {
+    const result = await syncAllEdgarFilings(ticker, maxFilings, sections as EdgarSectionKey[]);
+    return res.json({ ok: true, ticker, ...result });
+  } catch (err: any) {
+    console.error("[edgar-filings] sync error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/filings/us/:ticker/history
+ * 저장된 공시 목록을 최신순으로 반환합니다.
+ */
+router.get("/filings/us/:ticker/history", async (req, res) => {
+  try {
+    const history = await getEdgarFilingHistory(req.params.ticker);
+    return res.json({ ok: true, ticker: req.params.ticker, count: history.length, filings: history });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/filings/us/:ticker/section?accession_no=XXX&section_key=business
+ */
+router.get("/filings/us/:ticker/section", async (req, res) => {
+  const { accession_no, section_key = "business" } = req.query as Record<string, string>;
+  if (!accession_no) return res.status(400).json({ error: "accession_no 필수" });
+  try {
+    const section = await getEdgarSection(accession_no, section_key as EdgarSectionKey);
+    if (!section) return res.status(404).json({ error: "섹션 없음" });
+    return res.json({ ok: true, ...section });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/filings/us/:ticker/diff
+ * 두 공시 간 AI 변화 분석.
+ * body: { from_accession, to_accession, section_key? }
+ */
+router.post("/filings/us/:ticker/diff", async (req, res) => {
+  const { ticker } = req.params;
+  const { from_accession, to_accession, section_key = "business" } = req.body ?? {};
+  if (!from_accession || !to_accession) {
+    return res.status(400).json({ error: "from_accession, to_accession 필수" });
+  }
+  try {
+    const diff = await generateEdgarDiff(ticker, from_accession, to_accession, section_key as EdgarSectionKey);
+    if (!diff) return res.status(404).json({ error: "섹션 데이터 없음 — sync 먼저 필요" });
+    return res.json({ ok: true, ...diff });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/filings/us/:ticker/diffs?section_key=business
+ */
+router.get("/filings/us/:ticker/diffs", async (req, res) => {
+  const { section_key } = req.query as Record<string, string>;
+  try {
+    const diffs = await getEdgarFilingDiffs(req.params.ticker, section_key as EdgarSectionKey | undefined);
+    return res.json({ ok: true, ticker: req.params.ticker, count: diffs.length, diffs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/filings/us/:ticker/sync-diffs
+ * 연속 공시 간 diff 일괄 생성 (백그라운드).
+ */
+router.post("/filings/us/:ticker/sync-diffs", async (req, res) => {
+  const { ticker } = req.params;
+  const { section_key = "business" } = req.body ?? {};
+  res.json({ ok: true, message: "Edgar diff 생성 백그라운드 시작" });
+  generateAllEdgarDiffs(ticker, section_key as EdgarSectionKey).catch(err =>
+    console.error(`[edgar-filings] sync-diffs error:`, err.message)
+  );
 });
 
 export default router;

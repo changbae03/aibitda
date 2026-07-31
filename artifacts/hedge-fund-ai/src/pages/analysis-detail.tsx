@@ -1424,6 +1424,268 @@ function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?:
   );
 }
 
+// ─── 공시 이력 타임라인 패널 ──────────────────────────────────────────────────
+interface FilingHistoryItem {
+  id: number;
+  rceptNo?: string;
+  accessionNo?: string;
+  reportType?: string;
+  formType?: string;
+  fiscalYear: number;
+  periodCode: string;
+  filedAt: string | null;
+  hasSections: boolean;
+}
+interface FilingDiffItem {
+  fromRceptNo?: string;
+  toRceptNo?: string;
+  fromAccessionNo?: string;
+  toAccessionNo?: string;
+  sectionKey: string;
+  changesJson: { added: string[]; removed: string[]; modified: string[] } | null;
+  aiSummary: string | null;
+}
+
+const PERIOD_LABELS: Record<string, string> = {
+  FY: "사업보고서", H1: "반기", Q1: "1분기", Q2: "반기", Q3: "3분기",
+};
+const FORM_COLORS: Record<string, string> = {
+  FY: "bg-violet-500/15 text-violet-400",
+  H1: "bg-blue-500/15 text-blue-400",
+  Q1: "bg-sky-500/15 text-sky-400",
+  Q2: "bg-sky-500/15 text-sky-400",
+  Q3: "bg-sky-500/15 text-sky-400",
+};
+
+function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const isKR = /^\d{6}$/.test(ticker) || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
+  const isUS = !isKR;
+
+  const [filings, setFilings]   = useState<FilingHistoryItem[]>([]);
+  const [diffs, setDiffs]       = useState<FilingDiffItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [syncing, setSyncing]   = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const baseUrl = isUS ? `/api/filings/us/${encodeURIComponent(ticker)}` : `/api/filings/${encodeURIComponent(ticker)}`;
+  const syncUrl = isUS ? `/api/filings/us/sync/${encodeURIComponent(ticker)}` : `/api/filings/sync/${encodeURIComponent(ticker)}`;
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([
+      fetch(getApiUrl(`${baseUrl}/history`)).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(getApiUrl(`${baseUrl}/diffs?section_key=business_content`)).then(r => r.ok ? r.json() : null).catch(() => null),
+      // US diff uses different key
+      isUS ? fetch(getApiUrl(`${baseUrl}/diffs?section_key=business`)).then(r => r.ok ? r.json() : null).catch(() => null) : null,
+    ]).then(([histData, diffsKR, diffsUS]) => {
+      setFilings(histData?.filings ?? []);
+      const rawDiffs = isUS ? (diffsUS?.diffs ?? []) : (diffsKR?.diffs ?? []);
+      setDiffs(rawDiffs);
+      setLoading(false);
+    });
+  };
+
+  useEffect(() => { load(); }, [ticker]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await fetch(getApiUrl(syncUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      load();
+    } catch {}
+    setSyncing(false);
+  };
+
+  const getDiffForFiling = (filing: FilingHistoryItem): FilingDiffItem | undefined => {
+    const key = isUS ? filing.accessionNo : filing.rceptNo;
+    return diffs.find(d => (d.toRceptNo === key) || (d.toAccessionNo === key));
+  };
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  if (loading) return (
+    <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      <div className="flex items-center gap-2 mb-4">
+        <History className="w-4 h-4 text-muted-foreground/50" />
+        <div className="h-3 w-32 rounded bg-muted/60 animate-pulse" />
+      </div>
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-12 rounded-xl bg-muted/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-card rounded-2xl p-5 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 mb-4">
+        <History className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-base font-semibold text-foreground">
+          {isEn ? "Filing History" : "공시 이력"}
+        </h2>
+        <span className="text-[11px] text-muted-foreground/40">
+          {isUS ? "SEC EDGAR" : "DART"}
+        </span>
+        {filings.length > 0 && (
+          <span className="ml-auto text-[11px] font-mono text-muted-foreground/35">{filings.length}</span>
+        )}
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="ml-auto flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted/50 hover:bg-muted/80 text-muted-foreground transition-colors disabled:opacity-50"
+        >
+          {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          {isEn ? "Sync" : "동기화"}
+        </button>
+      </div>
+
+      {filings.length === 0 ? (
+        <div className="py-8 flex flex-col items-center gap-3 text-center">
+          <p className="text-[13px] text-muted-foreground/60">
+            {isEn ? "No filing history stored yet." : "저장된 공시 이력이 없습니다."}
+          </p>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            {isEn ? "Fetch & Store Filings" : "공시 이력 동기화하기"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filings.map((filing) => {
+            const key = isUS ? (filing.accessionNo ?? "") : (filing.rceptNo ?? "");
+            const diff = getDiffForFiling(filing);
+            const label = isUS
+              ? (filing.formType ?? filing.periodCode)
+              : (PERIOD_LABELS[filing.periodCode] ?? filing.reportType ?? filing.periodCode);
+            const colorCls = FORM_COLORS[filing.periodCode] ?? "bg-muted/20 text-muted-foreground";
+            const isOpen = expanded.has(key);
+            const hasChanges = diff && diff.changesJson && (
+              diff.changesJson.added.length > 0 ||
+              diff.changesJson.removed.length > 0 ||
+              diff.changesJson.modified.length > 0
+            );
+
+            return (
+              <div key={key} className="rounded-xl border border-border/40 overflow-hidden">
+                <button
+                  onClick={() => hasChanges && toggleExpand(key)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-colors ${hasChanges ? "hover:bg-muted/20 cursor-pointer" : "cursor-default"}`}
+                >
+                  {/* 연도 + 분기 */}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${colorCls}`}>
+                    {label}
+                  </span>
+                  <span className="text-[13px] font-semibold tabular-nums text-foreground/80">
+                    {filing.fiscalYear}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/40 font-mono">
+                    {filing.filedAt?.slice(0, 7) ?? "—"}
+                  </span>
+                  {/* 섹션 저장 여부 */}
+                  {filing.hasSections ? (
+                    <span className="text-[10px] text-emerald-400 ml-1">●</span>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground/25 ml-1">○</span>
+                  )}
+                  {/* diff 요약 뱃지 */}
+                  {hasChanges && (
+                    <div className="flex items-center gap-1.5 ml-auto mr-1">
+                      {diff!.changesJson!.added.length > 0 && (
+                        <span className="text-[10px] font-bold text-emerald-400">+{diff!.changesJson!.added.length}</span>
+                      )}
+                      {diff!.changesJson!.removed.length > 0 && (
+                        <span className="text-[10px] font-bold text-red-400">−{diff!.changesJson!.removed.length}</span>
+                      )}
+                      {diff!.changesJson!.modified.length > 0 && (
+                        <span className="text-[10px] font-bold text-amber-400">~{diff!.changesJson!.modified.length}</span>
+                      )}
+                    </div>
+                  )}
+                  {hasChanges && (
+                    <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/40 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  )}
+                </button>
+
+                {/* diff 상세 */}
+                {isOpen && diff && diff.changesJson && (
+                  <div className="px-3.5 pb-3.5 pt-1 border-t border-border/30 space-y-3">
+                    {/* AI 요약 */}
+                    {diff.aiSummary && (
+                      <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+                        {diff.aiSummary}
+                      </p>
+                    )}
+                    {/* Added */}
+                    {diff.changesJson.added.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Added" : "신규 추가"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.added.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-emerald-400 mt-0.5 shrink-0">+</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Removed */}
+                    {diff.changesJson.removed.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Removed" : "사라진 항목"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.removed.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-red-400 mt-0.5 shrink-0">−</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Modified */}
+                    {diff.changesJson.modified.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Changed" : "변화된 항목"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.modified.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-amber-400 mt-0.5 shrink-0">~</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 배당 정보 패널 ────────────────────────────────────────────────────────────
 interface DividendInfo {
   dividendRate: number | null;
@@ -4153,6 +4415,7 @@ export default function AnalysisDetail() {
           <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
           <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
           <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
+          <FilingTimelinePanel ticker={analysis.ticker} isEn={isEn} />
         </div>
       </details>
 
