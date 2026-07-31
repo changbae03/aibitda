@@ -2212,6 +2212,130 @@ function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent
 
 // ── 투자 결론: 핵심 포인트 3개 렌더러 ────────────────────────────────────────
 // ── 애빛다 6렌즈 행간읽기 ────────────────────────────────────────────────────
+// ── 투자 체크리스트 ──────────────────────────────────────────────────────────
+interface ChecklistItem {
+  category: string;
+  item: string;
+  status: "pass" | "warn" | "fail";
+  verdict: string;
+  detail?: string;
+}
+interface ChecklistData {
+  items: ChecklistItem[];
+  score: number;
+  total: number;
+}
+
+function parseChecklistJson(content: string): ChecklistData | null {
+  try {
+    // ```json ... ``` 블록 우선 추출
+    const blockMatch = content.match(/```json\s*([\s\S]*?)```/);
+    const raw = blockMatch ? blockMatch[1] : content.match(/\{[\s\S]*"items"[\s\S]*\}/)?.[0];
+    if (!raw) return null;
+    const obj = JSON.parse(raw.trim());
+    if (!Array.isArray(obj.items) || obj.items.length === 0) return null;
+    const score = obj.items.filter((i: ChecklistItem) => i.status === "pass").length;
+    return { items: obj.items, score, total: obj.items.length };
+  } catch {
+    return null;
+  }
+}
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  "성장성":     { bg: "bg-blue-500/10",   text: "text-blue-400" },
+  "수익성":     { bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "밸류에이션": { bg: "bg-violet-500/10", text: "text-violet-400" },
+  "재무건전성": { bg: "bg-orange-500/10", text: "text-orange-400" },
+  "내러티브":   { bg: "bg-teal-500/10",   text: "text-teal-400" },
+};
+
+function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
+  const data = parseChecklistJson(step.content ?? "");
+  if (!data) return null;
+
+  const categories = [...new Set(data.items.map((i: ChecklistItem) => i.category))];
+  const passCount = data.items.filter((i: ChecklistItem) => i.status === "pass").length;
+  const warnCount = data.items.filter((i: ChecklistItem) => i.status === "warn").length;
+  const failCount = data.items.filter((i: ChecklistItem) => i.status === "fail").length;
+  const pct = Math.round((passCount / data.total) * 100);
+
+  const statusIcon = (s: string) => s === "pass" ? "✅" : s === "warn" ? "⚠️" : "❌";
+  const statusTextColor = (s: string) =>
+    s === "pass" ? "text-green-400" : s === "warn" ? "text-amber-400" : "text-red-400";
+  const statusBg = (s: string) =>
+    s === "pass" ? "bg-green-500/8 border-green-500/20"
+    : s === "warn" ? "bg-amber-500/8 border-amber-500/20"
+    : "bg-red-500/8 border-red-500/20";
+
+  return (
+    <div className="space-y-5">
+      {/* 스코어 헤더 */}
+      <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+        <div className="text-center">
+          <div className="text-3xl font-bold tabular-nums">{passCount}</div>
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{isEn ? "Passed" : "충족"}</div>
+        </div>
+        <div className="text-muted-foreground/30 text-xl font-light">/</div>
+        <div className="text-center">
+          <div className="text-3xl font-bold tabular-nums text-muted-foreground/60">{data.total}</div>
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{isEn ? "Total" : "전체"}</div>
+        </div>
+        <div className="flex-1 ml-2">
+          {/* 진행 바 */}
+          <div className="h-2 w-full rounded-full bg-border/40 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${pct}%`,
+                background: pct >= 70 ? "#22c55e" : pct >= 40 ? "#f59e0b" : "#ef4444",
+              }}
+            />
+          </div>
+          <div className="flex gap-3 mt-2 text-[11px] text-muted-foreground/60">
+            <span>✅ {passCount}</span>
+            <span>⚠️ {warnCount}</span>
+            <span>❌ {failCount}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 카테고리별 항목 */}
+      {categories.map((cat) => {
+        const col = CATEGORY_COLORS[cat] ?? { bg: "bg-muted/20", text: "text-muted-foreground" };
+        const catItems = data.items.filter((i: ChecklistItem) => i.category === cat);
+        return (
+          <div key={cat} className="space-y-1.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
+                {cat}
+              </span>
+            </div>
+            {catItems.map((item: ChecklistItem, idx: number) => (
+              <div
+                key={idx}
+                className={`flex items-start gap-3 py-2.5 px-3.5 rounded-xl border ${statusBg(item.status)}`}
+              >
+                <span className="text-[15px] mt-0.5 flex-shrink-0">{statusIcon(item.status)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[13px] font-medium text-foreground/85 leading-snug">{item.item}</span>
+                    <span className={`text-[12px] font-semibold whitespace-nowrap leading-snug ${statusTextColor(item.status)}`}>
+                      {item.verdict}
+                    </span>
+                  </div>
+                  {item.detail && (
+                    <p className="text-[11px] text-muted-foreground/55 mt-0.5 leading-relaxed">{item.detail}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
   const raw = (step.content ?? "").replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");
 
@@ -3980,6 +4104,38 @@ export default function AnalysisDetail() {
         );
       })()}
 
+
+      {/* ══ 섹션 6: 투자 체크리스트 ══ */}
+      {(() => {
+        const checklistStep = analysis.steps.find((s: any) => s.stepKey === "checklist");
+        const streamingChecklist = streamingStep?.key === "checklist";
+        const thesisStarted = !!(analysis.steps.find((s: any) => s.stepKey === "investment_thesis") || streamingStep?.key === "investment_thesis");
+        const showSection = !!checklistStep || streamingChecklist || (thesisStarted && !isComplete && !isError);
+        if (!showSection) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
+          <NarrativeSectionBlock
+            num={6}
+            title={isEn ? "Investment Checklist" : "투자 체크리스트"}
+            subtitle={isEn ? "10 must-check criteria · pass / warn / fail" : "주식 볼 때 반드시 점검해야 할 10가지"}
+            accent="#10b981"
+            pending={!checklistStep && !streamingChecklist}
+            isEn={isEn}
+          >
+            {streamingChecklist && !checklistStep ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10b981" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Running checklist…" : "체크리스트 점검 중… ✅"}</span>
+              </div>
+            ) : checklistStep ? (
+              <ErrorBoundary fallback={null}>
+                <ChecklistView step={checklistStep} isEn={isEn} />
+              </ErrorBoundary>
+            ) : null}
+          </NarrativeSectionBlock>
+          </motion.div>
+        );
+      })()}
 
       {/* ── 추가 데이터 패널 ── */}
       <details className="group rounded-2xl bg-card border border-border/60 overflow-hidden print:hidden"

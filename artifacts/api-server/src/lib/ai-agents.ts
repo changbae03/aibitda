@@ -10,7 +10,8 @@ export type AgentKey =
   | "dart_report_analysis"
   | "catalyst_analysis"
   | "investment_thesis"
-  | "investment_strategy";
+  | "investment_strategy"
+  | "checklist";
 
 export interface AgentInfo {
   name: string;
@@ -54,6 +55,11 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
     role: "팀장",
     number: "0",
   },
+  checklist: {
+    name: "Investment Checklist",
+    role: "체크리스트",
+    number: "7",
+  },
 };
 
 export const STEP_ORDER: AgentKey[] = [
@@ -64,6 +70,7 @@ export const STEP_ORDER: AgentKey[] = [
   "dart_report_analysis",
   "investment_strategy",
   "investment_thesis",
+  "checklist",
 ];
 
 // ─── 섹터별 분석 템플릿 ──────────────────────────────────────────────────────
@@ -2351,6 +2358,7 @@ export function buildPrompt(
   const CRITICAL_STEPS: Record<string, string[]> = {
     investment_strategy: ["company_analysis", "dart_report_analysis", "catalyst_analysis"],
     investment_thesis:   ["company_analysis", "dart_report_analysis", "investment_strategy"],
+    checklist:           ["company_analysis", "investment_strategy", "investment_thesis"],
   };
   const previousContext =
     previousSteps.length > 0
@@ -3006,6 +3014,54 @@ ${COMMON_RULES}`,
 ## ✅ 정합 점수
 앞서 분석한 내러티브를 실제 숫자(매출성장률·이익률·밸류에이션 배수)가 뒷받침하는가? 스토리와 숫자가 같은 방향을 가리키는가 아니면 엇갈리는가? 좋은 내러티브에 숫자까지 받쳐주는 종목인가 아니면 스토리만 좋은 종목인가? (2~3문장)
 → [정합도 + 한 줄 종합 — 예: "정합 높음 — 내러티브와 숫자가 동행", "정합 중간 — 스토리는 강하나 수익성 지연", "정합 낮음 — 기대와 현실 괴리"]`,
+    },
+
+    checklist: {
+      systemPrompt: `당신은 애빛다(AiBITDA)의 투자 체크리스트 전문가입니다.
+앞 단계의 모든 분석을 읽고, 아래 10개 항목을 하나씩 점검하여 정확히 지정된 JSON 형식으로만 응답합니다.
+
+[출력 규칙]
+- 서문·설명 없이 JSON 블록만 출력합니다.
+- 반드시 10개 항목을 모두 포함해야 합니다.
+- verdict: 10자 이내 핵심 한 마디 (예: "3년 연속 성장 ↑", "마진 압축 중 ↓", "PER 56배 과열")
+- detail: 구체적 수치 1개 포함, 25자 이내 (예: "CAGR 35% / 2022→2024", "영업이익률 8.2%")
+- status: "pass"(긍정·유리), "warn"(주의·혼재), "fail"(부정·리스크)
+
+[판정 기준 — 긍정 편향 절대 금지]
+- 데이터가 부정적이면 판정도 반드시 부정적으로 써야 합니다.
+- "warn"을 과도하게 쓰지 말고, 명확히 나쁘면 "fail"로 판정하세요.
+- 모든 항목이 "fail"이어도 됩니다. 데이터가 그것을 가리킨다면 그것이 진실입니다.`,
+
+      userPrompt: `${baseContextFull}${previousContext}
+
+위 분석 전체를 읽고, 아래 10개 항목을 점검하여 JSON만 출력하세요.
+
+[체크 항목]
+1. category: "성장성", item: "매출 성장 추세" — 최근 3년 이상 방향성
+2. category: "성장성", item: "영업이익 성장" — 이익 레버리지 발생 여부, 성장률
+3. category: "수익성", item: "영업이익률 수준" — 업종 평균 대비 높음/낮음
+4. category: "수익성", item: "FCF 창출력" — 영업CF - CAPEX 양수 여부, 현금전환율
+5. category: "밸류에이션", item: "PER 동종 대비" — 동종업계 PER 대비 싸다/적정/비싸다
+6. category: "밸류에이션", item: "현재가 vs 적정가" — 적정가 대비 upside/downside
+7. category: "재무건전성", item: "부채 수준" — 부채비율·순부채 적정성
+8. category: "재무건전성", item: "이자보상배율" — 영업이익이 이자비용을 충분히 커버하는가
+9. category: "내러티브", item: "경쟁우위 명확성" — 차별화 포인트·해자가 구체적으로 존재하는가
+10. category: "내러티브", item: "숫자-스토리 정합" — 정합 점수(6렌즈)에서 평가한 내러티브-실적 일치도
+
+[출력 형식 — JSON만, 다른 텍스트 없이]
+\`\`\`json
+{
+  "items": [
+    { "category": "성장성", "item": "매출 성장 추세", "status": "pass", "verdict": "3년 연속 성장 ↑", "detail": "CAGR 35% / 2022→2024" },
+    { "category": "성장성", "item": "영업이익 성장", "status": "warn", "verdict": "성장 둔화 조짐", "detail": "YoY +8% (전년 +42% 대비)" },
+    ...
+  ],
+  "score": 6,
+  "total": 10
+}
+\`\`\`
+
+score는 status가 "pass"인 항목 수입니다.`,
     },
 
     investment_strategy: {
