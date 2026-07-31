@@ -3905,30 +3905,34 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 5: 투자 결론 ══ */}
+      {/* ══ 섹션 5: 애빛다 총정리 (투자 판단 + 6렌즈) ══ */}
       {(() => {
         const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
         const streamingStrat = streamingStep?.key === "investment_strategy";
+        const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
+        const streamingThesis = streamingStep?.key === "investment_thesis";
         const catStarted = !!(
           analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis") ||
           streamingStep?.key === "catalyst_analysis"
         );
-        if (!stratStep && !streamingStrat && (!catStarted || isComplete || isError)) return null;
-        const agent = AGENTS["investment_strategy"];
-        const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
+        const showSection = !!stratStep || streamingStrat || !!thesisStep || streamingThesis ||
+          (catStarted && !isComplete && !isError);
+        if (!showSection) return null;
+        const canRunThesis = !thesisStep && !streamingThesis && !isStreaming && !!stratStep;
         return (
           <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={5}
-            title={isEn ? "Investment conclusion" : "투자 결론"}
-            subtitle={isEn ? "3 core investment points" : "핵심 투자 포인트 3가지"}
-            accent="#FF8A7A"
-            pending={!stratStep && !streamingStrat}
+            title={isEn ? "Aibida Wrap-Up" : "애빛다 총정리"}
+            subtitle={isEn ? "Investment verdict · 6-lens deep read" : "투자 판단 · 6렌즈 심층 해석"}
+            accent="#8B5CF6"
+            pending={!stratStep && !streamingStrat && !thesisStep && !streamingThesis}
             isEn={isEn}
           >
+            {/* ① 투자 결론 */}
             {streamingStrat && !stratStep ? (
               <div className="flex items-center gap-3 py-8 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
                 <span className="text-sm text-muted-foreground">{isEn ? "Drumroll for the verdict… 🥁" : "최종 판단 내리는 중… 두구두구 🥁"}</span>
               </div>
             ) : stratStep ? (
@@ -3936,58 +3940,41 @@ export default function AnalysisDetail() {
                 <InvestmentPointsView step={stratStep} isEn={isEn} />
               </ErrorBoundary>
             ) : null}
-          </NarrativeSectionBlock>
-          </motion.div>
-        );
-      })()}
 
-      {/* ══ 섹션 6: 행간읽기 (애빛다 6렌즈 — 대미) ══ */}
-      {(() => {
-        const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
-        const streamingThesis = streamingStep?.key === "investment_thesis";
-        const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
-        const showSection = !!thesisStep || streamingThesis || !!stratStep;
-        if (!showSection) return null;
-        const canRunThesis = !thesisStep && !streamingThesis && !isStreaming && !!stratStep;
-        return (
-          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
-          <NarrativeSectionBlock
-            num={6}
-            title={isEn ? "Reading Between the Lines" : "행간읽기"}
-            subtitle={isEn ? "Narrative · Tide · Cycle · Multiple · Catalyst Depth · Alignment" : "내러티브 · 조류 · 사이클 · 배수 온도 · 재료의 깊이 · 정합 점수"}
-            accent="#8B5CF6"
-            pending={false}
-            isEn={isEn}
-          >
-            {thesisStep ? (
-              <ErrorBoundary fallback={null}>
-                <ThesisView step={thesisStep} isEn={isEn} />
-              </ErrorBoundary>
-            ) : streamingThesis ? (
-              <div className="flex items-center gap-3 py-10 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Mining for truths between the lines… 🔭" : "줄 사이에 숨은 진실 캐내는 중… 🔭"}</span>
-              </div>
-            ) : canRunThesis ? (
-              <div className="flex flex-col items-center gap-3 py-10">
-                <p className="text-sm text-muted-foreground text-center">
-                  {isEn ? "This analysis was created before 행간읽기 was available." : "이 분析은 행간읽기 기능 추가 전에 완료되었습니다."}
+            {/* ② 6렌즈 심층 해석 — 투자 결론 아래에 붙음 */}
+            {stratStep && (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
+                  {isEn ? "6-Lens Deep Read" : "6렌즈 심층 해석"}
                 </p>
-                <button
-                  onClick={() => {
-                    if (!triggeredSteps.current.has("investment_thesis")) {
-                      triggeredSteps.current.add("investment_thesis");
-                      runStreamingStepRef.current?.("investment_thesis");
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
-                  style={{ background: "#8B5CF6" }}
-                >
-                  <span>🔭</span>
-                  {isEn ? "Analyze now" : "지금 분析하기"}
-                </button>
+                {thesisStep ? (
+                  <ErrorBoundary fallback={null}>
+                    <ThesisView step={thesisStep} isEn={isEn} />
+                  </ErrorBoundary>
+                ) : streamingThesis ? (
+                  <div className="flex items-center gap-3 py-8 justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
+                    <span className="text-sm text-muted-foreground">{isEn ? "Mining for truths between the lines… 🔭" : "줄 사이에 숨은 진실 캐내는 중… 🔭"}</span>
+                  </div>
+                ) : canRunThesis ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <button
+                      onClick={() => {
+                        if (!triggeredSteps.current.has("investment_thesis")) {
+                          triggeredSteps.current.add("investment_thesis");
+                          runStreamingStepRef.current?.("investment_thesis");
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                      style={{ background: "#8B5CF6" }}
+                    >
+                      <span>🔭</span>
+                      {isEn ? "Run 6-lens analysis" : "6렌즈 분析하기"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            )}
           </NarrativeSectionBlock>
           </motion.div>
         );
