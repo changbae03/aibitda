@@ -77,7 +77,7 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
   company_intro:       { name: "브리핑",                role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
   industry_analysis:   { name: "매크로 및 산업 분석",   role: "Macro & Industry Analyst",      Icon: Globe2,      accent: "border-sky-500/30 bg-sky-500/5" },
   catalyst_analysis:   { name: "투자 촉매 및 수급 분석",role: "Catalyst & Smart Money Analyst",Icon: Zap,         accent: "border-amber-500/30 bg-amber-500/5" },
-  company_analysis:      { name: "실적분析",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
+  company_analysis:      { name: "실적분석",             role: "Financial Analyst",             Icon: PieChart,    accent: "border-violet-500/30 bg-violet-500/5" },
   dart_report_analysis:  { name: "사업보고서 분석",      role: "Business Intelligence Analyst", Icon: PieChart,    accent: "border-teal-500/30 bg-teal-500/5" },
   investment_strategy: { name: "결론",             role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
 };

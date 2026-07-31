@@ -29,7 +29,8 @@ import { normalizeTicker } from "@workspace/shared";
 import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
-import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
+import { fetchSECEdgarContent, fetchEdgarTimeSeries, fetchEdgarMDA } from "../lib/sec-edgar-content.js";
+import { fetchDartTimeSeries } from "../lib/dart-timeseries.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
@@ -105,7 +106,7 @@ router.post("/", async (req, res) => {
       const US_ALLOWED = new Set(["NMS", "NGM", "NCM", "NYQ", "NYS", "NYE", "ASE", "AMX", "PCX", "CBOE", "PNK", ""]);
       if (qExchange && !US_ALLOWED.has(qExchange)) {
         console.log(`[analysis-create] 400 비지원 거래소 차단: ${validatedTicker} exchange=${qExchange}`);
-        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분析 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
+        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분석 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
         return;
       }
     } catch { /* Yahoo 조회 실패 시 무시하고 진행 */ }
@@ -194,7 +195,7 @@ router.post("/", async (req, res) => {
   }
 
   // ── DB 레코드를 먼저 생성 → 즉시 응답 → 외부 데이터 수집은 백그라운드 ────
-  // 이 구조로 "분析 시작" 버튼 클릭 후 분析 페이지까지 대기 시간이 ~1초로 단축
+  // 이 구조로 "분석 시작" 버튼 클릭 후 분석 페이지까지 대기 시간이 ~1초로 단축
   let analysis: typeof analysesTable.$inferSelect;
   try {
     const client = await pool.connect();
@@ -227,11 +228,11 @@ router.post("/", async (req, res) => {
     const pgCode = err?.cause?.code ?? err?.code;
     const pgDetail = err?.cause?.detail ?? err?.detail;
     console.error("[POST /analysis] INSERT failed:", { pgMsg, pgCode, pgDetail, fullError: String(err) });
-    res.status(500).json({ error: "분析 시작 실패: DB INSERT 오류", detail: pgMsg });
+    res.status(500).json({ error: "분석 시작 실패: DB INSERT 오류", detail: pgMsg });
     return;
   }
 
-  // 즉시 응답 — 분析 페이지로 바로 이동
+  // 즉시 응답 — 분석 페이지로 바로 이동
   res.json(formatAnalysis(analysis, []));
 
   // ── 백그라운드: 외부 API 12개 병렬 수집 → DB 업데이트 → 파이프라인 시작 ──
@@ -241,7 +242,7 @@ router.post("/", async (req, res) => {
 
   // 종목 마스터 자가 치유 — 마스터에 없는 종목이면 지금 등록한다.
   // SEC 목록에도 없는 장외 ADR(NTDOY 등)과 상장 직후 종목이 여기서 메워진다.
-  // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분析을 막지 않는다.
+  // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분석을 막지 않는다.
   ensureStockRegistered(upperTicker, companyName).catch(() => {});
 
   (async () => {
@@ -255,7 +256,7 @@ router.post("/", async (req, res) => {
         const years = Object.keys(dartAnchorNumerics.annualRev).sort();
         console.log(`[analysis] #${_analysisId} DART 앵커 수치 로드 완료: ${years.join(", ")} (${krxCode})`);
       }
-      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext, dartOrderBacklog] = await Promise.all([
+      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext, dartOrderBacklog, dartTimeSeries, edgarTimeSeries, edgarMDA] = await Promise.all([
         fetchFinancialContext(resolvedSymbol, dartAnchorNumerics),
         fetchCompanyNews(companyName ?? ""),
         isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -270,6 +271,9 @@ router.post("/", async (req, res) => {
         !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
         buildFmpContext(resolvedSymbol).catch(() => null),
         isKoreanTicker ? fetchDartOrderBacklog(krxCode).catch(() => null) : Promise.resolve(null),
+        isKoreanTicker ? fetchDartTimeSeries(krxCode).catch(() => null) : Promise.resolve(null),
+        !isKoreanTicker ? fetchEdgarTimeSeries(resolvedSymbol).catch(() => null) : Promise.resolve(null),
+        !isKoreanTicker ? fetchEdgarMDA(resolvedSymbol).catch(() => null) : Promise.resolve(null),
       ]);
 
       const kisContext = kisResult?.context ?? null;
@@ -392,6 +396,10 @@ router.post("/", async (req, res) => {
             `※ 아래 내용은 DART 공시 원문입니다. 시장 규모·TAM 추정·업계 현황 서술 시 훈련 데이터보다 이 수치를 우선 사용하세요.\n\n` +
             dartBizContent
           : null,
+        // ── 재무 시계열 (한국: DART, 미국: EDGAR XBRL) ──
+        dartTimeSeries   ?? null,
+        edgarTimeSeries  ?? null,
+        edgarMDA         ?? null,
         fmpContext,
         secEdgarContent, kosisContext, macroContext, marketFlowContext, newsData,
         userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",

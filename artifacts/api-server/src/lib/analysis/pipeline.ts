@@ -253,7 +253,7 @@ async function executeStep(
       const prevDate = new Date(prevStepRef[0].created_at).toISOString().slice(0, 10);
       const snippetLen = 400;
       const snippet = prevContent.slice(0, snippetLen).replace(/\n+/g, " ").trim();
-      const binding = `아래는 가장 최근 분析의 이 단계 요약입니다. 방향성 참고 후 독자적 판단으로 분析하세요.`;
+      const binding = `아래는 가장 최근 분석의 이 단계 요약입니다. 방향성 참고 후 독자적 판단으로 분석하세요.`;
       const softAnchor = `\n\n[💡 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 참고]\n`
         + binding + `\n"${snippet}…"`;
       enrichedContext = enrichedContext ? enrichedContext + softAnchor : softAnchor;
@@ -279,7 +279,7 @@ async function executeStep(
     }
 
   } catch {
-    // 실패해도 분析 진행
+    // 실패해도 분석 진행
   }
 
   // ③④ 시장 레짐 + 섹터 학습 노트 주입 (KRW 종목 전용)
@@ -298,7 +298,7 @@ async function executeStep(
         if (pipelineCtx === undefined) console.log(`[sector-learning] 주입 완료 — ${analysis.ticker} (${sectorNote.length}chars)`);
       }
     } catch {
-      // 실패해도 분析 진행
+      // 실패해도 분석 진행
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -467,9 +467,9 @@ async function executeStep(
         };
         const STEP_LABEL: Record<string, string> = {
           company_intro: "팀장 브리핑",
-          industry_analysis: "산업 분析",
+          industry_analysis: "산업 분석",
           catalyst_analysis: "투자 촉매",
-          company_analysis: "기업 재무 분析",
+          company_analysis: "기업 재무 분석",
           intrinsic_valuation: "절대가치 밸류에이션",
           investment_strategy: "투자 전략",
         };
@@ -479,8 +479,8 @@ async function executeStep(
           .join("\n");
         if (completedLines) {
           const dedupBlock = `\n\n[⛔ 중복 작성 금지 — 이미 완료된 단계에서 다룬 영역]\n`
-            + `아래 영역은 각 담당 단계에서 이미 상세히 분析됨. 이 단계에서 같은 내용을 다시 설명하는 것은 금지됩니다.\n`
-            + `꼭 필요한 경우(현재 단계 논리 전개에 필수적인 수치 1개 인용 등) 1문장 이내로만 참조하고, 재분析·재설명은 하지 마세요.\n\n`
+            + `아래 영역은 각 담당 단계에서 이미 상세히 분석됨. 이 단계에서 같은 내용을 다시 설명하는 것은 금지됩니다.\n`
+            + `꼭 필요한 경우(현재 단계 논리 전개에 필수적인 수치 1개 인용 등) 1문장 이내로만 참조하고, 재분석·재설명은 하지 마세요.\n\n`
             + completedLines;
           enrichedContext = enrichedContext ? enrichedContext + dedupBlock : dedupBlock;
         }
@@ -694,7 +694,7 @@ async function executeStep(
   }
 
 
-  // ── 기술적 분析 전용: 주봉 이동평균(20주선·60주선) — 사전 수집 캐시 우선 사용 ──
+  // ── 기술적 분석 전용: 주봉 이동평균(20주선·60주선) — 사전 수집 캐시 우선 사용 ──
 
   // 현재 단계 이전에 완료된 단계만 context로 전달 (순서 보장)
   const currentStepIndex = STEP_ORDER.indexOf(stepKey);
@@ -1042,7 +1042,7 @@ async function executeStep(
 
     if (isLast) {
       // investment_strategy는 이제 마크다운 산문 — JSON 파싱 불필요
-      // DB의 investment_verdict, target_price 등은 새 분析에선 null로 유지
+      // DB의 investment_verdict, target_price 등은 새 분석에선 null로 유지
       await rawQuery(
         `UPDATE analyses SET status='completed', investment_verdict=NULL,
          target_price=NULL, entry_price=NULL, stop_loss=NULL,

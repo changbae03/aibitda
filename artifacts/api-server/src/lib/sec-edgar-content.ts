@@ -246,7 +246,358 @@ function extractBusinessSection(text: string, maxChars = 5_000): string | null {
   return cleaned || null;
 }
 
+// ─── Item 7 MD&A 섹션 추출 ───────────────────────────────────────────────────
+
+function extractMdaSection(text: string, maxChars = 4_000): string | null {
+  const startPats = [
+    /ITEM\s+7\.?\s+MANAGEMENT.{0,5}S\s+DISCUSSION\s+AND\s+ANALYSIS/i,
+    /ITEM\s+7\b[.\s]*\n\s*MANAGEMENT.{0,5}S/i,
+    /^ITEM\s+7[\s.]+MANAGEMENT/im,
+  ];
+  let startIdx = -1;
+  for (const pat of startPats) {
+    const m = text.match(pat);
+    if (m?.index !== undefined) { startIdx = m.index + m[0].length; break; }
+  }
+  if (startIdx === -1) return null;
+
+  const endPats = [
+    /ITEM\s+7A\.?\s+QUANTITATIVE/i,
+    /ITEM\s+8\.?\s+FINANCIAL\s+STATEMENTS/i,
+    /ITEM\s+8\b/i,
+  ];
+  let endIdx = Math.min(text.length, startIdx + maxChars * 3);
+  const searchFrom = startIdx + 200;
+  for (const pat of endPats) {
+    const m = text.slice(searchFrom).match(pat);
+    if (m?.index !== undefined) endIdx = Math.min(endIdx, searchFrom + m.index);
+  }
+
+  const raw = text.slice(startIdx, endIdx).trim();
+  if (raw.length < 200) return null;
+
+  return raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !/^\d{1,3}$/.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .slice(0, maxChars) || null;
+}
+
+// ─── EDGAR XBRL 구조화 재무 시계열 ────────────────────────────────────────────
+
+const XBRL_FACTS_URL = (cik: number) =>
+  `${SEC_DATA}/api/xbrl/companyfacts/CIK${String(cik).padStart(10, "0")}.json`;
+
+const REV_CONCEPTS   = ["Revenues","RevenueFromContractWithCustomerExcludingAssessedTax","SalesRevenueNet","RevenueFromContractWithCustomerIncludingAssessedTax","SalesRevenueGoodsNet"];
+const OPM_CONCEPTS   = ["OperatingIncomeLoss"];
+const NI_CONCEPTS    = ["NetIncomeLoss","NetIncomeLossAvailableToCommonStockholdersBasic"];
+const EPS_CONCEPTS   = ["EarningsPerShareDiluted","EarningsPerShareBasic"];
+const OCF_CONCEPTS   = ["NetCashProvidedByUsedInOperatingActivities"];
+const CAPEX_CONCEPTS = ["PaymentsToAcquirePropertyPlantAndEquipment"];
+const DEBT_CONCEPTS  = ["LongTermDebtNoncurrent","LongTermDebt","LongTermDebtAndCapitalLeaseObligations"];
+
+interface XbrlPoint { end: string; val: number; form: string; fp: string; }
+
+function pickSeries(gaap: any, concepts: string[]): XbrlPoint[] {
+  for (const c of concepts) {
+    const usd = gaap?.[c]?.units?.USD ?? gaap?.[c]?.units?.["USD/shares"];
+    if (Array.isArray(usd) && usd.length > 0) return usd as XbrlPoint[];
+  }
+  return [];
+}
+
+function getAnnual(series: XbrlPoint[], n: number): XbrlPoint[] {
+  const seen = new Set<string>();
+  return series
+    .filter((p) => p.fp === "FY" && (p.form === "10-K" || p.form === "20-F") && p.val != null)
+    .sort((a, b) => b.end.localeCompare(a.end))
+    .filter((p) => { if (seen.has(p.end)) return false; seen.add(p.end); return true; })
+    .slice(0, n);
+}
+
+function getQuarterly(series: XbrlPoint[], n: number): XbrlPoint[] {
+  const seen = new Set<string>();
+  return series
+    .filter((p) => p.form === "10-Q" && p.val != null)
+    .sort((a, b) => b.end.localeCompare(a.end))
+    .filter((p) => { if (seen.has(p.end)) return false; seen.add(p.end); return true; })
+    .slice(0, n);
+}
+
+function fmtUSD(val: number): string {
+  if (Math.abs(val) >= 1e12) return `$${(val / 1e12).toFixed(2)}T`;
+  if (Math.abs(val) >= 1e9)  return `$${(val / 1e9).toFixed(1)}B`;
+  if (Math.abs(val) >= 1e6)  return `$${(val / 1e6).toFixed(0)}M`;
+  return `$${val.toFixed(2)}`;
+}
+
+function pctChg(curr: number, prev: number): string {
+  if (prev === 0) return "";
+  const c = ((curr - prev) / Math.abs(prev)) * 100;
+  return `(${c >= 0 ? "+" : ""}${c.toFixed(1)}%)`;
+}
+
+function yrLabel(end: string): string {
+  return end.slice(0, 4); // "2023-09-30" → "2023"
+}
+
+function buildXbrlSummary(gaap: any, entityName: string): string {
+  const revAnn  = getAnnual(pickSeries(gaap, REV_CONCEPTS),   5);
+  const opmAnn  = getAnnual(pickSeries(gaap, OPM_CONCEPTS),   5);
+  const niAnn   = getAnnual(pickSeries(gaap, NI_CONCEPTS),    5);
+  const ocfAnn  = getAnnual(pickSeries(gaap, OCF_CONCEPTS),   5);
+  const capexAnn= getAnnual(pickSeries(gaap, CAPEX_CONCEPTS), 5);
+  const debtAnn = getAnnual(pickSeries(gaap, DEBT_CONCEPTS),  3);
+  const epsQ    = getQuarterly(pickSeries(gaap, EPS_CONCEPTS), 4);
+  const revQ    = getQuarterly(pickSeries(gaap, REV_CONCEPTS), 4);
+
+  const lines: string[] = [
+    `[📊 SEC EDGAR XBRL 재무 시계열 — ${entityName}]`,
+    `⚠️ SEC XBRL 공시 기반 구조화 데이터. 매출·마진·현금흐름 추세 분석에 활용하세요.`,
+    ``,
+  ];
+
+  if (revAnn.length > 0) {
+    lines.push(`▌ 연간 매출 (Revenue)`);
+    for (let i = revAnn.length - 1; i >= 0; i--) {
+      const p = revAnn[i], prev = revAnn[i + 1];
+      lines.push(`  FY${yrLabel(p.end)}: ${fmtUSD(p.val)}${prev ? " " + pctChg(p.val, prev.val) : ""}`);
+    }
+    if (revAnn.length >= 3) {
+      const [r0, r1, r2] = revAnn;
+      const trend =
+        r0.val > r1.val && r1.val > r2.val ? "3년 연속 성장 ↑↑↑"
+        : r0.val < r1.val && r1.val < r2.val ? "3년 연속 감소 ↓↓↓"
+        : r0.val > r1.val ? "전년 대비 회복 ↑"
+        : "전년 대비 감소 ↓";
+      lines.push(`  → 추세: ${trend}`);
+    }
+    lines.push(``);
+  }
+
+  if (opmAnn.length > 0) {
+    lines.push(`▌ 연간 영업이익 & 마진 (Operating Income & Margin)`);
+    const revMap = new Map(revAnn.map((p) => [yrLabel(p.end), p.val]));
+    for (let i = opmAnn.length - 1; i >= 0; i--) {
+      const p = opmAnn[i], prev = opmAnn[i + 1];
+      const rev = revMap.get(yrLabel(p.end));
+      const margin = rev ? ` (마진 ${((p.val / rev) * 100).toFixed(1)}%)` : "";
+      lines.push(`  FY${yrLabel(p.end)}: ${fmtUSD(p.val)}${margin}${prev ? " " + pctChg(p.val, prev.val) : ""}`);
+    }
+    if (opmAnn.length >= 2) {
+      const r0 = revMap.get(yrLabel(opmAnn[0].end)), r1 = revMap.get(yrLabel(opmAnn[1].end));
+      if (r0 && r1 && r0 > 0 && r1 > 0) {
+        const m0 = opmAnn[0].val / r0, m1 = opmAnn[1].val / r1;
+        const mTrend = m0 > m1 + 0.005 ? "마진 개선 중 ↑" : m0 < m1 - 0.005 ? "마진 압축 중 ↓" : "마진 보합 →";
+        lines.push(`  → 추세: ${mTrend}`);
+      }
+    }
+    lines.push(``);
+  }
+
+  if (niAnn.length > 0) {
+    lines.push(`▌ 연간 순이익 (Net Income)`);
+    for (let i = niAnn.length - 1; i >= 0; i--) {
+      const p = niAnn[i], prev = niAnn[i + 1];
+      lines.push(`  FY${yrLabel(p.end)}: ${fmtUSD(p.val)}${prev ? " " + pctChg(p.val, prev.val) : ""}`);
+    }
+    lines.push(``);
+  }
+
+  if (ocfAnn.length > 0) {
+    lines.push(`▌ 연간 영업현금흐름 & FCF (Operating Cash Flow & FCF)`);
+    const capexMap = new Map(capexAnn.map((p) => [yrLabel(p.end), p.val]));
+    for (let i = ocfAnn.length - 1; i >= 0; i--) {
+      const p = ocfAnn[i];
+      const capex = capexMap.get(yrLabel(p.end));
+      const fcf = capex != null ? ` | FCF: ${fmtUSD(p.val - capex)}` : "";
+      lines.push(`  FY${yrLabel(p.end)}: OCF ${fmtUSD(p.val)}${fcf}`);
+    }
+    lines.push(``);
+  }
+
+  if (epsQ.length > 0) {
+    lines.push(`▌ 최근 분기 EPS (Diluted)`);
+    for (const p of [...epsQ].reverse()) {
+      const d = new Date(p.end);
+      const q = Math.ceil((d.getMonth() + 1) / 3);
+      lines.push(`  ${d.getFullYear()}-Q${q}: $${p.val.toFixed(2)}`);
+    }
+    lines.push(``);
+  } else if (revQ.length > 0) {
+    lines.push(`▌ 최근 분기 매출`);
+    for (const p of [...revQ].reverse()) {
+      const d = new Date(p.end);
+      const q = Math.ceil((d.getMonth() + 1) / 3);
+      lines.push(`  ${d.getFullYear()}-Q${q}: ${fmtUSD(p.val)}`);
+    }
+    lines.push(``);
+  }
+
+  if (debtAnn.length > 0) {
+    lines.push(`▌ 장기부채 (Long-term Debt) — 최근 3년`);
+    for (const p of [...debtAnn].reverse()) {
+      lines.push(`  FY${yrLabel(p.end)}: ${fmtUSD(p.val)}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// XBRL DB 캐시 (7일 TTL)
+let _xbrlTableReady = false;
+async function ensureXbrlTable(): Promise<void> {
+  if (_xbrlTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sec_edgar_xbrl (
+      ticker     VARCHAR(20) PRIMARY KEY,
+      content    TEXT NOT NULL,
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  _xbrlTableReady = true;
+}
+
 // ─── 공개 함수 ───────────────────────────────────────────────────────────────
+
+/**
+ * 미국 주식 티커의 EDGAR XBRL 구조화 재무 시계열을 반환.
+ * SEC companyfacts API → 연간 5개년 + 최근 4분기. 7일 DB 캐시.
+ */
+export async function fetchEdgarTimeSeries(ticker: string): Promise<string | null> {
+  if (/^\d{6}$/.test(ticker)) return null;
+  const bare = ticker.replace(/\.(KS|KQ)$/i, "").toUpperCase();
+
+  try {
+    await ensureXbrlTable();
+    const r = await pool.query<{ content: string; fetched_at: Date }>(
+      "SELECT content, fetched_at FROM sec_edgar_xbrl WHERE ticker = $1",
+      [bare]
+    );
+    if (r.rows[0] && Date.now() - r.rows[0].fetched_at.getTime() < 30 * 86_400_000) {
+      console.log(`[edgar-xbrl] ${bare} 캐시 히트`);
+      return r.rows[0].content;
+    }
+  } catch { /* 캐시 테이블 미생성 — 무시 */ }
+
+  try {
+    const cikMap = await getCikMap();
+    const cik = cikMap.get(bare);
+    if (!cik) {
+      console.log(`[edgar-xbrl] ${bare} CIK 없음`);
+      return null;
+    }
+
+    const res = await fetch(XBRL_FACTS_URL(cik), {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as any;
+    const gaap = data?.facts?.["us-gaap"];
+    if (!gaap) return null;
+
+    const summary = buildXbrlSummary(gaap, data.entityName ?? bare);
+    if (!summary) return null;
+
+    try {
+      await pool.query(
+        `INSERT INTO sec_edgar_xbrl (ticker, content, fetched_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (ticker) DO UPDATE SET content = $2, fetched_at = NOW()`,
+        [bare, summary]
+      );
+    } catch { /* 캐시 저장 실패 무시 */ }
+
+    console.log(`[edgar-xbrl] ${bare} XBRL 완료 (${summary.length}자)`);
+    return summary;
+
+  } catch (e) {
+    console.warn("[edgar-xbrl] 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+/**
+ * 미국 주식 티커의 SEC 10-K "Item 7. MD&A" 섹션을 반환.
+ * 기존 sec_edgar_mda 테이블에 30일 캐시.
+ */
+export async function fetchEdgarMDA(ticker: string): Promise<string | null> {
+  if (/^\d{6}$/.test(ticker)) return null;
+  const bare = ticker.replace(/\.(KS|KQ)$/i, "").toUpperCase();
+
+  // MD&A 전용 캐시 테이블
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sec_edgar_mda (
+        ticker     VARCHAR(20) PRIMARY KEY,
+        content    TEXT,
+        fetched_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const r = await pool.query<{ content: string | null; fetched_at: Date }>(
+      "SELECT content, fetched_at FROM sec_edgar_mda WHERE ticker = $1",
+      [bare]
+    );
+    if (r.rows[0] && Date.now() - r.rows[0].fetched_at.getTime() < 30 * 86_400_000) {
+      if (!r.rows[0].content) return null; // 이전에 추출 실패 → 재시도 안 함
+      console.log(`[edgar-mda] ${bare} 캐시 히트`);
+      return r.rows[0].content;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const cikMap = await getCikMap();
+    const cik = cikMap.get(bare);
+    if (!cik) return null;
+
+    const filing = await fetchLatestAnnualFiling(cik);
+    if (!filing) return null;
+
+    const docUrl = await findPrimaryDocUrl(cik, filing.accessionNumber);
+    if (!docUrl) return null;
+
+    const docRes = await fetch(docUrl, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!docRes.ok) return null;
+
+    const cl = Number(docRes.headers.get("content-length") ?? "0");
+    if (cl > MAX_HTML_BYTES) return null;
+
+    const rawHtml = await docRes.text();
+    if (rawHtml.length > MAX_HTML_BYTES) return null;
+
+    const text = htmlToText(rawHtml);
+    const mda  = extractMdaSection(text, 4_000);
+
+    const result = mda
+      ? [
+          `[📝 SEC 10-K — Item 7. MD&A (${filing.filedDate} 제출)]`,
+          `⚠️ 경영진 직접 작성 구간. 가이던스·리스크·전략 방향 파악에 활용하세요.`,
+          mda,
+        ].join("\n")
+      : null;
+
+    try {
+      await pool.query(
+        `INSERT INTO sec_edgar_mda (ticker, content, fetched_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (ticker) DO UPDATE SET content = $2, fetched_at = NOW()`,
+        [bare, result]
+      );
+    } catch { /* ignore */ }
+
+    console.log(`[edgar-mda] ${bare} MD&A ${result ? `완료 (${result.length}자)` : "추출 실패"}`);
+    return result;
+
+  } catch (e) {
+    console.warn("[edgar-mda] 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
 
 /**
  * 미국 주식 티커를 입력받아 SEC 10-K/20-F "Item 1. Business" 주요 내용을 반환.

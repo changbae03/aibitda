@@ -534,7 +534,7 @@ export default function NewAnalysis() {
             {isEn ? (
               <>Reading between<br />the lines of<br />great companies.</>
             ) : (
-              <>빛나는 기업<br />행간읽기</>
+              <>애빛다, 기업의<br />행간읽기</>
             )}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed break-keep">

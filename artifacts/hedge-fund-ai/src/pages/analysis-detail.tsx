@@ -1424,6 +1424,268 @@ function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?:
   );
 }
 
+// ─── 공시 이력 타임라인 패널 ──────────────────────────────────────────────────
+interface FilingHistoryItem {
+  id: number;
+  rceptNo?: string;
+  accessionNo?: string;
+  reportType?: string;
+  formType?: string;
+  fiscalYear: number;
+  periodCode: string;
+  filedAt: string | null;
+  hasSections: boolean;
+}
+interface FilingDiffItem {
+  fromRceptNo?: string;
+  toRceptNo?: string;
+  fromAccessionNo?: string;
+  toAccessionNo?: string;
+  sectionKey: string;
+  changesJson: { added: string[]; removed: string[]; modified: string[] } | null;
+  aiSummary: string | null;
+}
+
+const PERIOD_LABELS: Record<string, string> = {
+  FY: "사업보고서", H1: "반기", Q1: "1분기", Q2: "반기", Q3: "3분기",
+};
+const FORM_COLORS: Record<string, string> = {
+  FY: "bg-violet-500/15 text-violet-400",
+  H1: "bg-blue-500/15 text-blue-400",
+  Q1: "bg-sky-500/15 text-sky-400",
+  Q2: "bg-sky-500/15 text-sky-400",
+  Q3: "bg-sky-500/15 text-sky-400",
+};
+
+function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const isKR = /^\d{6}$/.test(ticker) || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
+  const isUS = !isKR;
+
+  const [filings, setFilings]   = useState<FilingHistoryItem[]>([]);
+  const [diffs, setDiffs]       = useState<FilingDiffItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [syncing, setSyncing]   = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const baseUrl = isUS ? `/api/filings/us/${encodeURIComponent(ticker)}` : `/api/filings/${encodeURIComponent(ticker)}`;
+  const syncUrl = isUS ? `/api/filings/us/sync/${encodeURIComponent(ticker)}` : `/api/filings/sync/${encodeURIComponent(ticker)}`;
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([
+      fetch(getApiUrl(`${baseUrl}/history`)).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(getApiUrl(`${baseUrl}/diffs?section_key=business_content`)).then(r => r.ok ? r.json() : null).catch(() => null),
+      // US diff uses different key
+      isUS ? fetch(getApiUrl(`${baseUrl}/diffs?section_key=business`)).then(r => r.ok ? r.json() : null).catch(() => null) : null,
+    ]).then(([histData, diffsKR, diffsUS]) => {
+      setFilings(histData?.filings ?? []);
+      const rawDiffs = isUS ? (diffsUS?.diffs ?? []) : (diffsKR?.diffs ?? []);
+      setDiffs(rawDiffs);
+      setLoading(false);
+    });
+  };
+
+  useEffect(() => { load(); }, [ticker]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await fetch(getApiUrl(syncUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      load();
+    } catch {}
+    setSyncing(false);
+  };
+
+  const getDiffForFiling = (filing: FilingHistoryItem): FilingDiffItem | undefined => {
+    const key = isUS ? filing.accessionNo : filing.rceptNo;
+    return diffs.find(d => (d.toRceptNo === key) || (d.toAccessionNo === key));
+  };
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  if (loading) return (
+    <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      <div className="flex items-center gap-2 mb-4">
+        <History className="w-4 h-4 text-muted-foreground/50" />
+        <div className="h-3 w-32 rounded bg-muted/60 animate-pulse" />
+      </div>
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-12 rounded-xl bg-muted/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-card rounded-2xl p-5 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 mb-4">
+        <History className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-base font-semibold text-foreground">
+          {isEn ? "Filing History" : "공시 이력"}
+        </h2>
+        <span className="text-[11px] text-muted-foreground/40">
+          {isUS ? "SEC EDGAR" : "DART"}
+        </span>
+        {filings.length > 0 && (
+          <span className="ml-auto text-[11px] font-mono text-muted-foreground/35">{filings.length}</span>
+        )}
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="ml-auto flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted/50 hover:bg-muted/80 text-muted-foreground transition-colors disabled:opacity-50"
+        >
+          {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          {isEn ? "Sync" : "동기화"}
+        </button>
+      </div>
+
+      {filings.length === 0 ? (
+        <div className="py-8 flex flex-col items-center gap-3 text-center">
+          <p className="text-[13px] text-muted-foreground/60">
+            {isEn ? "No filing history stored yet." : "저장된 공시 이력이 없습니다."}
+          </p>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            {isEn ? "Fetch & Store Filings" : "공시 이력 동기화하기"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filings.map((filing) => {
+            const key = isUS ? (filing.accessionNo ?? "") : (filing.rceptNo ?? "");
+            const diff = getDiffForFiling(filing);
+            const label = isUS
+              ? (filing.formType ?? filing.periodCode)
+              : (PERIOD_LABELS[filing.periodCode] ?? filing.reportType ?? filing.periodCode);
+            const colorCls = FORM_COLORS[filing.periodCode] ?? "bg-muted/20 text-muted-foreground";
+            const isOpen = expanded.has(key);
+            const hasChanges = diff && diff.changesJson && (
+              diff.changesJson.added.length > 0 ||
+              diff.changesJson.removed.length > 0 ||
+              diff.changesJson.modified.length > 0
+            );
+
+            return (
+              <div key={key} className="rounded-xl border border-border/40 overflow-hidden">
+                <button
+                  onClick={() => hasChanges && toggleExpand(key)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-colors ${hasChanges ? "hover:bg-muted/20 cursor-pointer" : "cursor-default"}`}
+                >
+                  {/* 연도 + 분기 */}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${colorCls}`}>
+                    {label}
+                  </span>
+                  <span className="text-[13px] font-semibold tabular-nums text-foreground/80">
+                    {filing.fiscalYear}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/40 font-mono">
+                    {filing.filedAt?.slice(0, 7) ?? "—"}
+                  </span>
+                  {/* 섹션 저장 여부 */}
+                  {filing.hasSections ? (
+                    <span className="text-[10px] text-emerald-400 ml-1">●</span>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground/25 ml-1">○</span>
+                  )}
+                  {/* diff 요약 뱃지 */}
+                  {hasChanges && (
+                    <div className="flex items-center gap-1.5 ml-auto mr-1">
+                      {diff!.changesJson!.added.length > 0 && (
+                        <span className="text-[10px] font-bold text-emerald-400">+{diff!.changesJson!.added.length}</span>
+                      )}
+                      {diff!.changesJson!.removed.length > 0 && (
+                        <span className="text-[10px] font-bold text-red-400">−{diff!.changesJson!.removed.length}</span>
+                      )}
+                      {diff!.changesJson!.modified.length > 0 && (
+                        <span className="text-[10px] font-bold text-amber-400">~{diff!.changesJson!.modified.length}</span>
+                      )}
+                    </div>
+                  )}
+                  {hasChanges && (
+                    <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/40 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  )}
+                </button>
+
+                {/* diff 상세 */}
+                {isOpen && diff && diff.changesJson && (
+                  <div className="px-3.5 pb-3.5 pt-1 border-t border-border/30 space-y-3">
+                    {/* AI 요약 */}
+                    {diff.aiSummary && (
+                      <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+                        {diff.aiSummary}
+                      </p>
+                    )}
+                    {/* Added */}
+                    {diff.changesJson.added.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Added" : "신규 추가"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.added.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-emerald-400 mt-0.5 shrink-0">+</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Removed */}
+                    {diff.changesJson.removed.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Removed" : "사라진 항목"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.removed.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-red-400 mt-0.5 shrink-0">−</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Modified */}
+                    {diff.changesJson.modified.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1.5">
+                          {isEn ? "Changed" : "변화된 항목"}
+                        </p>
+                        <ul className="space-y-1">
+                          {diff.changesJson.modified.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[12px] text-foreground/70">
+                              <span className="text-amber-400 mt-0.5 shrink-0">~</span>
+                              <span className="leading-snug">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 배당 정보 패널 ────────────────────────────────────────────────────────────
 interface DividendInfo {
   dividendRate: number | null;
@@ -2211,6 +2473,181 @@ function CatalystView({ step, isEn, accent }: { step: any; isEn: boolean; accent
 }
 
 // ── 투자 결론: 핵심 포인트 3개 렌더러 ────────────────────────────────────────
+// ── 애빛다 6렌즈 행간읽기 ────────────────────────────────────────────────────
+// ── 투자 체크리스트 ──────────────────────────────────────────────────────────
+interface ChecklistItem {
+  category: string;
+  item: string;
+  status: "pass" | "warn" | "fail";
+  verdict: string;
+  detail?: string;
+}
+interface ChecklistData {
+  items: ChecklistItem[];
+  score: number;
+  total: number;
+}
+
+function parseChecklistJson(content: string): ChecklistData | null {
+  try {
+    // ```json ... ``` 블록 우선 추출
+    const blockMatch = content.match(/```json\s*([\s\S]*?)```/);
+    const raw = blockMatch ? blockMatch[1] : content.match(/\{[\s\S]*"items"[\s\S]*\}/)?.[0];
+    if (!raw) return null;
+    const obj = JSON.parse(raw.trim());
+    if (!Array.isArray(obj.items) || obj.items.length === 0) return null;
+    const score = obj.items.filter((i: ChecklistItem) => i.status === "pass").length;
+    return { items: obj.items, score, total: obj.items.length };
+  } catch {
+    return null;
+  }
+}
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  "성장성":     { bg: "bg-blue-500/10",   text: "text-blue-400" },
+  "수익성":     { bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "밸류에이션": { bg: "bg-violet-500/10", text: "text-violet-400" },
+  "재무건전성": { bg: "bg-orange-500/10", text: "text-orange-400" },
+  "내러티브":   { bg: "bg-teal-500/10",   text: "text-teal-400" },
+};
+
+function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
+  const data = parseChecklistJson(step.content ?? "");
+  if (!data) return null;
+
+  const categories = [...new Set(data.items.map((i: ChecklistItem) => i.category))];
+  const passCount = data.items.filter((i: ChecklistItem) => i.status === "pass").length;
+  const warnCount = data.items.filter((i: ChecklistItem) => i.status === "warn").length;
+  const failCount = data.items.filter((i: ChecklistItem) => i.status === "fail").length;
+  const pct = Math.round((passCount / data.total) * 100);
+
+  const statusIcon = (s: string) => s === "pass" ? "✅" : s === "warn" ? "⚠️" : "❌";
+  const statusTextColor = (s: string) =>
+    s === "pass" ? "text-green-400" : s === "warn" ? "text-amber-400" : "text-red-400";
+  const statusBg = (s: string) =>
+    s === "pass" ? "bg-green-500/8 border-green-500/20"
+    : s === "warn" ? "bg-amber-500/8 border-amber-500/20"
+    : "bg-red-500/8 border-red-500/20";
+
+  return (
+    <div className="space-y-5">
+      {/* 스코어 헤더 */}
+      <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+        <div className="text-center">
+          <div className="text-3xl font-bold tabular-nums">{passCount}</div>
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{isEn ? "Passed" : "충족"}</div>
+        </div>
+        <div className="text-muted-foreground/30 text-xl font-light">/</div>
+        <div className="text-center">
+          <div className="text-3xl font-bold tabular-nums text-muted-foreground/60">{data.total}</div>
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{isEn ? "Total" : "전체"}</div>
+        </div>
+        <div className="flex-1 ml-2">
+          {/* 진행 바 */}
+          <div className="h-2 w-full rounded-full bg-border/40 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${pct}%`,
+                background: pct >= 70 ? "#22c55e" : pct >= 40 ? "#f59e0b" : "#ef4444",
+              }}
+            />
+          </div>
+          <div className="flex gap-3 mt-2 text-[11px] text-muted-foreground/60">
+            <span>✅ {passCount}</span>
+            <span>⚠️ {warnCount}</span>
+            <span>❌ {failCount}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 카테고리별 항목 */}
+      {categories.map((cat) => {
+        const col = CATEGORY_COLORS[cat] ?? { bg: "bg-muted/20", text: "text-muted-foreground" };
+        const catItems = data.items.filter((i: ChecklistItem) => i.category === cat);
+        return (
+          <div key={cat} className="space-y-1.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
+                {cat}
+              </span>
+            </div>
+            {catItems.map((item: ChecklistItem, idx: number) => (
+              <div
+                key={idx}
+                className={`flex items-start gap-3 py-2.5 px-3.5 rounded-xl border ${statusBg(item.status)}`}
+              >
+                <span className="text-[15px] mt-0.5 flex-shrink-0">{statusIcon(item.status)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[13px] font-medium text-foreground/85 leading-snug">{item.item}</span>
+                    <span className={`text-[12px] font-semibold whitespace-nowrap leading-snug ${statusTextColor(item.status)}`}>
+                      {item.verdict}
+                    </span>
+                  </div>
+                  {item.detail && (
+                    <p className="text-[11px] text-muted-foreground/55 mt-0.5 leading-relaxed">{item.detail}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
+  const raw = (step.content ?? "").replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");
+
+  const sectionParts = raw.split(/\n(?=## )/).filter((s: string) => s.trim().startsWith("##"));
+
+  const LENS_STYLES = [
+    { border: "border-indigo-400/50", bg: "bg-indigo-500/[0.04]", badge: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
+    { border: "border-sky-400/50",    bg: "bg-sky-500/[0.04]",    badge: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+    { border: "border-violet-400/50", bg: "bg-violet-500/[0.04]", badge: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+    { border: "border-amber-400/50",  bg: "bg-amber-500/[0.04]",  badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    { border: "border-orange-400/50", bg: "bg-orange-500/[0.04]", badge: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
+    { border: "border-emerald-400/50",bg: "bg-emerald-500/[0.04]",badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  ];
+
+  const parsed = sectionParts.map((section: string, i: number) => {
+    const lines = section.split("\n");
+    const header = lines[0].replace(/^##\s*/, "").trim();
+    const verdictIdx = lines.findIndex((l: string, idx: number) => idx > 0 && l.trim().startsWith("→"));
+    const verdictLine = verdictIdx >= 0 ? lines[verdictIdx] : null;
+    const verdict = verdictLine?.replace(/^→\s*\*?\*?/, "").replace(/\*?\*?$/, "").trim();
+    const bodyLines = lines.slice(1, verdictIdx >= 0 ? verdictIdx : undefined);
+    const body = bodyLines.join("\n").trim();
+    return { header, body, verdict, style: LENS_STYLES[i % LENS_STYLES.length] };
+  });
+
+  if (parsed.length === 0) {
+    return <div className="prose-narrative"><MdBlock src={raw} isEn={isEn} /></div>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {parsed.map((lens: { header: string; body: string; verdict?: string; style: typeof LENS_STYLES[0] }, i: number) => (
+        <div key={i} className={`rounded-xl border ${lens.style.border} ${lens.style.bg} p-4 flex flex-col gap-2.5`}>
+          <p className="text-[13.5px] font-bold text-foreground leading-snug">{lens.header}</p>
+          {lens.body && (
+            <p className="text-[12.5px] leading-[1.85] text-foreground/70 flex-1">{lens.body}</p>
+          )}
+          {lens.verdict && (
+            <div className="pt-1.5 border-t border-border/25">
+              <span className={`inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full ${lens.style.badge}`}>
+                {lens.verdict}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
   const content = step.content ?? "";
 
@@ -2673,7 +3110,7 @@ function NarrativeSectionBlock({
         {pending ? (
           <div className="flex items-center gap-3 py-8 justify-center">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
-            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분析 중…"}</span>
+            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분석 중…"}</span>
           </div>
         ) : children}
       </div>
@@ -2688,7 +3125,7 @@ function NarrativeStepContent({
   step: any; isEn?: boolean; ticker?: string; accent?: string; compact?: boolean;
 }) {
   const raw = (step.content ?? "")
-    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분析 요약")
+    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분석 요약")
     .replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");  // 헤딩 숫자 번호 제거 (## 5. 제목 → ## 제목)
   const processed = stripPromptInstructions(stripEstimationLabels(
     step.stepKey === "company_analysis" ? stripValuationData(raw) : raw,
@@ -3182,7 +3619,7 @@ export default function AnalysisDetail() {
     // DB값(서버 verdict-override 결과)이 존재하면 최우선 사용
     const dbVerdict = (analysis as any).investmentVerdict as string | null ?? null;
     if (dbVerdict) return dbVerdict;
-    // 분析 진행 중(완료 전)에만 step JSON에서 임시로 파싱
+    // 분석 진행 중(완료 전)에만 step JSON에서 임시로 파싱
     const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
     if (stratStep?.content) {
       try {
@@ -3421,10 +3858,10 @@ export default function AnalysisDetail() {
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 animate-pulse"
                         : "bg-warning/10 text-warning border-warning/20 animate-pulse"
                 )}>
-                  {isComplete ? (isEn ? 'Complete' : '분析 완료')
+                  {isComplete ? (isEn ? 'Complete' : '분석 완료')
                     : isError ? (isEn ? 'Failed' : '실패')
                     : analysis.status === 'queued' ? (isEn ? 'Queued' : '대기 중')
-                    : (isEn ? 'In Progress' : '분析 중')}
+                    : (isEn ? 'In Progress' : '분석 중')}
                 </span>
               </div>
 
@@ -3636,18 +4073,18 @@ export default function AnalysisDetail() {
         <div className="print:hidden rounded-2xl bg-card border border-blue-500/20 p-5 flex items-center gap-4">
           <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0" />
           <div>
-            <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분析 대기 중"}</p>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분석 대기 중"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "Will start when a slot opens." : "슬롯이 열리면 자동으로 시작됩니다."}</p>
           </div>
         </div>
       )}
 
-      {/* ── 분析 실패 ── */}
+      {/* ── 분석 실패 ── */}
       {isError && (
         <div className="print:hidden rounded-2xl bg-card border border-red-500/20 p-5 flex items-center gap-4">
           <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
           <div>
-            <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분析 생성 실패"}</p>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분석 생성 실패"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "AI error — please re-run." : "AI 오류 — 다시 실행해 주세요."}</p>
           </div>
         </div>
@@ -3663,6 +4100,7 @@ export default function AnalysisDetail() {
         const activelyStreaming = streamingIntro || streamingInd;
         if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={1}
             title={isEn ? "What does this company do & what industry is it in?" : "이 기업, 어떤 산업에서 어떻게 돈 버나요?"}
@@ -3675,7 +4113,7 @@ export default function AnalysisDetail() {
             {streamingIntro && !introStep ? (
               <div className="flex items-center gap-3 py-10 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Reading company profile…" : "기업 개요 작성 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Figuring out how they make money…" : "이 회사가 어떻게 돈 버는지 파악 중…"}</span>
               </div>
             ) : introStep ? (
               <ErrorBoundary fallback={null}>
@@ -3693,10 +4131,11 @@ export default function AnalysisDetail() {
             ) : streamingInd ? (
               <div className={`flex items-center gap-3 py-6 justify-center ${introStep ? "mt-6 pt-6 border-t border-border/40" : ""}`}>
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing industry…" : "업황 분析 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Mapping the playing field…" : "이 판이 어떻게 돌아가는지 읽는 중…"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3706,11 +4145,15 @@ export default function AnalysisDetail() {
         const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingDart = streamingStep?.key === "dart_report_analysis";
         const streamingComp = streamingStep?.key === "company_analysis";
-        const showSection = !!(dartStep || compStep) || streamingDart || streamingComp ||
-          (isComplete && analysis.steps.some((s: any) => s.stepKey === "industry_analysis"));
+        const sec1Done = !!(
+          analysis.steps.find((s: any) => s.stepKey === "company_intro") ||
+          analysis.steps.find((s: any) => s.stepKey === "industry_analysis")
+        );
+        const showSection = isComplete || !!(dartStep || compStep) || streamingDart || streamingComp || sec1Done;
         if (!showSection) return null;
         const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={2}
             title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
@@ -3726,22 +4169,29 @@ export default function AnalysisDetail() {
             ) : streamingDart ? (
               <div className="flex items-center gap-3 py-6 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Reading DART filings…" : "사업보고서 분析 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Speed-reading filings… skipping the fluff 📄" : "사업보고서 정독 중… CEO 자랑은 건너뜀 📄"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
-      {/* ══ 실적 분析 카드 ══ */}
+      {/* ══ 실적 분석 카드 ══ */}
       {(() => {
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingComp = streamingStep?.key === "company_analysis";
-        const showCard = isComplete || !!compStep || streamingComp ||
-          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        const dartStarted = !!(
+          analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis") ||
+          analysis.steps.find((s: any) => s.stepKey === "company_analysis") ||
+          streamingStep?.key === "dart_report_analysis" ||
+          streamingStep?.key === "company_analysis"
+        );
+        const showCard = isComplete || dartStarted;
         if (!showCard) return null;
         const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={3}
             title={isEn ? "How are the numbers looking?" : "실적과 주가, 숫자로 보는 기업"}
@@ -3756,7 +4206,7 @@ export default function AnalysisDetail() {
                 <FinancialChart ticker={analysis.ticker} isEn={isEn} />
               </div>
 
-              {/* 재무 심층 분析 */}
+              {/* 재무 심층 분석 */}
               {compStep ? (
                 <div className="px-5 sm:px-6 py-5">
                   <ErrorBoundary fallback={null}>
@@ -3766,7 +4216,7 @@ export default function AnalysisDetail() {
               ) : streamingComp ? (
                 <div className="px-5 sm:px-6 py-6 flex items-center gap-3 justify-center">
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
-                  <span className="text-sm text-muted-foreground">{isEn ? "Connecting numbers to filings…" : "재무 수치를 사업 흐름과 연결 중…"}</span>
+                  <span className="text-sm text-muted-foreground">{isEn ? "Making numbers tell a story…" : "숫자에 이야기 입히는 중… 📊"}</span>
                 </div>
               ) : null}
 
@@ -3789,19 +4239,24 @@ export default function AnalysisDetail() {
               )}
             </div>
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
-      {/* ══ 섹션 3: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
+      {/* ══ 섹션 4: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
       {(() => {
         const catStep = analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis");
         const streamingCat = streamingStep?.key === "catalyst_analysis";
         const hasAny = !!catStep;
         // 뉴스 타임라인은 항상 표시 (캐시 기반 독립 fetch)
-        const showSection = isComplete || hasAny || streamingCat ||
-          analysis.steps.some((s: any) => s.stepKey === "company_analysis");
+        const prevDone = !!(
+          analysis.steps.find((s: any) => s.stepKey === "company_analysis") ||
+          analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis")
+        );
+        const showSection = isComplete || hasAny || streamingCat || prevDone;
         if (!showSection) return null;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={4}
             title={isEn ? "What's happening right now?" : "지금 이 기업에 무슨 일이 일어나고 있나"}
@@ -3828,40 +4283,119 @@ export default function AnalysisDetail() {
             ) : streamingCat ? (
               <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Building catalyst timeline…" : "촉매 & 향후 타임라인 생성 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Filling in the events calendar… 📅" : "앞으로 뭔 일이 생길지 캘린더 채우는 중… 📅"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
-      {/* ══ 섹션 4: 투자 결론 ══ */}
+      {/* ══ 섹션 5: 애빛다 총정리 (투자 판단 + 6렌즈) ══ */}
       {(() => {
         const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
         const streamingStrat = streamingStep?.key === "investment_strategy";
-        if (!stratStep && !streamingStrat && (isComplete || isError)) return null;
-        const agent = AGENTS["investment_strategy"];
-        const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
+        const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
+        const streamingThesis = streamingStep?.key === "investment_thesis";
+        const catStarted = !!(
+          analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis") ||
+          streamingStep?.key === "catalyst_analysis"
+        );
+        const showSection = !!stratStep || streamingStrat || !!thesisStep || streamingThesis ||
+          (catStarted && !isComplete && !isError);
+        if (!showSection) return null;
+        const canRunThesis = !thesisStep && !streamingThesis && !isStreaming && !!stratStep;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={5}
-            title={isEn ? "Investment conclusion" : "투자 결론"}
-            subtitle={isEn ? "3 core investment points" : "핵심 투자 포인트 3가지"}
-            accent="#FF8A7A"
-            pending={!stratStep && !streamingStrat}
+            title={isEn ? "Aibida Wrap-Up" : "애빛다 총정리"}
+            subtitle={isEn ? "Investment verdict · 6-lens deep read" : "투자 판단 · 6렌즈 심층 해석"}
+            accent="#8B5CF6"
+            pending={!stratStep && !streamingStrat && !thesisStep && !streamingThesis}
             isEn={isEn}
           >
+            {/* ① 투자 결론 */}
             {streamingStrat && !stratStep ? (
               <div className="flex items-center gap-3 py-8 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Writing investment conclusion…" : "핵심 투자 포인트 정리 중…"}</span>
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Drumroll for the verdict… 🥁" : "최종 판단 내리는 중… 두구두구 🥁"}</span>
               </div>
             ) : stratStep ? (
               <ErrorBoundary fallback={null}>
                 <InvestmentPointsView step={stratStep} isEn={isEn} />
               </ErrorBoundary>
             ) : null}
+
+            {/* ② 6렌즈 심층 해석 — 투자 결론 아래에 붙음 */}
+            {stratStep && (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-4">
+                  {isEn ? "6-Lens Deep Read" : "6렌즈 심층 해석"}
+                </p>
+                {thesisStep ? (
+                  <ErrorBoundary fallback={null}>
+                    <ThesisView step={thesisStep} isEn={isEn} />
+                  </ErrorBoundary>
+                ) : streamingThesis ? (
+                  <div className="flex items-center gap-3 py-8 justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
+                    <span className="text-sm text-muted-foreground">{isEn ? "Mining for truths between the lines… 🔭" : "줄 사이에 숨은 진실 캐내는 중… 🔭"}</span>
+                  </div>
+                ) : canRunThesis ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <button
+                      onClick={() => {
+                        if (!triggeredSteps.current.has("investment_thesis")) {
+                          triggeredSteps.current.add("investment_thesis");
+                          runStreamingStepRef.current?.("investment_thesis");
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                      style={{ background: "#8B5CF6" }}
+                    >
+                      <span>🔭</span>
+                      {isEn ? "Run 6-lens analysis" : "6렌즈 분석하기"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </NarrativeSectionBlock>
+          </motion.div>
+        );
+      })()}
+
+
+      {/* ══ 섹션 6: 투자 체크리스트 ══ */}
+      {(() => {
+        const checklistStep = analysis.steps.find((s: any) => s.stepKey === "checklist");
+        const streamingChecklist = streamingStep?.key === "checklist";
+        const thesisStarted = !!(analysis.steps.find((s: any) => s.stepKey === "investment_thesis") || streamingStep?.key === "investment_thesis");
+        const showSection = !!checklistStep || streamingChecklist || (thesisStarted && !isComplete && !isError);
+        if (!showSection) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
+          <NarrativeSectionBlock
+            num={6}
+            title={isEn ? "Investment Checklist" : "투자 체크리스트"}
+            subtitle={isEn ? "10 must-check criteria · pass / warn / fail" : "주식 볼 때 반드시 점검해야 할 10가지"}
+            accent="#10b981"
+            pending={!checklistStep && !streamingChecklist}
+            isEn={isEn}
+          >
+            {streamingChecklist && !checklistStep ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10b981" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Running checklist…" : "체크리스트 점검 중… ✅"}</span>
+              </div>
+            ) : checklistStep ? (
+              <ErrorBoundary fallback={null}>
+                <ChecklistView step={checklistStep} isEn={isEn} />
+              </ErrorBoundary>
+            ) : null}
+          </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3881,6 +4415,7 @@ export default function AnalysisDetail() {
           <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
           <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
           <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
+          <FilingTimelinePanel ticker={analysis.ticker} isEn={isEn} />
         </div>
       </details>
 
@@ -4612,7 +5147,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       </div>
 
       {/* markdown prose fallback (investment_strategy는 JSON 아닌 마크다운 산문) */}
-      {!json && step.content && !step.content.startsWith("분析 오류:") && !step.content.startsWith("분析 결과를 생성하지 못했습니다") ? (
+      {!json && step.content && !step.content.startsWith("분석 오류:") && !step.content.startsWith("분석 결과를 생성하지 못했습니다") ? (
         <div className="p-4 sm:p-6">
           <MdBlock src={step.content} isEn={isEn} />
         </div>
@@ -5674,7 +6209,7 @@ function stripPromptInstructions(content: string): string {
       // ── 체인 인계 선언 문장 ───────────────────────────────────────
       if (/브리핑에서 확인된 핵심 이슈 .+을 중심으로/.test(t)) return false;
       if (/산업 分析에서 .+이 확인되었습니다\. 이를 배경으로/.test(t)) return false;
-      if (/촉매 분析에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
+      if (/촉매 분석에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
       if (/^📌\s*\*?\*?\[체인 인계 규칙\]/.test(t)) return false;
       if (/^→\s*이 문장으로 리포트가 시작/.test(t)) return false;
       if (/^→\s*이 한 문장을 모든 소제목/.test(t)) return false;
@@ -5687,14 +6222,14 @@ function stripPromptInstructions(content: string): string {
       if (/이 단계의 담당 범위/.test(t)) return false;
       if (/이 범위 밖 내용은 타 단계에서/.test(t)) return false;
       if (/다른 단계 전담/.test(t)) return false;
-      if (/다음 분析 단계/.test(t)) return false;
+      if (/다음 분석 단계/.test(t)) return false;
       if (/다음 에이전트에게/.test(t)) return false;
 
       // ── 검증 결과 문구 ────────────────────────────────────────────
       if (/논리 일관성 확인됨|논리 충돌 해소됨|검증 완료/.test(t)) return false;
 
       // ── 상투어 마감 ───────────────────────────────────────────────
-      if (/이상으로 분析을 마칩니다|이로써 보고서를 마칩니다|이상으로 마칩니다/.test(t)) return false;
+      if (/이상으로 분석을 마칩니다|이로써 보고서를 마칩니다|이상으로 마칩니다/.test(t)) return false;
 
       // ── 지시 잔재 (instruction leakage) ──────────────────────────
       if (/^⚠️.*(선정 기준|자가 검증|담당 범위)/.test(t)) return false;
