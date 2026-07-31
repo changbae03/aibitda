@@ -3714,6 +3714,7 @@ export default function AnalysisDetail() {
         const activelyStreaming = streamingIntro || streamingInd;
         if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={1}
             title={isEn ? "What does this company do & what industry is it in?" : "이 기업, 어떤 산업에서 어떻게 돈 버나요?"}
@@ -3748,6 +3749,7 @@ export default function AnalysisDetail() {
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3757,11 +3759,15 @@ export default function AnalysisDetail() {
         const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingDart = streamingStep?.key === "dart_report_analysis";
         const streamingComp = streamingStep?.key === "company_analysis";
-        const showSection = !!(dartStep || compStep) || streamingDart || streamingComp ||
-          (isComplete && analysis.steps.some((s: any) => s.stepKey === "industry_analysis"));
+        const sec1Done = !!(
+          analysis.steps.find((s: any) => s.stepKey === "company_intro") ||
+          analysis.steps.find((s: any) => s.stepKey === "industry_analysis")
+        );
+        const showSection = isComplete || !!(dartStep || compStep) || streamingDart || streamingComp || sec1Done;
         if (!showSection) return null;
         const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={2}
             title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
@@ -3781,6 +3787,7 @@ export default function AnalysisDetail() {
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3788,11 +3795,17 @@ export default function AnalysisDetail() {
       {(() => {
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingComp = streamingStep?.key === "company_analysis";
-        const showCard = isComplete || !!compStep || streamingComp ||
-          analysis.steps.some((s: any) => s.stepKey === "dart_report_analysis");
+        const dartStarted = !!(
+          analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis") ||
+          analysis.steps.find((s: any) => s.stepKey === "company_analysis") ||
+          streamingStep?.key === "dart_report_analysis" ||
+          streamingStep?.key === "company_analysis"
+        );
+        const showCard = isComplete || dartStarted;
         if (!showCard) return null;
         const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={3}
             title={isEn ? "How are the numbers looking?" : "실적과 주가, 숫자로 보는 기업"}
@@ -3840,6 +3853,7 @@ export default function AnalysisDetail() {
               )}
             </div>
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3849,10 +3863,14 @@ export default function AnalysisDetail() {
         const streamingCat = streamingStep?.key === "catalyst_analysis";
         const hasAny = !!catStep;
         // 뉴스 타임라인은 항상 표시 (캐시 기반 독립 fetch)
-        const showSection = isComplete || hasAny || streamingCat ||
-          analysis.steps.some((s: any) => s.stepKey === "company_analysis");
+        const prevDone = !!(
+          analysis.steps.find((s: any) => s.stepKey === "company_analysis") ||
+          analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis")
+        );
+        const showSection = isComplete || hasAny || streamingCat || prevDone;
         if (!showSection) return null;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={4}
             title={isEn ? "What's happening right now?" : "지금 이 기업에 무슨 일이 일어나고 있나"}
@@ -3883,6 +3901,7 @@ export default function AnalysisDetail() {
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3890,10 +3909,15 @@ export default function AnalysisDetail() {
       {(() => {
         const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
         const streamingStrat = streamingStep?.key === "investment_strategy";
-        if (!stratStep && !streamingStrat && (isComplete || isError)) return null;
+        const catStarted = !!(
+          analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis") ||
+          streamingStep?.key === "catalyst_analysis"
+        );
+        if (!stratStep && !streamingStrat && (!catStarted || isComplete || isError)) return null;
         const agent = AGENTS["investment_strategy"];
         const fallbackAgent = { id: "investment_strategy", name: "전략가", nameEn: "Strategist", role: "최종 전략", icon: BrainCircuit, color: "text-primary", bgColor: "bg-primary/10", description: "", descriptionEn: "" };
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={5}
             title={isEn ? "Investment conclusion" : "투자 결론"}
@@ -3913,6 +3937,7 @@ export default function AnalysisDetail() {
               </ErrorBoundary>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
@@ -3925,6 +3950,7 @@ export default function AnalysisDetail() {
         if (!showSection) return null;
         const canRunThesis = !thesisStep && !streamingThesis && !isStreaming && !!stratStep;
         return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
             num={6}
             title={isEn ? "Reading Between the Lines" : "행간읽기"}
@@ -3963,6 +3989,7 @@ export default function AnalysisDetail() {
               </div>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
         );
       })()}
 
