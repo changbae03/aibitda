@@ -126,8 +126,9 @@ export async function collectBizTimeline(
     // 분기·반기는 짧게 뽑는다. 12개 기간을 연간과 같은 분량으로 넣으면 프롬프트가
     // 20만자를 넘어 감당이 안 되고, 무엇보다 분기 보고서는 연간의 요약·증분이라
     // 같은 내용이 반복된다. 변화가 드러나는 만큼만 담는다.
-    // 소분류마다 상한을 따로 준다. 연간은 표가 크니 넉넉히, 분기·반기는 증분이라 절반.
-    const content = extractSections(raw, rep.quarter === 4 ? 4_000 : 2_000);
+    // 연간은 full 가중치+큰 base, 분기·반기는 qWeight+작은 base로 반복 서술을 줄인다.
+    // (분기의 바뀌는 숫자 표는 qWeight를 그대로 둬 살리고, 반복되는 기타참고만 깎는다)
+    const content = extractSections(raw, rep.quarter === 4 ? 4_000 : 2_000, rep.quarter !== 4);
     if (content.length < 300) { console.warn(`[biz-timeline] ${ticker} ${label} 섹션 추출 실패`); continue; }
 
     await pool.query(

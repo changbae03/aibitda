@@ -27,13 +27,18 @@ const BIZ_SUBSECTIONS = [
   // SK하이닉스 기준 기타참고 20,244자(점유율·매출비중·산업분석)인데
   // 연구개발 11,398자는 특허·조직 목록 보일러플레이트다. 같은 상한을 주면
   // 정작 중요한 기타참고가 잘리고 목록만 남는다. 그래서 가중치로 나눈다.
-  { key: "사업개요",   head: /^\d+\.\s*사업의\s*개요/,           weight: 1 },
-  { key: "주요제품",   head: /^\d+\.\s*주요\s*제품/,             weight: 1.5 }, // 제품 구성·매출비중
-  { key: "생산설비",   head: /^\d+\.\s*(원재료|생산)/,           weight: 1.5 }, // 생산능력·가동률 표
-  { key: "매출수주",   head: /^\d+\.\s*매출/,                     weight: 2 },   // 매출비중·매출처·수주잔고
-  { key: null,         head: /^\d+\.\s*위험\s*관리/,             weight: 0 },   // 파생거래 보일러플레이트 — 버림
-  { key: "연구개발",   head: /^\d+\.\s*(주요\s*계약|연구개발)/,   weight: 1 },   // R&D 수치는 앞쪽, 뒤는 특허목록
-  { key: "기타참고",   head: /^\d+\.\s*기타\s*참고/,             weight: 3 },   // 점유율·경쟁·산업분석 — 금광
+  //
+  // qWeight = 분기·반기용 가중치. **분기 보고서는 연간의 산업분석·점유율을 거의
+  // 그대로 반복한다** — 분기에서 값이 있는 건 "바뀐 숫자"(생산실적·매출·수주)뿐이다.
+  // 그래서 반복되는 서술(기타참고·사업개요)은 대폭 줄이고, 바뀌는 표(생산설비·매출수주)는
+  // 그대로 둔다. 기타참고를 줄여도 트림의 SIGNAL이 점유율 한 줄은 여전히 끌어온다.
+  { key: "사업개요",   head: /^\d+\.\s*사업의\s*개요/,           weight: 1,   qWeight: 0.5 },
+  { key: "주요제품",   head: /^\d+\.\s*주요\s*제품/,             weight: 1.5, qWeight: 1.5 }, // 매출비중은 분기에도 변한다
+  { key: "생산설비",   head: /^\d+\.\s*(원재료|생산)/,           weight: 1.5, qWeight: 1.5 }, // 생산실적·가동률 — 분기의 핵심
+  { key: "매출수주",   head: /^\d+\.\s*매출/,                     weight: 2,   qWeight: 2 },   // 매출·수주잔고 — 분기의 핵심
+  { key: null,         head: /^\d+\.\s*위험\s*관리/,             weight: 0,   qWeight: 0 },   // 파생거래 보일러플레이트 — 버림
+  { key: "연구개발",   head: /^\d+\.\s*(주요\s*계약|연구개발)/,   weight: 1,   qWeight: 0.5 }, // R&D 수치는 앞쪽뿐
+  { key: "기타참고",   head: /^\d+\.\s*기타\s*참고/,             weight: 3,   qWeight: 0.5 }, // 산업분석은 연간과 중복
 ] as const;
 
 /** 참고용으로만 남긴 옛 이름 */
@@ -100,7 +105,7 @@ function sliceBusinessSection(lines: string[]): [number, number] | null {
  * 시계열 분석에 값이 있는 신호. 소분류가 상한을 넘칠 때 **이 신호가 있는 대목은
  * 앞에서 잘려도 살려낸다.** 점유율이 문서 깊숙이(기타참고 243줄째) 있어도 놓치지 않게.
  */
-const SIGNAL = /점유율|비중|시장\s*규모|경쟁|주요\s*고객|매출처|가동률|생산\s*능력|생산\s*실적|수주\s*잔고|증설|신규\s*(사업|수주|계약)|CAPA|M\/S/;
+const SIGNAL = /점유율|비중|시장\s*규모|경쟁|주요\s*고객|매출처|가동률|생산\s*능력|생산\s*실적|수주\s*잔고|연구개발비|증설|신규\s*(사업|수주|계약)|CAPA|M\/S/;
 
 /**
  * 한 소분류를 상한까지 담되, 넘치면 앞 문맥 + 신호 대목을 함께 남긴다.
@@ -142,7 +147,7 @@ function trimSubsection(lines: string[], cap: number): string {
  *
  * 위험관리(파생거래) 소분류만 버린다 — 정형 문구라 연도 비교에 값이 없다.
  */
-export function extractSections(text: string, base = 4_000): string {
+export function extractSections(text: string, base = 4_000, quarterly = false): string {
   const raw = text.split("\n").map(l => l.trim());
   const span = sliceBusinessSection(raw);
   // 본문 블록을 못 찾으면(비정형 서식) 전체에서 찾되, 빈 줄만 제거한다.
@@ -158,12 +163,14 @@ export function extractSections(text: string, base = 4_000): string {
   }
 
   // 소분류 정의 순서대로, 각자 가중치만큼의 상한까지.
+  // 분기·반기는 qWeight를 써서 반복 서술을 줄인다.
   const out: string[] = [];
   for (const sec of BIZ_SUBSECTIONS) {
     if (!sec.key) continue; // 위험관리(weight 0)는 key가 null이라 여기서 걸러진다
     const body = buckets.get(sec.key);
     if (!body || body.length === 0) continue;
-    const chunk = trimSubsection(body, Math.round(base * sec.weight));
+    const w = quarterly ? sec.qWeight : sec.weight; // non-null key는 항상 > 0
+    const chunk = trimSubsection(body, Math.round(base * w));
     if (chunk.length > 100) out.push(`### [${sec.key}]\n${chunk}`);
   }
   return out.join("\n\n");
