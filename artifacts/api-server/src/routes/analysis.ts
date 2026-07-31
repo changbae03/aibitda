@@ -29,7 +29,8 @@ import { normalizeTicker } from "@workspace/shared";
 import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
-import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
+import { fetchSECEdgarContent, fetchEdgarTimeSeries, fetchEdgarMDA } from "../lib/sec-edgar-content.js";
+import { fetchDartTimeSeries } from "../lib/dart-timeseries.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
@@ -255,7 +256,7 @@ router.post("/", async (req, res) => {
         const years = Object.keys(dartAnchorNumerics.annualRev).sort();
         console.log(`[analysis] #${_analysisId} DART 앵커 수치 로드 완료: ${years.join(", ")} (${krxCode})`);
       }
-      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext, dartOrderBacklog] = await Promise.all([
+      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext, dartOrderBacklog, dartTimeSeries, edgarTimeSeries, edgarMDA] = await Promise.all([
         fetchFinancialContext(resolvedSymbol, dartAnchorNumerics),
         fetchCompanyNews(companyName ?? ""),
         isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -270,6 +271,9 @@ router.post("/", async (req, res) => {
         !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
         buildFmpContext(resolvedSymbol).catch(() => null),
         isKoreanTicker ? fetchDartOrderBacklog(krxCode).catch(() => null) : Promise.resolve(null),
+        isKoreanTicker ? fetchDartTimeSeries(krxCode).catch(() => null) : Promise.resolve(null),
+        !isKoreanTicker ? fetchEdgarTimeSeries(resolvedSymbol).catch(() => null) : Promise.resolve(null),
+        !isKoreanTicker ? fetchEdgarMDA(resolvedSymbol).catch(() => null) : Promise.resolve(null),
       ]);
 
       const kisContext = kisResult?.context ?? null;
@@ -392,6 +396,10 @@ router.post("/", async (req, res) => {
             `※ 아래 내용은 DART 공시 원문입니다. 시장 규모·TAM 추정·업계 현황 서술 시 훈련 데이터보다 이 수치를 우선 사용하세요.\n\n` +
             dartBizContent
           : null,
+        // ── 재무 시계열 (한국: DART, 미국: EDGAR XBRL) ──
+        dartTimeSeries   ?? null,
+        edgarTimeSeries  ?? null,
+        edgarMDA         ?? null,
         fmpContext,
         secEdgarContent, kosisContext, macroContext, marketFlowContext, newsData,
         userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
