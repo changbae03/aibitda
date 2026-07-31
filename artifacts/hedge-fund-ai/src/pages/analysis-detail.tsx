@@ -3726,7 +3726,7 @@ export default function AnalysisDetail() {
             {streamingIntro && !introStep ? (
               <div className="flex items-center gap-3 py-10 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Reading company profile…" : "기업 개요 작성 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Figuring out how they make money…" : "이 회사가 어떻게 돈 버는지 파악 중…"}</span>
               </div>
             ) : introStep ? (
               <ErrorBoundary fallback={null}>
@@ -3744,7 +3744,7 @@ export default function AnalysisDetail() {
             ) : streamingInd ? (
               <div className={`flex items-center gap-3 py-6 justify-center ${introStep ? "mt-6 pt-6 border-t border-border/40" : ""}`}>
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#6366F1" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Analyzing industry…" : "업황 분析 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Mapping the playing field…" : "이 판이 어떻게 돌아가는지 읽는 중…"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
@@ -3777,7 +3777,7 @@ export default function AnalysisDetail() {
             ) : streamingDart ? (
               <div className="flex items-center gap-3 py-6 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Reading DART filings…" : "사업보고서 분析 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Speed-reading filings… skipping the fluff 📄" : "사업보고서 정독 중… CEO 자랑은 건너뜀 📄"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
@@ -3817,7 +3817,7 @@ export default function AnalysisDetail() {
               ) : streamingComp ? (
                 <div className="px-5 sm:px-6 py-6 flex items-center gap-3 justify-center">
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
-                  <span className="text-sm text-muted-foreground">{isEn ? "Connecting numbers to filings…" : "재무 수치를 사업 흐름과 연결 중…"}</span>
+                  <span className="text-sm text-muted-foreground">{isEn ? "Making numbers tell a story…" : "숫자에 이야기 입히는 중… 📊"}</span>
                 </div>
               ) : null}
 
@@ -3879,7 +3879,7 @@ export default function AnalysisDetail() {
             ) : streamingCat ? (
               <div className="flex items-center gap-3 py-6 justify-center mt-6 pt-6 border-t border-border/40">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#F59E0B" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Building catalyst timeline…" : "촉매 & 향후 타임라인 생성 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Filling in the events calendar… 📅" : "앞으로 뭔 일이 생길지 캘린더 채우는 중… 📅"}</span>
               </div>
             ) : null}
           </NarrativeSectionBlock>
@@ -3905,7 +3905,7 @@ export default function AnalysisDetail() {
             {streamingStrat && !stratStep ? (
               <div className="flex items-center gap-3 py-8 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#FF8A7A" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Writing investment conclusion…" : "핵심 투자 포인트 정리 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Drumroll for the verdict… 🥁" : "최종 판단 내리는 중… 두구두구 🥁"}</span>
               </div>
             ) : stratStep ? (
               <ErrorBoundary fallback={null}>
@@ -3940,7 +3940,7 @@ export default function AnalysisDetail() {
             ) : streamingThesis ? (
               <div className="flex items-center gap-3 py-10 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#8B5CF6" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Reading between the lines…" : "행간을 읽는 중…"}</span>
+                <span className="text-sm text-muted-foreground">{isEn ? "Mining for truths between the lines… 🔭" : "줄 사이에 숨은 진실 캐내는 중… 🔭"}</span>
               </div>
             ) : canRunThesis ? (
               <div className="flex flex-col items-center gap-3 py-10">
