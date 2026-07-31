@@ -45,6 +45,9 @@ async function ensureTable(): Promise<void> {
   _tableReady = true;
 }
 
+// 연간보고서 기반 데이터 — 분기별로만 변하므로 7일 TTL
+const CACHE_TTL_MS = 7 * 24 * 3_600_000;
+
 async function getCached(stockCode: string): Promise<string | null> {
   try {
     await ensureTable();
@@ -54,7 +57,7 @@ async function getCached(stockCode: string): Promise<string | null> {
     );
     if (!r.rows[0]) return null;
     const age = Date.now() - r.rows[0].created_at.getTime();
-    return age < 24 * 3_600_000 ? r.rows[0].content : null;
+    return age < CACHE_TTL_MS ? r.rows[0].content : null;
   } catch {
     return null;
   }
@@ -76,14 +79,15 @@ async function setCached(stockCode: string, content: string): Promise<void> {
 async function fetchDartFinancials(
   corpCode: string,
   bsnsYear: string,
-  reprtCode: string
+  reprtCode: string,
+  fsDiv: "CFS" | "OFS" = "CFS"
 ): Promise<DartItem[] | null> {
   const key = DART_KEY();
   if (!key) return null;
   const url =
     `${DART_BASE}/fnlttSinglAcntAll.json` +
     `?crtfc_key=${key}&corp_code=${corpCode}` +
-    `&bsns_year=${bsnsYear}&reprt_code=${reprtCode}&fs_div=CFS`;
+    `&bsns_year=${bsnsYear}&reprt_code=${reprtCode}&fs_div=${fsDiv}`;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return null;
@@ -93,6 +97,19 @@ async function fetchDartFinancials(
   } catch {
     return null;
   }
+}
+
+/** CFS(연결) 우선, 없으면 OFS(별도)로 폴백 — dart-store.ts와 동일 전략 */
+async function fetchDartFinancialsCfsOrOfs(
+  corpCode: string,
+  bsnsYear: string,
+  reprtCode: string
+): Promise<{ items: DartItem[]; fsDiv: "CFS" | "OFS" } | null> {
+  const cfs = await fetchDartFinancials(corpCode, bsnsYear, reprtCode, "CFS");
+  if (cfs && cfs.length > 0) return { items: cfs, fsDiv: "CFS" };
+  const ofs = await fetchDartFinancials(corpCode, bsnsYear, reprtCode, "OFS");
+  if (ofs && ofs.length > 0) return { items: ofs, fsDiv: "OFS" };
+  return null;
 }
 
 // ─── 파싱 / 포맷 유틸 ────────────────────────────────────────────────────────
@@ -155,17 +172,19 @@ export async function fetchDartTimeSeries(stockCode: string): Promise<string | n
     const curYear  = now.getFullYear().toString();
     const prevYear = (now.getFullYear() - 1).toString();
 
-    // ── 연간 보고서: 올해 → 안 되면 작년 ──
-    let fyItems = await fetchDartFinancials(corpCode, curYear, REPRT_FY);
-    let fyYear  = curYear;
-    if (!fyItems) {
-      fyItems = await fetchDartFinancials(corpCode, prevYear, REPRT_FY);
-      fyYear  = prevYear;
+    // ── 연간 보고서: 올해 → 안 되면 작년 (CFS 우선, OFS 폴백) ──
+    let fyResult = await fetchDartFinancialsCfsOrOfs(corpCode, curYear, REPRT_FY);
+    let fyYear   = curYear;
+    if (!fyResult) {
+      fyResult = await fetchDartFinancialsCfsOrOfs(corpCode, prevYear, REPRT_FY);
+      fyYear   = prevYear;
     }
-    if (!fyItems) {
+    if (!fyResult) {
       console.log(`[dart-timeseries] ${stockCode} 연간 보고서 없음`);
       return null;
     }
+    const fyItems   = fyResult.items;
+    const fyFsLabel = fyResult.fsDiv === "OFS" ? " (별도)" : " (연결)";
 
     // ── 최근 분기: 당해년도 Q3 → Q2 → Q1 → 전년도 Q3 ──
     let qItems: DartItem[] | null = null;
@@ -178,8 +197,8 @@ export async function fetchDartTimeSeries(stockCode: string): Promise<string | n
       [yearToTry,  REPRT_Q3, `${yearToTry}년 3분기`],
     ];
     for (const [yr, code, label] of qCandidates) {
-      const items = await fetchDartFinancials(corpCode, yr, code);
-      if (items) { qItems = items; qLabel = label; break; }
+      const r = await fetchDartFinancialsCfsOrOfs(corpCode, yr, code);
+      if (r) { qItems = r.items; qLabel = label; break; }
     }
 
     // ── 연간 수치 추출 ──
@@ -234,8 +253,8 @@ export async function fetchDartTimeSeries(stockCode: string): Promise<string | n
         : null;
 
     const lines: string[] = [
-      `[📅 DART 재무 시계열 — ${yr2}~${yr0}년 연간 + 최근 분기]`,
-      `⚠️ DART OpenAPI 공시 기반 (연결 기준). 사업 흐름 추세 분석에 활용하세요.`,
+      `[📅 DART 재무 시계열 — ${yr2}~${yr0}년 연간 + 최근 분기${fyFsLabel}]`,
+      `⚠️ DART OpenAPI 공시 기반. 사업 흐름 추세 분석에 활용하세요.`,
       ``,
       `▌ 매출액`,
       `  ${yr2}: ${fmtKrw(revY[2])}`,

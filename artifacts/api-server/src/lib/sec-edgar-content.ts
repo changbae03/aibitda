@@ -476,7 +476,7 @@ export async function fetchEdgarTimeSeries(ticker: string): Promise<string | nul
       "SELECT content, fetched_at FROM sec_edgar_xbrl WHERE ticker = $1",
       [bare]
     );
-    if (r.rows[0] && Date.now() - r.rows[0].fetched_at.getTime() < 7 * 86_400_000) {
+    if (r.rows[0] && Date.now() - r.rows[0].fetched_at.getTime() < 30 * 86_400_000) {
       console.log(`[edgar-xbrl] ${bare} 캐시 히트`);
       return r.rows[0].content;
     }
