@@ -24,6 +24,7 @@ import { warmupNpsDart } from "./lib/nps-dart-holdings.js";
 import { warmupNps13F } from "./lib/nps-13f-holdings.js";
 import { fetchECOSMacro } from "./lib/ecos-client.js";
 import { fetchFREDMacro } from "./lib/fred-client.js";
+import { ensureFilingTables } from "./lib/dart-filing-store.js";
 
 // ── 프로세스 레벨 크래시 방지 ─────────────────────────────────────────────
 // Neon 서버리스 환경에서 DB 연결이 갑자기 끊길 때 Node.js EventEmitter가
@@ -95,6 +96,7 @@ const server = app.listen(port, () => {
         initPredictionTable(),
         initPresurgeTrackerTable(),
         initDailyWinnersTable(),
+        ensureFilingTables().catch(e => console.warn("[filing-tables] 생성 실패:", e?.message)),
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
