@@ -2724,7 +2724,7 @@ function NarrativeSectionBlock({
         {pending ? (
           <div className="flex items-center gap-3 py-8 justify-center">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
-            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분析 중…"}</span>
+            <span className="text-sm text-muted-foreground/60">{isEn ? "Analyzing…" : "분석 중…"}</span>
           </div>
         ) : children}
       </div>
@@ -2739,7 +2739,7 @@ function NarrativeStepContent({
   step: any; isEn?: boolean; ticker?: string; accent?: string; compact?: boolean;
 }) {
   const raw = (step.content ?? "")
-    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분析 요약")
+    .replace(/##\s*\d*\.?\s*종합\s*판단/g, "## 사업보고서 분석 요약")
     .replace(/(#{1,3})\s*\d+\.\s+/g, "$1 ");  // 헤딩 숫자 번호 제거 (## 5. 제목 → ## 제목)
   const processed = stripPromptInstructions(stripEstimationLabels(
     step.stepKey === "company_analysis" ? stripValuationData(raw) : raw,
@@ -3233,7 +3233,7 @@ export default function AnalysisDetail() {
     // DB값(서버 verdict-override 결과)이 존재하면 최우선 사용
     const dbVerdict = (analysis as any).investmentVerdict as string | null ?? null;
     if (dbVerdict) return dbVerdict;
-    // 분析 진행 중(완료 전)에만 step JSON에서 임시로 파싱
+    // 분석 진행 중(완료 전)에만 step JSON에서 임시로 파싱
     const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
     if (stratStep?.content) {
       try {
@@ -3472,10 +3472,10 @@ export default function AnalysisDetail() {
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 animate-pulse"
                         : "bg-warning/10 text-warning border-warning/20 animate-pulse"
                 )}>
-                  {isComplete ? (isEn ? 'Complete' : '분析 완료')
+                  {isComplete ? (isEn ? 'Complete' : '분석 완료')
                     : isError ? (isEn ? 'Failed' : '실패')
                     : analysis.status === 'queued' ? (isEn ? 'Queued' : '대기 중')
-                    : (isEn ? 'In Progress' : '분析 중')}
+                    : (isEn ? 'In Progress' : '분석 중')}
                 </span>
               </div>
 
@@ -3687,18 +3687,18 @@ export default function AnalysisDetail() {
         <div className="print:hidden rounded-2xl bg-card border border-blue-500/20 p-5 flex items-center gap-4">
           <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0" />
           <div>
-            <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분析 대기 중"}</p>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분석 대기 중"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "Will start when a slot opens." : "슬롯이 열리면 자동으로 시작됩니다."}</p>
           </div>
         </div>
       )}
 
-      {/* ── 분析 실패 ── */}
+      {/* ── 분석 실패 ── */}
       {isError && (
         <div className="print:hidden rounded-2xl bg-card border border-red-500/20 p-5 flex items-center gap-4">
           <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
           <div>
-            <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분析 생성 실패"}</p>
+            <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분석 생성 실패"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{isEn ? "AI error — please re-run." : "AI 오류 — 다시 실행해 주세요."}</p>
           </div>
         </div>
@@ -3791,7 +3791,7 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 실적 분析 카드 ══ */}
+      {/* ══ 실적 분석 카드 ══ */}
       {(() => {
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingComp = streamingStep?.key === "company_analysis";
@@ -3820,7 +3820,7 @@ export default function AnalysisDetail() {
                 <FinancialChart ticker={analysis.ticker} isEn={isEn} />
               </div>
 
-              {/* 재무 심층 분析 */}
+              {/* 재무 심층 분석 */}
               {compStep ? (
                 <div className="px-5 sm:px-6 py-5">
                   <ErrorBoundary fallback={null}>
@@ -3969,7 +3969,7 @@ export default function AnalysisDetail() {
                       style={{ background: "#8B5CF6" }}
                     >
                       <span>🔭</span>
-                      {isEn ? "Run 6-lens analysis" : "6렌즈 분析하기"}
+                      {isEn ? "Run 6-lens analysis" : "6렌즈 분석하기"}
                     </button>
                   </div>
                 ) : null}
@@ -4728,7 +4728,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       </div>
 
       {/* markdown prose fallback (investment_strategy는 JSON 아닌 마크다운 산문) */}
-      {!json && step.content && !step.content.startsWith("분析 오류:") && !step.content.startsWith("분析 결과를 생성하지 못했습니다") ? (
+      {!json && step.content && !step.content.startsWith("분석 오류:") && !step.content.startsWith("분석 결과를 생성하지 못했습니다") ? (
         <div className="p-4 sm:p-6">
           <MdBlock src={step.content} isEn={isEn} />
         </div>
@@ -5790,7 +5790,7 @@ function stripPromptInstructions(content: string): string {
       // ── 체인 인계 선언 문장 ───────────────────────────────────────
       if (/브리핑에서 확인된 핵심 이슈 .+을 중심으로/.test(t)) return false;
       if (/산업 分析에서 .+이 확인되었습니다\. 이를 배경으로/.test(t)) return false;
-      if (/촉매 분析에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
+      if (/촉매 분석에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
       if (/^📌\s*\*?\*?\[체인 인계 규칙\]/.test(t)) return false;
       if (/^→\s*이 문장으로 리포트가 시작/.test(t)) return false;
       if (/^→\s*이 한 문장을 모든 소제목/.test(t)) return false;
@@ -5803,14 +5803,14 @@ function stripPromptInstructions(content: string): string {
       if (/이 단계의 담당 범위/.test(t)) return false;
       if (/이 범위 밖 내용은 타 단계에서/.test(t)) return false;
       if (/다른 단계 전담/.test(t)) return false;
-      if (/다음 분析 단계/.test(t)) return false;
+      if (/다음 분석 단계/.test(t)) return false;
       if (/다음 에이전트에게/.test(t)) return false;
 
       // ── 검증 결과 문구 ────────────────────────────────────────────
       if (/논리 일관성 확인됨|논리 충돌 해소됨|검증 완료/.test(t)) return false;
 
       // ── 상투어 마감 ───────────────────────────────────────────────
-      if (/이상으로 분析을 마칩니다|이로써 보고서를 마칩니다|이상으로 마칩니다/.test(t)) return false;
+      if (/이상으로 분석을 마칩니다|이로써 보고서를 마칩니다|이상으로 마칩니다/.test(t)) return false;
 
       // ── 지시 잔재 (instruction leakage) ──────────────────────────
       if (/^⚠️.*(선정 기준|자가 검증|담당 범위)/.test(t)) return false;

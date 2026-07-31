@@ -105,7 +105,7 @@ router.post("/", async (req, res) => {
       const US_ALLOWED = new Set(["NMS", "NGM", "NCM", "NYQ", "NYS", "NYE", "ASE", "AMX", "PCX", "CBOE", "PNK", ""]);
       if (qExchange && !US_ALLOWED.has(qExchange)) {
         console.log(`[analysis-create] 400 비지원 거래소 차단: ${validatedTicker} exchange=${qExchange}`);
-        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분析 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
+        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분석 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
         return;
       }
     } catch { /* Yahoo 조회 실패 시 무시하고 진행 */ }
@@ -194,7 +194,7 @@ router.post("/", async (req, res) => {
   }
 
   // ── DB 레코드를 먼저 생성 → 즉시 응답 → 외부 데이터 수집은 백그라운드 ────
-  // 이 구조로 "분析 시작" 버튼 클릭 후 분析 페이지까지 대기 시간이 ~1초로 단축
+  // 이 구조로 "분석 시작" 버튼 클릭 후 분석 페이지까지 대기 시간이 ~1초로 단축
   let analysis: typeof analysesTable.$inferSelect;
   try {
     const client = await pool.connect();
@@ -227,11 +227,11 @@ router.post("/", async (req, res) => {
     const pgCode = err?.cause?.code ?? err?.code;
     const pgDetail = err?.cause?.detail ?? err?.detail;
     console.error("[POST /analysis] INSERT failed:", { pgMsg, pgCode, pgDetail, fullError: String(err) });
-    res.status(500).json({ error: "분析 시작 실패: DB INSERT 오류", detail: pgMsg });
+    res.status(500).json({ error: "분석 시작 실패: DB INSERT 오류", detail: pgMsg });
     return;
   }
 
-  // 즉시 응답 — 분析 페이지로 바로 이동
+  // 즉시 응답 — 분석 페이지로 바로 이동
   res.json(formatAnalysis(analysis, []));
 
   // ── 백그라운드: 외부 API 12개 병렬 수집 → DB 업데이트 → 파이프라인 시작 ──
@@ -241,7 +241,7 @@ router.post("/", async (req, res) => {
 
   // 종목 마스터 자가 치유 — 마스터에 없는 종목이면 지금 등록한다.
   // SEC 목록에도 없는 장외 ADR(NTDOY 등)과 상장 직후 종목이 여기서 메워진다.
-  // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분析을 막지 않는다.
+  // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분석을 막지 않는다.
   ensureStockRegistered(upperTicker, companyName).catch(() => {});
 
   (async () => {

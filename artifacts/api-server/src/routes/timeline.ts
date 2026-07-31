@@ -156,7 +156,7 @@ ${articleSnippets ? `━━━ 참고 RSS 기사 (주식회사 관련 기사만 
       "date": "YYYY-MM-DD 또는 YYYY-MM 또는 YYYY",
       "dateLabel": "2025년 3월 15일",
       "event": "핵심 기업 이슈 제목 (25자 이내)",
-      "detail": "이 뉴스가 기업 실적·사업·주가에 미치는 영향 2~3문장 (단순 사실 재술 X, 투자자 관점 영향 분析)",
+      "detail": "이 뉴스가 기업 실적·사업·주가에 미치는 영향 2~3문장 (단순 사실 재술 X, 투자자 관점 영향 분석)",
       "importance": "high | medium | low",
       "category": "실적/공시/M&A/제품/경영/산업/시장/기술/금융 중 하나",
       "source": "출처 (있는 경우만)",

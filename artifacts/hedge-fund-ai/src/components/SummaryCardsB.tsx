@@ -192,7 +192,7 @@ function extractIndustryPoints(content: string, max = 3): string[] {
     const m1 = trimmed.match(/\*\*([^*]{2,50})\*\*[\u{FF1A}:\s]+(.{15,})/u);
     if (m1) {
       const label = m1[1].trim();
-      if (/^(분析|개요|현황|요약|결론|Part|Step|Industry|Market|구조|경쟁)/.test(label)) continue;
+      if (/^(분석|개요|현황|요약|결론|Part|Step|Industry|Market|구조|경쟁)/.test(label)) continue;
       const desc = m1[2].replace(/\*\*/g, "").trim().slice(0, 180);
       const point = desc.length > 15 ? desc : label + ": " + desc;
       if (!out.includes(point)) out.push(point);
@@ -204,7 +204,7 @@ function extractIndustryPoints(content: string, max = 3): string[] {
     const m2 = trimmed.match(/^[-*\u2022]\s+(.{20,})/u);
     if (m2 && trimmed.includes("**")) {
       const text = m2[1].replace(/\*\*/g, "").trim().slice(0, 180);
-      if (text.length > 18 && !/^(분析|개요|현황|요약|결론)/.test(text)) {
+      if (text.length > 18 && !/^(분석|개요|현황|요약|결론)/.test(text)) {
         if (!out.includes(text)) out.push(text);
         if (out.length >= max) break;
       }
