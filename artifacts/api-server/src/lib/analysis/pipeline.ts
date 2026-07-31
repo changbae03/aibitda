@@ -21,6 +21,7 @@ import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNume
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
+import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -606,6 +607,18 @@ async function executeStep(
           if (metricTable) {
             dartBlocks.push(metricTable);
             console.log(`[dart_report_analysis] 서버 추출 지표표 주입 (${metricTable.length}chars)`);
+          }
+
+          // "사라진 것" — 매출비중 표의 사업부문을 연간끼리 집합 비교한다.
+          // 회사는 접은 사업을 말하지 않으니, 코드가 목록에서 빠진 부문을 짚어준다.
+          const segDiff = renderSegmentDiff(diffSegments(timeline.map(t => ({
+            bsnsYear: t.bsnsYear, quarter: t.quarter,
+            periodLabel: periodLabel(t.bsnsYear, t.quarter),
+            segments: segmentsFromContent(t.content),
+          }))));
+          if (segDiff) {
+            dartBlocks.push(segDiff);
+            console.log(`[dart_report_analysis] 사업부문 변화 진단 주입`);
           }
 
           dartBlocks.push(
