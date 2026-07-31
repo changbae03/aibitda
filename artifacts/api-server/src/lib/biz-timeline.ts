@@ -20,56 +20,17 @@ import { pool } from "@workspace/db";
 import { isKoreanTicker } from "@workspace/shared";
 import { lookupCorpCode } from "./dart-store.js";
 import { parseZip, htmlToText } from "./dart-business-content.js";
+import {
+  type BizReportYear, TIMELINE_SECTIONS, extractSections, parsePeriod, periodLabel,
+} from "./biz-timeline-extract.js";
+
+// 순수 추출 로직은 biz-timeline-extract.ts(DB 무관, 테스트 가능)로 나갔다.
+// 여기서는 그대로 재노출해 기존 import 경로를 유지한다.
+export { TIMELINE_SECTIONS, extractSections, periodLabel };
+export type { BizReportYear };
 
 const DART_API = "https://opendart.fss.or.kr/api";
 const MAX_ZIP_BYTES = 20 * 1024 * 1024;
-
-/**
- * 연도 비교에 쓸 섹션들.
- *
- * **무엇을 비교할지 미리 정해두는 것이 핵심이다.** 정하지 않고 LLM에 맡기면 회사마다,
- * 실행마다 다른 것을 말한다 — 이번 작업에서 밸류에이션이 흔들린 이유가 정확히 그것이었다.
- * 같은 잣대를 모든 회사·모든 해에 적용해야 변화가 눈에 띈다.
- */
-export const TIMELINE_SECTIONS = [
-  { key: "사업개요",   markers: ["사업의 개요", "사업의 내용", "회사의 현황", "영업 개황"] },
-  { key: "주요제품",   markers: ["주요 제품", "주요제품", "제품 및 서비스", "매출 구성"] },
-  { key: "매출처",     markers: ["주요 매출처", "매출처", "판매 경로", "판매경로"] },
-  { key: "생산판매",   markers: ["생산 및 설비", "생산능력", "생산실적", "판매실적", "가동률"] },
-  { key: "수주",       markers: ["수주 현황", "수주현황", "수주잔고", "신규수주"] },
-  { key: "연구개발",   markers: ["연구개발 활동", "연구개발비", "연구개발 실적", "신규 사업"] },
-  { key: "시장경쟁",   markers: ["시장 점유율", "경쟁 현황", "업계의 현황", "시장 여건"] },
-] as const;
-
-export interface BizReportYear {
-  bsnsYear: number;
-  /** 1=1분기 · 2=반기 · 3=3분기 · 4=사업보고서(연간) */
-  quarter: number;
-  rceptNo: string;
-  reportNm: string;
-  content: string;
-}
-
-/** 사람이 읽는 기간 표기 */
-export function periodLabel(bsnsYear: number, quarter: number): string {
-  return quarter === 4 ? `${bsnsYear}년 연간`
-    : quarter === 2 ? `${bsnsYear}년 상반기`
-    : `${bsnsYear}년 ${quarter}분기`;
-}
-
-/**
- * 보고서 이름의 결산월로 분기를 가른다.
- *   "사업보고서 (2025.12)" → 4   "반기보고서 (2025.06)" → 2
- *   "분기보고서 (2025.03)" → 1   "분기보고서 (2025.09)" → 3
- */
-function parsePeriod(reportNm: string): { year: number; quarter: number } | null {
-  const m = reportNm.match(/\((\d{4})\.(\d{2})\)/);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const quarter = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-  return Number.isFinite(year) ? { year, quarter } : null;
-}
 
 /**
  * 정기공시(사업·반기·분기) 목록을 기간별로 하나씩 고른다.
@@ -129,30 +90,6 @@ async function fetchReportText(rceptNo: string, key: string): Promise<string | n
 }
 
 /**
- * 정해둔 섹션만 잘라낸다.
- *
- * 원문은 수백 페이지라 통째로 넣으면 프롬프트가 감당하지 못한다. 그렇다고 앞부분만
- * 자르면(예전 방식) 연도별로 다른 대목이 잘려 비교가 안 된다.
- * **섹션을 정해 같은 자리를 뽑아야** 해가 바뀌어도 같은 것을 비교하게 된다.
- */
-export function extractSections(text: string, perSection = 2_500): string {
-  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 3);
-  const out: string[] = [];
-
-  for (const sec of TIMELINE_SECTIONS) {
-    let best = "";
-    for (let i = 0; i < lines.length; i++) {
-      if (!sec.markers.some(m => lines[i].includes(m))) continue;
-      const chunk = lines.slice(i, i + 60).join("\n").slice(0, perSection);
-      if (chunk.length > best.length) best = chunk;
-      if (best.length >= perSection) break;
-    }
-    if (best.length > 100) out.push(`### [${sec.key}]\n${best}`);
-  }
-  return out.join("\n\n");
-}
-
-/**
  * 최근 N년치 사업보고서를 받아 저장한다. 이미 받은 해는 건너뛴다.
  */
 export async function collectBizTimeline(
@@ -189,7 +126,8 @@ export async function collectBizTimeline(
     // 분기·반기는 짧게 뽑는다. 12개 기간을 연간과 같은 분량으로 넣으면 프롬프트가
     // 20만자를 넘어 감당이 안 되고, 무엇보다 분기 보고서는 연간의 요약·증분이라
     // 같은 내용이 반복된다. 변화가 드러나는 만큼만 담는다.
-    const content = extractSections(raw, rep.quarter === 4 ? 2_500 : 1_100);
+    // 소분류마다 상한을 따로 준다. 연간은 표가 크니 넉넉히, 분기·반기는 증분이라 절반.
+    const content = extractSections(raw, rep.quarter === 4 ? 4_000 : 2_000);
     if (content.length < 300) { console.warn(`[biz-timeline] ${ticker} ${label} 섹션 추출 실패`); continue; }
 
     await pool.query(
