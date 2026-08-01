@@ -17,11 +17,12 @@ import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, needsSOTP, type 
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
-import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../dart-store.js";
+import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, type DartAnchorNumerics } from "../dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
+import { computeWorkingCapital, renderWorkingCapital } from "../working-capital.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -695,6 +696,23 @@ async function executeStep(
       } catch (e) {
         console.warn("[dart_report_analysis] 재무 데이터 조회 실패:", (e as Error)?.message?.slice(0, 80));
         dartBlocks.push("[📊 재무 데이터] 조회 실패 — 이전 단계 컨텍스트 기반으로 추론하세요.");
+      }
+
+      // 3) 운전자본 효율성 — 서버가 재무제표에서 직접 계산한다(LLM에게 계산 안 시킴).
+      //    전체 재무제표 한 보고서가 3개년을 주므로 한 번 호출로 DIO·DSO·DPO·CCC 추이가 나온다.
+      if (isKoreanTicker(analysis.ticker)) {
+        try {
+          const all = await fetchAnnualAllRows(analysis.ticker);
+          if (all) {
+            const wc = renderWorkingCapital(computeWorkingCapital(all.rows, all.bsnsYear));
+            if (wc) {
+              dartBlocks.push(wc);
+              console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear} 기준)`);
+            }
+          }
+        } catch (e) {
+          console.warn("[dart_report_analysis] 운전자본 계산 실패:", (e as Error)?.message?.slice(0, 80));
+        }
       }
 
       const dartContext = dartBlocks.join("\n\n");

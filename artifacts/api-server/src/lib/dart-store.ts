@@ -334,6 +334,30 @@ export async function saveNetDebt(
   }
 }
 
+/**
+ * 최신 연간 전체 재무제표(fnlttSinglAcntAll) 원본 행을 그대로 돌려준다.
+ *
+ * 운전자본(DIO·DSO·DPO)처럼 저장 컬럼에 없는 계정을 계산할 때 쓴다. 한 연간 보고서가
+ * 당기·전기·전전기 3개년을 함께 주므로 한 번 호출로 3년치가 나온다. 아직 안 나온 연도는
+ * status가 000이 아니라 null이니, 최근 연도부터 내려가며 처음 잡히는 것을 쓴다.
+ */
+export async function fetchAnnualAllRows(
+  stockCode: string,
+): Promise<{ rows: DartRow[]; bsnsYear: number } | null> {
+  const key = process.env["DART_API_KEY"];
+  if (!key) return null;
+  const corpCode = await lookupCorpCode(stockCode);
+  if (!corpCode) return null;
+  const thisYear = new Date().getFullYear();
+  for (let year = thisYear - 1; year >= thisYear - 4; year--) {
+    for (const fs of ["CFS", "OFS"] as const) {
+      const rows = await fetchDartPeriod(corpCode, year, "11011", fs, key);
+      if (rows && rows.length > 0) return { rows, bsnsYear: year };
+    }
+  }
+  return null;
+}
+
 // ─── 메인: 분기·연간 데이터 수집 및 저장 ──────────────────────────────────────
 
 /**
