@@ -566,6 +566,24 @@ export async function runMigrations() {
         ADD CONSTRAINT dart_biz_reports_uniq UNIQUE (ticker, bsns_year, quarter);
       CREATE INDEX IF NOT EXISTS idx_dart_biz_reports_period
         ON dart_biz_reports (ticker, bsns_year DESC, quarter DESC);
+
+      -- 사업 국면 판정 이력 — 실체·기대 2축으로 라이프사이클(①~⑤·쇠퇴·턴어라운드)을 찍는다.
+      -- 저장하는 이유: (1) UI가 궤적을 그리고 (2) 다음 분석이 직전 실체 점수로 턴어라운드를 감지한다.
+      CREATE TABLE IF NOT EXISTS stock_stage_verdict (
+        id              SERIAL PRIMARY KEY,
+        ticker          TEXT NOT NULL,
+        analysis_id     INTEGER,
+        phase           TEXT NOT NULL,
+        stage_number    INTEGER,
+        substance_score INTEGER NOT NULL,
+        substance_state TEXT NOT NULL,
+        expectation     TEXT NOT NULL,
+        confidence      TEXT NOT NULL,
+        reasons         JSONB,
+        computed_at     TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_stock_stage_verdict_ticker
+        ON stock_stage_verdict (ticker, computed_at DESC);
     `);
 
     // ── 종목별 정본 ─────────────────────────────────────────────────────────

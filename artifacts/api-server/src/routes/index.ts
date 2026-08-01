@@ -31,6 +31,7 @@ import liveGainersRouter from "./live-gainers.js";
 import winnerRouter from "./winner.js";
 import institutionPicksRouter from "./institution-picks.js";
 import filingsRouter from "./filings.js";
+import stageRouter from "./stage.js";
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -65,6 +66,7 @@ router.use(liveGainersRouter);
 router.use(winnerRouter);
 router.use(institutionPicksRouter);
 router.use(filingsRouter);
+router.use("/stage", stageRouter);
 // market-analysis 라우트는 market-server 프로세스에서 처리 (app.ts 프록시로 전달)
 
 export default router;

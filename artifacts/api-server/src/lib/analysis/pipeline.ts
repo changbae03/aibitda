@@ -25,6 +25,12 @@ import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
+import {
+  classifyStage, renderStageVerdict, pctChange, capexTrendOf,
+  percentileAgainst, expectationPercentile, type StageSignals,
+} from "../stage-classifier.js";
+import { getSectorBand } from "../valuation/sector-bands.js";
+import { saveStageVerdict, getPriorStageScore } from "../stage-store.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -581,6 +587,9 @@ async function executeStep(
   if (stepKey === "dart_report_analysis") {
     try {
       const dartBlocks: string[] = [];
+      // 사업 국면 판정에 쓸 신호를 이 블록을 지나며 하나씩 채운다(끝에서 한 번에 판정).
+      const stageSig: StageSignals = {};
+      let segCounts = { added: 0, dropped: 0 };
 
       // 1) 사업의 내용 — **여러 기간을 나란히** 넣는다.
       //
@@ -614,11 +623,13 @@ async function executeStep(
 
           // "사라진 것" — 매출비중 표의 사업부문을 연간끼리 집합 비교한다.
           // 회사는 접은 사업을 말하지 않으니, 코드가 목록에서 빠진 부문을 짚어준다.
-          const segDiff = renderSegmentDiff(diffSegments(timeline.map(t => ({
+          const segDiffResult = diffSegments(timeline.map(t => ({
             bsnsYear: t.bsnsYear, quarter: t.quarter,
             periodLabel: periodLabel(t.bsnsYear, t.quarter),
             segments: segmentsFromContent(t.content),
-          }))));
+          })));
+          segCounts = { added: segDiffResult.appeared.length, dropped: segDiffResult.disappeared.length };
+          const segDiff = renderSegmentDiff(segDiffResult);
           if (segDiff) {
             dartBlocks.push(segDiff);
             console.log(`[dart_report_analysis] 사업부문 변화 진단 주입`);
@@ -654,11 +665,20 @@ async function executeStep(
       try {
         const [annualRows, quarterRows] = await Promise.all([
           rawQuery(
-            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
-                    total_assets, equity, cash, total_debt, operating_margin
+            // operating_margin 컬럼은 존재하지 않는다 — 넣으면 쿼리 전체가 던져지고
+            // catch에 삼켜져 이 연간 재무표가 통째로 사라진다(조용한 실패). OPM은 코드가 계산한다.
+            //
+            // 같은 (종목·연도·보고서)에 fs_type이 다른 행이 여럿 쌓인다('CFS'·'연결'·'OFS').
+            // 그중 매출이 NULL인 빈 껍데기 행이 섞여 있어, 단순 최신순으로 집으면 매출 0으로
+            // 계산돼 "매출급감 -100%" 같은 헛값이 나온다(SK하이닉스 실측). 연도별로 매출이
+            // 있는 행 중 규모가 가장 큰 것(=연결)을 하나만 집는다.
+            `SELECT DISTINCT ON (bsns_year)
+                    bsns_year, reprt_code, revenue, operating_income, net_income,
+                    total_assets, equity, cash, total_debt
              FROM ticker_financials
-             WHERE ticker = $1 AND reprt_code = '11011'
-             ORDER BY bsns_year DESC LIMIT 4`,
+             WHERE ticker = $1 AND reprt_code = '11011' AND revenue IS NOT NULL
+             ORDER BY bsns_year DESC, revenue DESC
+             LIMIT 4`,
             [analysis.ticker]
           ),
           rawQuery(
@@ -672,6 +692,17 @@ async function executeStep(
         ]);
 
         if (annualRows.length > 0) {
+          // OPM은 영업이익/매출로 계산한다(저장된 마진 컬럼이 없다).
+          const opmOf = (r: any): number | null => {
+            const rev = Number(r?.revenue), oi = Number(r?.operating_income);
+            return Number.isFinite(rev) && rev > 0 && Number.isFinite(oi) ? oi / rev : null;
+          };
+          // 국면 신호: 매출성장률·OPM 추세 (최근 확정 연간 vs 직전)
+          if (annualRows.length >= 2) {
+            stageSig.revGrowthPct = pctChange(Number(annualRows[0].revenue), Number(annualRows[1].revenue));
+            const opmL = opmOf(annualRows[0]), opmP = opmOf(annualRows[1]);
+            if (opmL != null && opmP != null) stageSig.opmDeltaPp = (opmL - opmP) * 100;
+          }
           const fmt = (v: any) => (v == null ? "—" : Number(v).toLocaleString("ko-KR"));
           const pct = (v: any) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
           const reprtLabel: Record<string, string> = { "11011": "연간", "11012": "반기", "11013": "1분기", "11014": "3분기" };
@@ -680,7 +711,7 @@ async function executeStep(
           annualTable += "| 연도 | 매출 | 영업이익 | 순이익 | OPM | 자산 | 자본 |\n";
           annualTable += "|------|------|---------|--------|-----|------|------|\n";
           for (const r of annualRows) {
-            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(r.operating_margin)} | ${fmt(r.total_assets)} | ${fmt(r.equity)} |\n`;
+            annualTable += `| ${r.bsns_year}년 | ${fmt(r.revenue)} | ${fmt(r.operating_income)} | ${fmt(r.net_income)} | ${pct(opmOf(r))} | ${fmt(r.total_assets)} | ${fmt(r.equity)} |\n`;
           }
           dartBlocks.push(annualTable);
 
@@ -708,10 +739,15 @@ async function executeStep(
           let latestRevenue: number | null = null;
           if (all) {
             // 같은 rows에서 CapEx(투자 방향)와 운전자본(현금 효율)을 함께 뽑는다.
-            const capex = renderCapex(computeCapex(all.rows, all.bsnsYear));
+            const capexYears = computeCapex(all.rows, all.bsnsYear);
+            const capex = renderCapex(capexYears);
             if (capex) { dartBlocks.push(capex); console.log(`[dart_report_analysis] CapEx 주입 (${all.bsnsYear})`); }
-            const wc = renderWorkingCapital(computeWorkingCapital(all.rows, all.bsnsYear));
+            stageSig.capexTrend = capexTrendOf(capexYears.map(c => c.capex));
+            const wcYears = computeWorkingCapital(all.rows, all.bsnsYear);
+            const wc = renderWorkingCapital(wcYears);
             if (wc) { dartBlocks.push(wc); console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear})`); }
+            const cccs = wcYears.filter(w => w.ccc != null);
+            if (cccs.length >= 2) stageSig.cccDeltaDays = cccs[cccs.length - 1].ccc! - cccs[cccs.length - 2].ccc!;
             const revRow = all.rows.find(r => String(r.account_id ?? "").includes("Revenue"));
             const rev = Number(String(revRow?.thstrm_amount ?? "").replace(/,/g, ""));
             latestRevenue = Number.isFinite(rev) && rev > 0 ? rev : null;
@@ -719,9 +755,11 @@ async function executeStep(
 
           // 임직원 수 추이(직원현황 API) — 인력 증감은 확장·구조조정의 직접 신호.
           const emp = await fetchEmployeeCounts(analysis.ticker);
-          const headcount = renderHeadcount(
-            emp.map(e => aggregateEmployees(e.rows, e.year)).filter((x): x is NonNullable<typeof x> => x != null));
+          const hcYears = emp.map(e => aggregateEmployees(e.rows, e.year))
+            .filter((x): x is NonNullable<typeof x> => x != null);
+          const headcount = renderHeadcount(hcYears);
           if (headcount) { dartBlocks.push(headcount); console.log(`[dart_report_analysis] 임직원 수 주입`); }
+          if (hcYears.length >= 2) stageSig.headcountGrowthPct = pctChange(hcYears[hcYears.length - 1].total, hcYears[hcYears.length - 2].total);
 
           // 고객 집중도(재무제표 주석) — 고객명은 익명이어도 단일 대형고객 매출을 금액 공시.
           const rawAnnual = await fetchLatestAnnualText(analysis.ticker);
@@ -730,6 +768,34 @@ async function executeStep(
           if (cust) { dartBlocks.push(cust); console.log(`[dart_report_analysis] 고객 집중도 주입`); }
         } catch (e) {
           console.warn("[dart_report_analysis] 운전자본 계산 실패:", (e as Error)?.message?.slice(0, 80));
+        }
+
+        // 사업 국면 판정 — 위에서 모은 신호를 2축 매트릭스에 넣는다.
+        // 실체(펀더멘털)와 기대(밴드 분위)를 조합해 ①~⑤·쇠퇴·턴어라운드를 찍는다.
+        try {
+          stageSig.segmentsAdded = segCounts.added;
+          stageSig.segmentsDropped = segCounts.dropped;
+          // 기대 축: PER·PBR을 업종 밴드 분위(0~100)로 환산
+          const master = await pool
+            .query<{ per: number | null; pbr: number | null; industry: string | null; kis_industry: string | null }>(
+              `SELECT per, pbr, industry, kis_industry FROM stocks WHERE ticker = $1 LIMIT 1`,
+              [analysis.ticker])
+            .then(r => r.rows[0] ?? null).catch(() => null);
+          if (master) {
+            const sec = classifySector(master.industry ?? analysis.industry ?? "", "KR", master.kis_industry);
+            const band = await getSectorBand(sec).catch(() => null);
+            stageSig.valuationPercentile = expectationPercentile(
+              percentileAgainst(master.per, band?.per ?? null),
+              percentileAgainst(master.pbr, band?.pbr ?? null),
+            );
+          }
+          stageSig.priorSubstanceScore = await getPriorStageScore(analysis.ticker);
+          const verdict = classifyStage(stageSig);
+          dartBlocks.push(renderStageVerdict(verdict));
+          await saveStageVerdict(analysis.ticker, verdict, (analysis as any).id ?? null);
+          console.log(`[dart_report_analysis] 국면 판정: ${verdict.meta.labelKo} (실체 ${verdict.substance.score}, 신뢰도 ${verdict.confidence})`);
+        } catch (e) {
+          console.warn("[dart_report_analysis] 국면 판정 실패:", (e as Error)?.message?.slice(0, 80));
         }
       }
 

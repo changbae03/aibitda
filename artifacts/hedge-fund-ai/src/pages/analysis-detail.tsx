@@ -828,6 +828,131 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
   );
 }
 
+// ─── StageMap: 사업 국면 지도 (실체 × 기대 2축) ───────────────────────────────
+
+interface StageRow {
+  phase: string;
+  stageNumber: number | null;
+  substanceScore: number;
+  substanceState: string;
+  expectation: string;
+  confidence: string;
+  reasons: string[];
+  computedAt: string;
+}
+
+const PHASE_UI: Record<string, { ko: string; tag: string; color: string }> = {
+  hype:       { ko: "기대 선반영", tag: "실체 없는 프리미엄", color: "#BA7517" },
+  proving:    { ko: "실체 확인",   tag: "저평가 증명 구간",   color: "#0F6E56" },
+  numbers:    { ko: "숫자 싸움",   tag: "실체가 프리미엄 정당화", color: "#0F6E56" },
+  peakout:    { ko: "피크아웃 전조", tag: "기대가 실체 추월",  color: "#BA7517" },
+  value:      { ko: "성장→가치",   tag: "성장 멈추고 재평가", color: "#5F5E5A" },
+  decline:    { ko: "쇠퇴",        tag: "실체·기대 동반 하락", color: "#5F5E5A" },
+  turnaround: { ko: "턴어라운드",  tag: "실체가 바닥에서 반등", color: "#185FA5" },
+};
+
+function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [data, setData] = useState<{ history: StageRow[]; latest: StageRow | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!ticker) return;
+    setLoading(true);
+    fetch(getApiUrl(`/api/stage/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  if (loading || !data || !data.latest) return null;
+  const history = (data.history ?? []).slice(-6);
+  const latest = data.latest;
+  const ui = PHASE_UI[latest.phase] ?? { ko: latest.phase, tag: "", color: "#5F5E5A" };
+
+  // 플롯 좌표계
+  const L = 66, R = 344, T = 44, B = 250, W = 360;
+  const colX = (exp: string) => (exp === "premium" ? (204 + R) / 2 : (L + 204) / 2);
+  const yOf = (score: number) => {
+    const s = Math.max(-60, Math.min(60, score));
+    return T + ((60 - s) / 120) * (B - T);
+  };
+  const yStrong = yOf(30), yContract = yOf(-15);
+
+  const zones = [
+    { x: L, y: T, w: 204 - L, h: yStrong - T, fill: "rgba(29,158,117,0.13)", label: "② 실체 확인", c: "#0F6E56" },
+    { x: 204, y: T, w: R - 204, h: yStrong - T, fill: "rgba(29,158,117,0.13)", label: "③ 숫자 싸움", c: "#0F6E56" },
+    { x: L, y: yStrong, w: 204 - L, h: yContract - yStrong, fill: "rgba(150,148,140,0.12)", label: "⑤ 성장→가치", c: "#5F5E5A" },
+    { x: 204, y: yStrong, w: R - 204, h: yContract - yStrong, fill: "rgba(239,159,39,0.15)", label: "④ 피크아웃", c: "#92600B" },
+    { x: L, y: yContract, w: 204 - L, h: B - yContract, fill: "rgba(150,148,140,0.12)", label: "🔻 쇠퇴", c: "#5F5E5A" },
+    { x: 204, y: yContract, w: R - 204, h: B - yContract, fill: "rgba(239,159,39,0.15)", label: "① 기대 선반영", c: "#92600B" },
+  ];
+
+  // 궤적 점 — 같은 칸에 겹치지 않게 인덱스로 살짝 벌린다
+  const pts = history.map((h, i) => ({
+    x: colX(h.expectation) + (i - (history.length - 1) / 2) * 12,
+    y: yOf(h.substanceScore),
+    row: h,
+    year: h.computedAt.slice(2, 4),
+  }));
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(0)} ${p.y.toFixed(0)}`).join(" ");
+
+  return (
+    <div className="bg-card rounded-2xl p-4 mb-4" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-base">🧭</span>
+        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Business phase map" : "사업 국면 지도"}</h4>
+        <span className="ml-1 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: ui.color + "1f", color: ui.color }}>
+          {ui.ko}
+        </span>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {isEn ? "confidence" : "신뢰도"} {latest.confidence === "high" ? (isEn ? "high" : "높음") : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음")}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground mb-2">{isEn ? "Substance (fundamentals) × Expectation (valuation), computed from filings" : "실체(펀더멘털) × 기대(밸류에이션) — 공시 실측으로 서버가 판정"}</p>
+
+      <svg viewBox={`0 0 ${W} 288`} width="100%" style={{ maxWidth: 440, color: "var(--muted-foreground, #6b7280)" }} role="img" aria-label={isEn ? "Business phase map" : "사업 국면 지도"}>
+        <defs>
+          <marker id="stagearrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </marker>
+        </defs>
+        {zones.map((z, i) => (
+          <g key={i}>
+            <rect x={z.x} y={z.y} width={z.w} height={z.h} fill={z.fill} rx={6} />
+            <text x={z.x + 8} y={z.y + 17} fontSize={11} fontWeight={600} fill={z.c}>{z.label}</text>
+          </g>
+        ))}
+        {/* 축 라벨 */}
+        <text x={(L + 204) / 2} y={T - 8} fontSize={11} textAnchor="middle" fill="currentColor">저평가</text>
+        <text x={(204 + R) / 2} y={T - 8} fontSize={11} textAnchor="middle" fill="currentColor">프리미엄 →</text>
+        <text x={L - 6} y={yOf(45)} fontSize={10} textAnchor="end" fill="currentColor">강함</text>
+        <text x={L - 6} y={yOf(7)} fontSize={10} textAnchor="end" fill="currentColor">둔화</text>
+        <text x={L - 6} y={yOf(-38)} fontSize={10} textAnchor="end" fill="currentColor">역성장</text>
+        {/* 궤적 */}
+        {pts.length >= 2 && <path d={line} fill="none" stroke="#185FA5" strokeWidth={2} strokeDasharray="5 4" markerEnd="url(#stagearrow)" />}
+        {pts.map((p, i) => {
+          const isLast = i === pts.length - 1;
+          return (
+            <g key={i}>
+              <circle cx={p.x} cy={p.y} r={isLast ? 7 : 4} fill="#185FA5" stroke="#fff" strokeWidth={isLast ? 2 : 1.5} />
+              {isLast && <text x={p.x} y={p.y - 11} fontSize={10} textAnchor="middle" fontWeight={700} fill="#185FA5">'{p.year}</text>}
+            </g>
+          );
+        })}
+      </svg>
+
+      {latest.reasons?.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {latest.reasons.slice(0, 7).map((r, i) => (
+            <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-muted/60 text-muted-foreground">{r}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── VersionTimelinePanel ─────────────────────────────────────────────────────
 interface VersionItem {
   id: number;
@@ -4164,6 +4289,7 @@ export default function AnalysisDetail() {
           >
             {dartStep ? (
               <ErrorBoundary fallback={null}>
+                <StageMap ticker={analysis.ticker} isEn={isEn} />
                 <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
               </ErrorBoundary>
             ) : streamingDart ? (
