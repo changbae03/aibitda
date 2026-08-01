@@ -46,17 +46,17 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  --primary: 222 47% 25%;
-  --primary-foreground: 210 40% 98%;
+  --primary: 7 100% 74%;          /* 코랄 #FF8A7A */
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 220 14% 94%;
-  --secondary-foreground: 222 47% 11%;
+  --secondary-foreground: 10 30% 20%;
 
   --muted: 220 14% 94%;
   --muted-foreground: 220 15% 45%;
 
-  --accent: 220 20% 93%;
-  --accent-foreground: 222 47% 25%;
+  --accent: 7 80% 95%;
+  --accent-foreground: 7 60% 40%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
@@ -69,7 +69,7 @@
 
   --border: 220 15% 88%;
   --input: 220 15% 88%;
-  --ring: 222 47% 25%;
+  --ring: 7 100% 74%;
 
   --radius: 0.875rem; /* 14px */
 
@@ -87,8 +87,8 @@
   --popover: 220 15% 12%;
   --popover-foreground: 220 15% 90%;
 
-  --primary: 222 80% 80%;
-  --primary-foreground: 222 47% 11%;
+  --primary: 7 90% 70%;           /* 다크모드 코랄 (살짝 소프트) */
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 220 15% 18%;
   --secondary-foreground: 220 15% 90%;
@@ -96,8 +96,8 @@
   --muted: 220 15% 16%;
   --muted-foreground: 220 15% 65%;
 
-  --accent: 220 15% 18%;
-  --accent-foreground: 222 80% 80%;
+  --accent: 7 40% 20%;
+  --accent-foreground: 7 90% 70%;
 
   --destructive: 0 62% 30%;
   --destructive-foreground: 0 0% 100%;
@@ -110,7 +110,7 @@
 
   --border: 220 15% 20%;
   --input: 220 15% 20%;
-  --ring: 222 80% 80%;
+  --ring: 7 90% 70%;
 
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
