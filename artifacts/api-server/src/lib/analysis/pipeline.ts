@@ -17,12 +17,14 @@ import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, needsSOTP, type 
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
-import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, type DartAnchorNumerics } from "../dart-store.js";
+import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, fetchEmployeeCounts, type DartAnchorNumerics } from "../dart-store.js";
+import { fetchLatestAnnualText } from "../biz-timeline.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
+import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -703,13 +705,29 @@ async function executeStep(
       if (isKoreanTicker(analysis.ticker)) {
         try {
           const all = await fetchAnnualAllRows(analysis.ticker);
+          let latestRevenue: number | null = null;
           if (all) {
             // 같은 rows에서 CapEx(투자 방향)와 운전자본(현금 효율)을 함께 뽑는다.
             const capex = renderCapex(computeCapex(all.rows, all.bsnsYear));
             if (capex) { dartBlocks.push(capex); console.log(`[dart_report_analysis] CapEx 주입 (${all.bsnsYear})`); }
             const wc = renderWorkingCapital(computeWorkingCapital(all.rows, all.bsnsYear));
             if (wc) { dartBlocks.push(wc); console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear})`); }
+            const revRow = all.rows.find(r => String(r.account_id ?? "").includes("Revenue"));
+            const rev = Number(String(revRow?.thstrm_amount ?? "").replace(/,/g, ""));
+            latestRevenue = Number.isFinite(rev) && rev > 0 ? rev : null;
           }
+
+          // 임직원 수 추이(직원현황 API) — 인력 증감은 확장·구조조정의 직접 신호.
+          const emp = await fetchEmployeeCounts(analysis.ticker);
+          const headcount = renderHeadcount(
+            emp.map(e => aggregateEmployees(e.rows, e.year)).filter((x): x is NonNullable<typeof x> => x != null));
+          if (headcount) { dartBlocks.push(headcount); console.log(`[dart_report_analysis] 임직원 수 주입`); }
+
+          // 고객 집중도(재무제표 주석) — 고객명은 익명이어도 단일 대형고객 매출을 금액 공시.
+          const rawAnnual = await fetchLatestAnnualText(analysis.ticker);
+          const cust = renderCustomerConcentration(
+            rawAnnual ? extractCustomerConcentration(rawAnnual) : null, latestRevenue);
+          if (cust) { dartBlocks.push(cust); console.log(`[dart_report_analysis] 고객 집중도 주입`); }
         } catch (e) {
           console.warn("[dart_report_analysis] 운전자본 계산 실패:", (e as Error)?.message?.slice(0, 80));
         }

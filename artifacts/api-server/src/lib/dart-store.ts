@@ -148,6 +148,7 @@ export async function lookupCorpCode(stockCode: string): Promise<string | null> 
 
 type DartRow = {
   sj_div: string;
+  account_id?: string;   // IFRS 표준 택소노미 코드 (fnlttSinglAcntAll이 함께 준다)
   account_nm: string;
   thstrm_amount?: string;
   frmtrm_amount?: string;
@@ -356,6 +357,36 @@ export async function fetchAnnualAllRows(
     }
   }
   return null;
+}
+
+/**
+ * DART 직원현황(empSttus) — 최근 3개년 원본 행을 연도별로 돌려준다.
+ * 부문·성별로 쪼개져 오므로 합치는 것은 company-facts.aggregateEmployees가 한다.
+ */
+export async function fetchEmployeeCounts(
+  stockCode: string,
+): Promise<Array<{ year: number; rows: import("./company-facts.js").EmpRow[] }>> {
+  type EmpRow = import("./company-facts.js").EmpRow;
+  const key = process.env["DART_API_KEY"];
+  if (!key) return [];
+  const corpCode = await lookupCorpCode(stockCode);
+  if (!corpCode) return [];
+  const thisYear = new Date().getFullYear();
+  const out: Array<{ year: number; rows: EmpRow[] }> = [];
+  for (let year = thisYear - 3; year <= thisYear - 1; year++) {
+    try {
+      const res = await fetch(
+        `https://opendart.fss.or.kr/api/empSttus.json?crtfc_key=${key}` +
+        `&corp_code=${corpCode}&bsns_year=${year}&reprt_code=11011`,
+        { signal: AbortSignal.timeout(12000) },
+      );
+      const data = await res.json() as any;
+      if (data.status === "000" && Array.isArray(data.list) && data.list.length > 0) {
+        out.push({ year, rows: data.list as EmpRow[] });
+      }
+    } catch { /* 개별 연도 실패는 건너뛴다 */ }
+  }
+  return out;
 }
 
 // ─── 메인: 분기·연간 데이터 수집 및 저장 ──────────────────────────────────────

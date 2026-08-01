@@ -161,3 +161,21 @@ export async function getBizTimeline(ticker: string): Promise<BizReportYear[]> {
     rceptNo: r.rcept_no, reportNm: r.report_nm, content: r.content,
   }));
 }
+
+/**
+ * 최신 연간 사업보고서의 **원문 전체**를 평문으로 돌려준다.
+ *
+ * 고객 집중도(재무제표 주석)처럼 우리가 저장하는 "II. 사업의 내용"에는 없고
+ * 원문 전체에만 있는 정보를 뽑을 때 쓴다. 저장하지 않고 그때그때 받는다(항상 최신).
+ */
+export async function fetchLatestAnnualText(ticker: string): Promise<string | null> {
+  if (!isKoreanTicker(ticker)) return null;
+  const key = process.env["DART_API_KEY"];
+  if (!key) return null;
+  const corpCode = await lookupCorpCode(ticker);
+  if (!corpCode) return null;
+  const reports = await listPeriodicReports(corpCode, key, new Date().getFullYear() - 2);
+  const annual = reports.find(r => r.quarter === 4);
+  if (!annual) return null;
+  return fetchReportText(annual.rceptNo, key);
+}
