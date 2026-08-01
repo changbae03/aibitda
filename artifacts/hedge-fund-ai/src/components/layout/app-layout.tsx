@@ -152,13 +152,13 @@ const ADMIN_GROUPS = [
 function CreditBar({ credits }: { credits: CreditInfo }) {
   const remaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
   const pct = credits.dailyLimit > 0 ? (remaining / credits.dailyLimit) * 100 : 0;
-  const color = remaining === 0 ? "bg-muted-foreground/30" : remaining <= 3 ? "bg-amber-400" : "bg-[#FF8A7A]";
+  const color = remaining === 0 ? "bg-muted-foreground/30" : remaining <= 3 ? "bg-amber-400" : "bg-primary";
   return (
     <div className="flex items-center gap-1.5 w-full">
       <div className="flex-1 h-1 rounded-full bg-muted-foreground/15 overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
       </div>
-      <span className={cn("text-[10px] font-semibold tabular-nums shrink-0", remaining === 0 ? "text-muted-foreground/40" : remaining <= 3 ? "text-amber-400" : "text-[#FF8A7A]")}>
+      <span className={cn("text-[10px] font-semibold tabular-nums shrink-0", remaining === 0 ? "text-muted-foreground/40" : remaining <= 3 ? "text-amber-400" : "text-primary")}>
         {remaining}
       </span>
     </div>
@@ -280,11 +280,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150 overflow-hidden",
                   isActive
-                    ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                    ? "bg-primary/12 text-primary font-semibold"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 )}
               >
-                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground")} />
+                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
                 <span className={cn(
                   "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
                   expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
@@ -303,11 +303,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="px-2 py-3 border-t border-border space-y-1">
       {user && expanded && (
         <Link href="/mypage" className="flex items-center gap-2.5 px-2 py-1.5 mb-0.5 rounded-lg hover:bg-accent transition-colors">
-          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
             {user.profileImage ? (
               <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
             ) : (
-              <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
+              <User className="w-3.5 h-3.5 text-primary" />
             )}
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
@@ -322,11 +322,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
       {user && !expanded && (
         <Link href="/mypage" className="flex justify-center py-1" title={isEn ? "My Page" : "마이페이지"}>
-          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center hover:bg-[#FF8A7A]/30 transition-colors">
+          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/30 transition-colors">
             {user.profileImage ? (
               <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
             ) : (
-              <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
+              <User className="w-3.5 h-3.5 text-primary" />
             )}
           </div>
         </Link>
@@ -338,7 +338,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/about"
-            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+            ? "bg-primary/12 text-primary font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
@@ -354,7 +354,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/settings"
-            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+            ? "bg-primary/12 text-primary font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
@@ -382,7 +382,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           className={cn(
             "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
             location === "/login"
-              ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+              ? "bg-primary/12 text-primary font-semibold"
               : "text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
         >
@@ -419,7 +419,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           >
             <span
               className="text-[20px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200"
-              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
+              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "hsl(var(--primary))" }}
             >
               {isEn ? "A" : "애"}
             </span>
@@ -432,7 +432,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link href="/analysis/new" className="flex items-center group px-3 min-w-0">
               <span
                 className="text-[22px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200 whitespace-nowrap"
-                style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
+                style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "hsl(var(--primary))" }}
               >
                 {isEn ? "AiBITDA" : "애빛다"}
               </span>
@@ -457,7 +457,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         className={cn(
                           "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150 whitespace-nowrap overflow-hidden",
                           isActive
-                            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                            ? "bg-primary/12 text-primary font-semibold"
                             : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
                         )}
                       >
@@ -517,7 +517,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="px-5 h-14 flex items-center justify-between border-b border-border">
                 <span
                   className="text-[22px] font-black tracking-tighter leading-none"
-                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
+                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "hsl(var(--primary))" }}
                 >
                   {isEn ? "AiBITDA" : "애빛다"}
                 </span>
@@ -545,7 +545,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                               className={cn(
                                 "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
                                 isActive
-                                  ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                                  ? "bg-primary/12 text-primary font-semibold"
                                   : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
                               )}
                             >
@@ -564,11 +564,11 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="px-3 py-3 border-t border-border space-y-0.5">
                 {user && (
                   <div className="flex items-center gap-2.5 px-2 py-2 mb-1">
-                    <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                       {user.profileImage ? (
                         <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
                       ) : (
-                        <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
+                        <User className="w-3.5 h-3.5 text-primary" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -608,7 +608,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border bg-background z-30 sticky top-0 shrink-0 print:hidden">
           <span
             className="text-[20px] font-black tracking-tighter leading-none"
-            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "hsl(var(--primary))" }}
           >
             {isEn ? "AiBITDA" : "애빛다"}
           </span>
@@ -699,7 +699,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <img
                   src="/pwa-192x192.png"
                   alt="AiBITDA"
-                  className="w-12 h-12 rounded-xl shrink-0 shadow"
+                  className="w-12 h-12 rounded-[var(--radius)] shrink-0 shadow"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm text-foreground leading-tight">
@@ -732,7 +732,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       setShowBanner(false);
                       setShowKakaoGuide(true);
                     }}
-                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:scale-[.98] transition-all flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-[var(--radius)] bg-primary text-primary-foreground text-sm font-semibold active:scale-[.98] transition-all flex items-center justify-center gap-2"
                   >
                     <Share className="w-4 h-4" />
                     {isEn ? "Open in Safari & Install" : "Safari에서 열고 설치하기"}
@@ -741,7 +741,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               ) : isSafariIos ? (
                 /* ── 일반 Safari iOS: 공유 버튼 안내 ── */
                 <div className="px-4 pb-4">
-                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+                  <div className="bg-muted/40 rounded-[var(--radius)] p-3 space-y-2">
                     <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{isEn ? "How to Install" : "설치 방법"}</p>
                     <ol className="space-y-1.5">
                       {(isEn ? [
@@ -774,7 +774,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <div className="px-4 pb-4">
                   <button
                     onClick={handleInstall}
-                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all"
+                    className="w-full py-2.5 rounded-[var(--radius)] bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all"
                   >
                     {isEn ? "Add to Home Screen" : "홈 화면에 추가"}
                   </button>
@@ -828,7 +828,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <p className="font-bold text-base text-foreground mb-1">{isEn ? "Open in Safari" : "Safari에서 열기"}</p>
 
                 {/* 링크 자동 복사 안내 */}
-                <div className="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 mb-4 flex items-center gap-2">
+                <div className="bg-primary/10 border border-primary/20 rounded-[var(--radius)] px-3 py-2 mb-4 flex items-center gap-2">
                   <span className="text-primary text-base">✓</span>
                   <p className="text-xs text-primary font-medium leading-snug">
                     {isEn ? "Link copied! Paste it in Safari's address bar." : "링크가 복사됐어요! Safari 주소창에 붙여넣기 해주세요."}

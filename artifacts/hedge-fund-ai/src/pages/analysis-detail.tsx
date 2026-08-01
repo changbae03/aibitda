@@ -415,7 +415,7 @@ function RoadmapTbody({ children }: { children: React.ReactNode }) {
 
 const MD_TABLE_COMPONENTS = {
   table: ({ children }: any) => (
-    <div className="overflow-x-auto my-4 rounded-lg border border-border/50">
+    <div className="overflow-x-auto my-4 rounded-xl border border-border/60 shadow-[var(--shadow-xs)]">
       <table className="w-full text-[14px] border-collapse">{children}</table>
     </div>
   ),
@@ -678,7 +678,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
         <motion.div
-          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-background rounded-2xl shadow-2xl overflow-hidden"
+          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-background rounded-[var(--radius)] shadow-2xl overflow-hidden"
           initial={{ y: 60, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
@@ -696,7 +696,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           </div>
 
           {/* ── 리포트 정보 ── */}
-          <div className="mx-5 mb-4 rounded-xl border border-border overflow-hidden">
+          <div className="mx-5 mb-4 rounded-[var(--radius)] border border-border overflow-hidden">
             <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-4 py-3 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center flex-shrink-0">
                 <span className="text-white text-[10px] font-black tracking-tight">AI</span>
@@ -730,7 +730,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
             <motion.button
               onClick={handleCopy}
               className={cn(
-                "w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-[14px] font-bold transition-all",
+                "w-full flex items-center justify-center gap-2.5 py-3.5 rounded-[var(--radius)] text-[14px] font-bold transition-all",
                 copied
                   ? "bg-emerald-500 text-white"
                   : "bg-primary text-white hover:bg-primary/90"
@@ -757,7 +757,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               {/* KakaoTalk */}
               <button
                 onClick={handleKakao}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#FEE500] hover:bg-[#F5DB00] transition-colors"
+                className="flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius)] bg-[#FEE500] hover:bg-[#F5DB00] transition-colors"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
                   <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.706 1.574 5.083 3.96 6.549L4.8 21l4.6-2.4A11.7 11.7 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" fill="#391B1B"/>
@@ -768,7 +768,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               {/* Telegram */}
               <button
                 onClick={handleTelegram}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
+                className="flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius)] bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
@@ -785,7 +785,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25"
+                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius)] bg-emerald-500/10 border border-emerald-500/25"
               >
                 <Zap className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span className="text-[12px] font-semibold text-emerald-500">
@@ -800,7 +800,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted border border-border"
+                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius)] bg-muted border border-border"
               >
                 <Zap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span className="text-[12px] text-muted-foreground">
@@ -812,7 +812,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
 
           {/* ── 카카오 공유 크레딧 안내 (idle 상태일 때만) ── */}
           {shareCredit === 'idle' && (
-            <div className="mx-5 mb-4 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/8 border border-amber-500/20">
+            <div className="mx-5 mb-4 flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius)] bg-amber-500/8 border border-amber-500/20">
               <Zap className="w-3 h-3 text-amber-500 shrink-0" />
               <span className="text-[11px] text-amber-600 dark:text-amber-400">
                 {isEnModal
@@ -863,7 +863,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
   }, [ticker]);
 
   if (loading) return (
-    <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-2 text-muted-foreground text-sm">
+    <div className="bg-card border border-border rounded-[var(--radius)] p-5 flex items-center gap-2 text-muted-foreground text-sm">
       <Loader2 className="w-4 h-4 animate-spin" /> {isEn ? "Loading version history…" : "버전 히스토리 로딩 중…"}
     </div>
   );
@@ -878,7 +878,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
   };
 
   return (
-    <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-center gap-2 mb-4">
         <h3 className="font-semibold text-base text-foreground">
           {isEn ? "Analysis Version Timeline" : "분석 버전 타임라인"}
@@ -901,7 +901,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
                 key={v.id}
                 onClick={() => !isCurrent && navigate(`/analysis/${v.id}`)}
                 className={cn(
-                  "relative flex items-start gap-3 w-full text-left pl-7 pr-2 py-2 rounded-xl transition-colors",
+                  "relative flex items-start gap-3 w-full text-left pl-7 pr-2 py-2 rounded-[var(--radius)] transition-colors",
                   isCurrent ? "bg-primary/8 cursor-default" : "hover:bg-accent cursor-pointer"
                 )}
               >
@@ -991,7 +991,7 @@ function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolea
   const fmtPct = (v: number | null) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-card border border-border rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]">
       <button
         className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 text-left gap-3 hover:bg-muted/30 transition-colors"
         onClick={() => setOpen(v => !v)}
@@ -1066,7 +1066,7 @@ function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolea
                     hint:  data.loanRatio != null ? `대차 ${data.loanRatio.toFixed(2)}%` : undefined,
                   },
                 ].map(({ label, sub, score, max, hint }) => (
-                  <div key={label} className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                  <div key={label} className="bg-muted/40 rounded-[var(--radius)] px-3 py-2.5 space-y-1.5">
                     <div className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide truncate">{label}</div>
                     <div className="text-base font-bold tabular-nums leading-tight">{sub}</div>
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -1165,7 +1165,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
   if (!loading && !data) return null;
 
   return (
-    <div className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+    <div className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]">
       <div
         role="button"
         tabIndex={0}
@@ -1362,7 +1362,7 @@ function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?:
   if (!isKR || (!loading && items.length === 0)) return null;
 
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 sm:p-6 print:hidden shadow-[var(--shadow-card)]">
       <div className="flex items-center gap-2 mb-4">
         <FileText className="w-4 h-4 text-muted-foreground/50" />
         <h2 className="text-base font-semibold text-foreground">
@@ -1510,21 +1510,21 @@ function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: 
   };
 
   if (loading) return (
-    <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-center gap-2 mb-4">
         <History className="w-4 h-4 text-muted-foreground/50" />
         <div className="h-3 w-32 rounded bg-muted/60 animate-pulse" />
       </div>
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-12 rounded-xl bg-muted/30 animate-pulse" />
+          <div key={i} className="h-12 rounded-[var(--radius)] bg-muted/30 animate-pulse" />
         ))}
       </div>
     </div>
   );
 
   return (
-    <div className="bg-card rounded-2xl p-5 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 print:hidden shadow-[var(--shadow-card)]">
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-4">
         <History className="w-4 h-4 text-muted-foreground/50" />
@@ -1578,7 +1578,7 @@ function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: 
             );
 
             return (
-              <div key={key} className="rounded-xl border border-border/40 overflow-hidden">
+              <div key={key} className="rounded-[var(--radius)] border border-border/40 overflow-hidden">
                 <button
                   onClick={() => hasChanges && toggleExpand(key)}
                   className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-colors ${hasChanges ? "hover:bg-muted/20 cursor-pointer" : "cursor-default"}`}
@@ -1630,7 +1630,7 @@ function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: 
                     {/* Added */}
                     {diff.changesJson.added.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5">
+                        <p className="text-[11px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-1.5">
                           {isEn ? "Added" : "신규 추가"}
                         </p>
                         <ul className="space-y-1">
@@ -1646,7 +1646,7 @@ function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: 
                     {/* Removed */}
                     {diff.changesJson.removed.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1.5">
+                        <p className="text-[11px] font-bold text-red-500 dark:text-red-400 uppercase tracking-widest mb-1.5">
                           {isEn ? "Removed" : "사라진 항목"}
                         </p>
                         <ul className="space-y-1">
@@ -1662,7 +1662,7 @@ function FilingTimelinePanel({ ticker, isEn = false }: { ticker: string; isEn?: 
                     {/* Modified */}
                     {diff.changesJson.modified.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1.5">
+                        <p className="text-[11px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-widest mb-1.5">
                           {isEn ? "Changed" : "변화된 항목"}
                         </p>
                         <ul className="space-y-1">
@@ -1732,7 +1732,7 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
   const maxAmt = info?.history?.length ? Math.max(...info.history.map(h => h.amount)) : 1;
 
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 sm:p-6 print:hidden shadow-[var(--shadow-card)]">
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="w-4 h-4 text-muted-foreground/50" />
@@ -1753,7 +1753,7 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
         <div className="space-y-3 animate-pulse">
           <div className="grid grid-cols-2 gap-2.5">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-muted/40 rounded-xl h-14" />
+              <div key={i} className="bg-muted/40 rounded-[var(--radius)] h-14" />
             ))}
           </div>
           <div className="flex items-end gap-2 mt-4">
@@ -1776,7 +1776,7 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
               { label: isEn ? "Payout Ratio" : "배당성향", value: fmtPct(info.payoutRatio, true) },
               { label: isEn ? "5Y Avg Yield" : "5년 평균수익률", value: info.fiveYearAvgDividendYield != null ? `${info.fiveYearAvgDividendYield.toFixed(2)}%` : "—" },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-muted/30 rounded-xl px-3 py-2.5 text-center">
+              <div key={label} className="bg-muted/30 rounded-[var(--radius)] px-3 py-2.5 text-center">
                 <div className="text-[10.5px] text-muted-foreground/55 mb-1 leading-tight">{label}</div>
                 <div className="text-[13px] font-semibold text-foreground tabular-nums">{value}</div>
               </div>
@@ -1870,7 +1870,7 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
   ];
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+    <div className="rounded-[var(--radius)] border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <TrendingDown className="w-4 h-4 text-muted-foreground/50" />
         <h2 className="text-base font-semibold text-foreground">{isEn ? "Short Selling" : "공매도 현황"}</h2>
@@ -1991,7 +1991,7 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
   };
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+    <div className="rounded-[var(--radius)] border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <BarChart2 className="w-4 h-4 text-muted-foreground/50" />
         <h2 className="text-base font-semibold text-foreground">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</h2>
@@ -2244,7 +2244,7 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
   const isPurchase = (text: string) => /purchase|acquisition/i.test(text);
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+    <div className="rounded-[var(--radius)] border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4 text-muted-foreground/50" />
         <h2 className="text-base font-semibold text-foreground">{isEn ? "Major Shareholders" : "주요 주주 현황"}</h2>
@@ -2532,7 +2532,7 @@ function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
   return (
     <div className="space-y-5">
       {/* 스코어 헤더 */}
-      <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+      <div className="flex items-center gap-4 p-4 rounded-[var(--radius)] bg-muted/30 border border-border/50">
         <div className="text-center">
           <div className="text-3xl font-bold tabular-nums">{passCount}</div>
           <div className="text-[10px] text-muted-foreground/60 mt-0.5">{isEn ? "Passed" : "충족"}</div>
@@ -2575,7 +2575,7 @@ function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
             {catItems.map((item: ChecklistItem, idx: number) => (
               <div
                 key={idx}
-                className={`flex items-start gap-3 py-2.5 px-3.5 rounded-xl border ${statusBg(item.status)}`}
+                className={`flex items-start gap-3 py-2.5 px-3.5 rounded-[var(--radius)] border ${statusBg(item.status)}`}
               >
                 <span className="text-[15px] mt-0.5 flex-shrink-0">{statusIcon(item.status)}</span>
                 <div className="flex-1 min-w-0">
@@ -2630,7 +2630,7 @@ function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {parsed.map((lens: { header: string; body: string; verdict?: string; style: typeof LENS_STYLES[0] }, i: number) => (
-        <div key={i} className={`rounded-xl border ${lens.style.border} ${lens.style.bg} p-4 flex flex-col gap-2.5`}>
+        <div key={i} className={`rounded-[var(--radius)] border ${lens.style.border} ${lens.style.bg} p-4 flex flex-col gap-2.5`}>
           <p className="text-[13.5px] font-bold text-foreground leading-snug">{lens.header}</p>
           {lens.body && (
             <p className="text-[12.5px] leading-[1.85] text-foreground/70 flex-1">{lens.body}</p>
@@ -2731,7 +2731,7 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
     : null;
 
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+    <div className="bg-card rounded-[var(--radius)] p-5 sm:p-6 print:hidden shadow-[var(--shadow-card)]">
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-5">
         <Newspaper className="w-4 h-4 text-muted-foreground/50" />
@@ -2944,17 +2944,17 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
 
   return (
     <div className="mt-4 print:hidden">
-      <div className="rounded-2xl border border-border bg-card dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-[#141414] px-5 py-5 space-y-3.5 shadow-sm">
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+      <div className="rounded-[var(--radius)] border border-border bg-card dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-[#141414] px-5 py-5 space-y-3.5 shadow-[var(--shadow-card)]">
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
           {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
         </p>
         <div className="grid grid-cols-2 gap-3">
           {/* 홈으로 */}
           <button
             onClick={() => setLocation("/")}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/30 hover:border-border hover:bg-muted/60 px-4 py-4 transition-all duration-200 group"
+            className="flex flex-col items-center gap-2 rounded-[var(--radius)] border border-border bg-muted/30 hover:border-border hover:bg-muted/60 px-4 py-4 transition-all duration-200 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
+            <div className="w-10 h-10 rounded-[var(--radius)] bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
               <Home className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
             <span className="text-[13px] font-semibold text-foreground leading-tight text-center">
@@ -2969,9 +2969,9 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
           {pfStatus === "exists" || pfStatus === "added" ? (
             <button
               onClick={() => setLocation("/portfolio")}
-              className="relative flex flex-col items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 px-4 py-4 transition-all duration-200 group overflow-hidden"
+              className="relative flex flex-col items-center gap-2 rounded-[var(--radius)] border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 px-4 py-4 transition-all duration-200 group overflow-hidden"
             >
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
+              <div className="w-10 h-10 rounded-[var(--radius)] bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
                 <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <span className="text-[13px] font-bold text-emerald-700 dark:text-emerald-400 leading-tight text-center">
@@ -2985,10 +2985,10 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
             <button
               onClick={addToPortfolio}
               disabled={pfStatus === "adding" || pfStatus === "checking"}
-              className="relative flex flex-col items-center gap-2 rounded-xl border border-[#FF8A7A]/50 bg-gradient-to-br from-[#FF8A7A]/10 to-[#FF8A7A]/5 hover:from-[#FF8A7A]/20 hover:to-[#FF8A7A]/10 hover:border-[#FF8A7A]/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
+              className="relative flex flex-col items-center gap-2 rounded-[var(--radius)] border border-[#FF8A7A]/50 bg-gradient-to-br from-[#FF8A7A]/10 to-[#FF8A7A]/5 hover:from-[#FF8A7A]/20 hover:to-[#FF8A7A]/10 hover:border-[#FF8A7A]/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
             >
-              <div className="absolute inset-0 rounded-xl bg-[#FF8A7A]/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="w-10 h-10 rounded-xl bg-[#FF8A7A]/15 flex items-center justify-center group-hover:bg-[#FF8A7A]/25 transition-colors relative">
+              <div className="absolute inset-0 rounded-[var(--radius)] bg-[#FF8A7A]/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="w-10 h-10 rounded-[var(--radius)] bg-[#FF8A7A]/15 flex items-center justify-center group-hover:bg-[#FF8A7A]/25 transition-colors relative">
                 {pfStatus === "adding" || pfStatus === "checking"
                   ? <Loader2 className="w-5 h-5 text-[#FF8A7A] animate-spin" />
                   : <Briefcase className="w-5 h-5 text-[#FF8A7A]" />
@@ -3010,7 +3010,7 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
             {wlStatus === "exists" || wlStatus === "added" ? (
               <button
                 onClick={() => setLocation("/portfolio")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-400/30 bg-amber-400/8 hover:bg-amber-400/14 transition-all duration-200 group"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-amber-400/30 bg-amber-400/8 hover:bg-amber-400/14 transition-all duration-200 group"
               >
                 <div className="w-8 h-8 rounded-lg bg-amber-400/15 flex items-center justify-center shrink-0">
                   <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
@@ -3029,7 +3029,7 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
               <button
                 onClick={addToWatchlist}
                 disabled={wlStatus === "adding"}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 hover:border-amber-400/30 transition-all duration-200 group disabled:opacity-60"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-border/60 bg-muted/20 hover:bg-muted/40 hover:border-amber-400/30 transition-all duration-200 group disabled:opacity-60"
               >
                 <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-amber-400/10 flex items-center justify-center shrink-0 transition-colors">
                   {wlStatus === "adding"
@@ -3087,13 +3087,13 @@ function NarrativeSectionBlock({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: num * 0.05 }}
-      className="rounded-2xl bg-card border border-border/50 overflow-hidden"
+      className="rounded-[var(--radius)] bg-card border shadow-[var(--shadow-card)] overflow-hidden"
     >
       {/* 챕터 헤더 */}
       <div className="px-5 sm:px-6 pt-4 pb-3.5" style={{ borderBottom: `1px solid ${accent}22` }}>
         <div className="flex items-center gap-3">
           <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[13px] text-white shrink-0"
+            className="w-8 h-8 rounded-[var(--radius)] flex items-center justify-center font-black text-[13px] text-white shrink-0"
             style={{ background: accent }}
           >
             {num}
@@ -3663,7 +3663,7 @@ export default function AnalysisDetail() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ type: "spring", damping: 28, stiffness: 300, delay: 0.05 }}
-              className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+              className="relative z-10 w-full max-w-sm overflow-hidden rounded-[var(--radius)] border border-border bg-background shadow-2xl"
             >
               {/* 상단 컬러 라인 */}
               <div className="h-0.5 w-full bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400" />
@@ -3708,7 +3708,7 @@ export default function AnalysisDetail() {
                 {/* 확인 버튼 */}
                 <button
                   onClick={() => setShowDisclaimer(false)}
-                  className="w-full rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
+                  className="w-full rounded-[var(--radius)] bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
                 >
                   {isEn ? "Understood" : "확인했습니다"}
                 </button>
@@ -3735,7 +3735,7 @@ export default function AnalysisDetail() {
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">{isEn ? "AiBITDA  |  AI Equity Research Report" : "애빛다 \u00a0|\u00a0 AI 기업분석 리포트"}</div>
+            <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">{isEn ? "AiBITDA  |  AI Equity Research Report" : "애빛다 \u00a0|\u00a0 AI 기업분석 리포트"}</div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {isEn ? (analysis.englishName || analysis.companyName) : analysis.companyName}
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
@@ -3803,28 +3803,28 @@ export default function AnalysisDetail() {
       <div className="mt-4 sm:mt-5 space-y-3.5 sm:space-y-4">
 
       {/* ── Report Hero ─────────────────────────────────────────────── */}
-      <div ref={headerRef} className="rounded-2xl overflow-hidden border border-border/50 relative bg-card">
+      <div ref={headerRef} className="rounded-[var(--radius)] overflow-hidden border shadow-[var(--shadow-card)] relative bg-card">
 
         {/* 방향성 글로우 배경 */}
         {headerLivePrice && headerLivePrice.change != null && (
           <div className={cn(
-            "absolute inset-0 pointer-events-none",
+            "absolute inset-0 pointer-events-none opacity-60 dark:opacity-40",
             headerLivePrice.change >= 0
-              ? "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(142_76%_36%/0.07),transparent)]"
-              : "[background:radial-gradient(ellipse_80%_60%_at_0%_0%,hsl(0_84%_60%/0.07),transparent)]"
+              ? "[background:radial-gradient(ellipse_60%_60%_at_50%_-20%,hsl(142_76%_36%/0.15),transparent)]"
+              : "[background:radial-gradient(ellipse_60%_60%_at_50%_-20%,hsl(0_84%_60%/0.15),transparent)]"
           )} />
         )}
 
         {/* 상단 컬러 스트라이프 */}
         <div className={cn(
-          "h-[3px] w-full relative z-10",
+          "h-[4px] w-full relative z-10",
           isComplete && effectiveVerdict
             ? ["strong buy", "buy"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500/20"
+              ? "bg-gradient-to-r from-emerald-500/80 to-emerald-400/10"
               : ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase())
-              ? "bg-gradient-to-r from-rose-500 via-orange-400 to-rose-500/20"
-              : "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400/20"
-            : "bg-gradient-to-r from-primary/60 via-primary/30 to-transparent"
+              ? "bg-gradient-to-r from-rose-500/80 to-rose-400/10"
+              : "bg-gradient-to-r from-amber-500/80 to-amber-400/10"
+            : "bg-gradient-to-r from-primary/80 to-primary/10"
         )} />
 
         <div className="relative z-10 p-5 sm:p-6">
@@ -3922,7 +3922,7 @@ export default function AnalysisDetail() {
                           ? "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#10B981)"
                           : "linear-gradient(to right,hsl(var(--muted-foreground)/0.2),#F87171)",
                       }} />
-                      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-background shadow-sm"
+                      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-background shadow-[var(--shadow-card)]"
                         style={{ left: `${pct}%`, background: isUp ? "#10B981" : "#F87171" }} />
                     </div>
                   </div>
@@ -4013,11 +4013,10 @@ export default function AnalysisDetail() {
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-rose-500 dark:text-rose-400";
                 return (
-                  <div className="rounded-2xl border border-border/60 bg-card overflow-hidden"
-                    style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+                  <div className="rounded-[var(--radius)] border border-border/60 bg-card overflow-hidden shadow-[var(--shadow-card)]">
                     {/* 적정주가 */}
                     <div className="px-5 pt-4 pb-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
                         {isEn ? "Fair Value (12M)" : "적정주가 (12개월)"}
                       </p>
                       <p className={`text-2xl font-black tabular-nums leading-none tracking-tight ${upColor}`}>
@@ -4036,7 +4035,7 @@ export default function AnalysisDetail() {
                     <div className="px-3 pb-3">
                       <button
                         onClick={() => setShowShareModal(true)}
-                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-[var(--radius)] bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
                       >
                         <Share2 className="w-3.5 h-3.5" />
                         {isEn ? 'Share this analysis' : '이 분석 공유하기'}
@@ -4053,7 +4052,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* ── 주가 차트 (헤더 바로 아래) ── */}
-      <div className="rounded-2xl bg-card overflow-hidden print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+      <div className="rounded-[var(--radius)] bg-card overflow-hidden print:hidden shadow-[var(--shadow-card)]">
         <ErrorBoundary fallback={null}>
           <StockChart
             ticker={analysis.ticker}
@@ -4084,7 +4083,7 @@ export default function AnalysisDetail() {
 
       {/* ── 큐 대기 중 ── */}
       {analysis.status === 'queued' && (
-        <div className="print:hidden rounded-2xl bg-card border border-blue-500/20 p-5 flex items-center gap-4">
+        <div className="print:hidden rounded-[var(--radius)] bg-card border border-blue-500/20 p-5 flex items-center gap-4">
           <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0" />
           <div>
             <p className="font-semibold text-foreground text-sm">{isEn ? "Queued for Analysis" : "분석 대기 중"}</p>
@@ -4095,7 +4094,7 @@ export default function AnalysisDetail() {
 
       {/* ── 분석 실패 ── */}
       {isError && (
-        <div className="print:hidden rounded-2xl bg-card border border-red-500/20 p-5 flex items-center gap-4">
+        <div className="print:hidden rounded-[var(--radius)] bg-card border border-red-500/20 p-5 flex items-center gap-4">
           <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
           <div>
             <p className="font-semibold text-foreground text-sm">{isEn ? "Analysis Failed" : "분석 생성 실패"}</p>
@@ -4398,8 +4397,7 @@ export default function AnalysisDetail() {
       })()}
 
       {/* ── 추가 데이터 패널 ── */}
-      <details className="group rounded-2xl bg-card border border-border/60 overflow-hidden print:hidden"
-               style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.04)" }}>
+      <details className="group rounded-[var(--radius)] bg-card border border-border/60 overflow-hidden print:hidden shadow-[var(--shadow-card)]">
         <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-muted/30 transition-colors list-none">
           <span className="text-[13px] font-semibold text-muted-foreground">{isEn ? "More data (ETF, peers, shareholders…)" : "추가 데이터 더 보기 (ETF · 동종업체 · 주주 현황 등)"}</span>
           <ChevronDown className="w-4 h-4 text-muted-foreground/50 group-open:rotate-180 transition-transform" />
@@ -4430,7 +4428,7 @@ export default function AnalysisDetail() {
             <div className="mt-8 print:hidden">
               <button
                 onClick={() => setShowShareModal(true)}
-                className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground/80 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                className="w-full flex items-center justify-center gap-2.5 rounded-[var(--radius)] border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground/80 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
               >
                 <Share2 className="w-4 h-4" />
                 {isEn ? "Share" : "공유하기"}
@@ -4447,9 +4445,9 @@ export default function AnalysisDetail() {
                   initial={{ y: 80, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 1.2, type: "spring", damping: 25 }}
-                  className="pointer-events-auto w-full max-w-lg rounded-2xl bg-card/95 backdrop-blur-md border border-border shadow-2xl px-5 py-4 flex items-center gap-4"
+                  className="pointer-events-auto w-full max-w-lg rounded-[var(--radius)] bg-card/95 backdrop-blur-md border border-border shadow-2xl px-5 py-4 flex items-center gap-4"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-[var(--radius)] bg-primary/20 flex items-center justify-center flex-shrink-0">
                     <BrainCircuit className="w-5 h-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -4458,7 +4456,7 @@ export default function AnalysisDetail() {
                   </div>
                   <a
                     href="/login"
-                    className="flex-shrink-0 px-4 py-2 rounded-xl bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    className="flex-shrink-0 px-4 py-2 rounded-[var(--radius)] bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
                   >
                     {isEn ? "Start Analysis →" : "분석 시작하기 →"}
                   </a>
@@ -4472,13 +4470,13 @@ export default function AnalysisDetail() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 px-5 py-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium"
+                  className="flex items-center justify-center gap-2 rounded-[var(--radius)] bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 px-5 py-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium"
                 >
                   <Check className="w-4 h-4" />
                   {isEn ? "Your feedback helps improve our AI. Thank you!" : "피드백이 AI 학습에 반영되었습니다. 감사합니다!"}
                 </motion.div>
               ) : (
-                <div className="rounded-xl border border-border bg-background px-5 py-4 space-y-3">
+                <div className="rounded-[var(--radius)] border border-border bg-background px-5 py-4 space-y-3">
                   {/* 헤더 */}
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
@@ -4576,7 +4574,7 @@ export default function AnalysisDetail() {
             {/* 관리자 종목 보정 메모 — 관리자에게만 표시 */}
             {isComplete && isAdmin && (
               <div className="mt-4 print:hidden">
-                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-5 py-4 space-y-3">
+                <div className="rounded-[var(--radius)] border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-5 py-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">📝 종목 보정 메모</span>
                     <span className="text-[10px] text-amber-600 dark:text-amber-500">— 다음 AI 분석에 자동 반영됩니다</span>
@@ -4623,7 +4621,7 @@ export default function AnalysisDetail() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-muted/70 border border-border px-5 py-4 space-y-2">
+              <div className="rounded-[var(--radius)] bg-muted/70 border border-border px-5 py-4 space-y-2">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Legal Disclaimer" : "투자 유의사항 (Legal Disclaimer)"}</p>
                 {isEn ? (
                   <>
@@ -4686,7 +4684,7 @@ export default function AnalysisDetail() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.95 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="fixed bottom-5 right-4 z-50 bg-card/95 border border-border rounded-2xl shadow-2xl p-4 min-w-[200px] max-w-[240px] print:hidden"
+            className="fixed bottom-5 right-4 z-50 bg-card/95 border border-border rounded-[var(--radius)] shadow-2xl p-4 min-w-[200px] max-w-[240px] print:hidden"
             style={{ backdropFilter: "blur(16px)" }}
           >
             <div className="flex items-start justify-between gap-2 mb-2.5">
@@ -4885,18 +4883,17 @@ function TldrCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card rounded-2xl overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]"
     >
       <div className="px-5 py-3 border-b border-border/50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
           {isEn ? "Investment Summary · TL;DR" : "투자 요약 · 한눈에 보기"}
         </span>
         <span className="text-[10px] text-muted-foreground/50 font-mono">AI Research</span>
       </div>
       <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
-        <div className={`rounded-xl border ${accentBorder} ${accentBg} px-5 py-4 flex flex-col justify-center sm:min-w-[152px] sm:max-w-[188px]`}>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
+        <div className={`rounded-[var(--radius)] border ${accentBorder} ${accentBg} px-5 py-4 flex flex-col justify-center sm:min-w-[152px] sm:max-w-[188px]`}>
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
             {isEn ? "Verdict" : "투자의견"}
           </p>
           <p className={`text-[18px] font-bold leading-tight ${accentColor}`}>{verdictLabel}</p>
@@ -4930,7 +4927,7 @@ function TldrCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
           )}
           {json?.summary && (
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">
                 {isEn ? "Investment Thesis" : "투자 논거"}
               </p>
               <p className="text-[13px] text-foreground/75 leading-relaxed">{json.summary}</p>
@@ -4987,11 +4984,10 @@ function ScenarioCompareCard({ analysis, isEn }: { analysis: any; isEn: boolean 
 
   return (
     <div
-      className="bg-card rounded-2xl overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]"
     >
       <div className="px-5 py-3 border-b border-border/50">
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
           {isEn ? "Scenario Analysis — Bull / Base / Bear" : "시나리오 분석 — 낙관 · 기본 · 비관"}
         </span>
       </div>
@@ -5005,7 +5001,7 @@ function ScenarioCompareCard({ analysis, isEn }: { analysis: any; isEn: boolean 
           const pStr = String(s.probability ?? "");
           const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
           return (
-            <div key={s.case} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-3 sm:p-4`}>
+            <div key={s.case} className={`rounded-[var(--radius)] border ${cfg.border} ${cfg.bg} p-3 sm:p-4`}>
               <p className={`text-[11px] font-bold ${cfg.color}`}>{cfg.label}</p>
               <p className="text-[10px] text-muted-foreground mb-2.5">{cfg.sublabel}</p>
               <p className={`text-[13px] sm:text-[15px] font-bold tabular-nums leading-tight break-all ${cfg.color}`}>
@@ -5127,8 +5123,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="rounded-2xl bg-card overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="rounded-[var(--radius)] bg-card overflow-hidden shadow-[var(--shadow-card)]"
     >
       {/* ── 상단 헤더 ── */}
       <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3 border-b border-border/50">
@@ -5238,7 +5233,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ④ 투자 논거 요약 ── */}
             {json.summary && (
               <div className="px-4 sm:px-6 py-5 bg-muted/25 border-b border-border">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2.5">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2.5">
                   {isEn ? "Investment Thesis" : "투자 논거"}
                 </p>
                 <p className="text-[13.5px] text-foreground/88 leading-[1.95]">{json.summary}</p>
@@ -5306,7 +5301,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 <div className="px-4 sm:px-6 py-4">
                   {/* 단기 기술적 이정표 — technical_target 있을 때만 표시 */}
                   {techTarget && (
-                    <div className="mt-3 rounded-xl border border-orange-300/60 dark:border-orange-700/40 bg-orange-50/40 dark:bg-orange-950/20 px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="mt-3 rounded-[var(--radius)] border border-orange-300/60 dark:border-orange-700/40 bg-orange-50/40 dark:bg-orange-950/20 px-4 py-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
                         <div>
@@ -5343,7 +5338,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
               <div className="px-4 sm:px-6 py-4">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Scenario Analysis" : "시나리오 분석"}</p>
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Scenario Analysis" : "시나리오 분석"}</p>
                 <div className="space-y-2">
                   {json.scenarios.map((s: any, i: number) => {
                     const isBear = s.case === "Bear";
@@ -5360,7 +5355,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                       <div
                         key={i}
                         className={cn(
-                          "rounded-xl border border-border bg-card p-3 sm:p-3.5 flex items-center gap-3 sm:gap-4 border-l-4",
+                          "rounded-[var(--radius)] border border-border bg-card p-3 sm:p-3.5 flex items-center gap-3 sm:gap-4 border-l-4",
                           isBear ? "border-l-red-400" : isBull ? "border-l-emerald-500" : "border-l-blue-500"
                         )}
                       >
@@ -5417,7 +5412,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               <div className="px-4 sm:px-6 py-4 grid sm:grid-cols-2 gap-5">
                 {json.risks?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Key Risks" : "핵심 리스크"}</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Key Risks" : "핵심 리스크"}</p>
                     <ul className="space-y-2">
                       {json.risks.map((r: string, i: number) => (
                         <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-foreground/70 leading-relaxed">
@@ -5430,7 +5425,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 )}
                 {json.monitoring_indicators?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Monitoring Indicators" : "모니터링 지표"}</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Monitoring Indicators" : "모니터링 지표"}</p>
                     <ul className="space-y-2">
                       {json.monitoring_indicators.map((m: string, i: number) => (
                         <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-muted-foreground leading-relaxed">
@@ -5453,12 +5448,12 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
           <div className="p-6 text-sm text-foreground/60 leading-relaxed">
             {isApiErr ? (
               <>
-                <p className="text-red-500 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "AI Service Error" : "AI 서비스 연결 오류"}</p>
+                <p className="text-red-500 font-medium mb-2 text-[11px] font-bold uppercase tracking-widest">{isEn ? "AI Service Error" : "AI 서비스 연결 오류"}</p>
                 <p>{isEn ? "Failed to connect to AI service. Please re-run the analysis." : "AI 서비스 연결 실패로 최종 전략을 생성하지 못했습니다. 분석을 다시 실행해 주세요."}</p>
               </>
             ) : (
               <>
-                <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "Error loading analysis" : "분석 결과 로드 중 오류"}</p>
+                <p className="text-amber-600 font-medium mb-2 text-[11px] font-bold uppercase tracking-widest">{isEn ? "Error loading analysis" : "분석 결과 로드 중 오류"}</p>
                 <p>{isEn ? "Failed to load strategy data. Please re-run the analysis." : "최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요."}</p>
               </>
             )}
@@ -5711,8 +5706,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4, transition: { duration: 0.3 } }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card rounded-2xl overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]"
     >
       {/* 헤더 */}
       <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
@@ -5957,7 +5951,7 @@ function TechnicalLevelLadder({ levels, startPrice, currency, isEn = false }: {
             const p = item.variant !== "current" ? fmtPct(item.price) : null;
             return (
               <div key={item.key}
-                className={cn("rounded-xl border px-2.5 sm:px-3 py-2 min-w-[76px] flex flex-col items-center gap-0.5", st.bg, st.border)}>
+                className={cn("rounded-[var(--radius)] border px-2.5 sm:px-3 py-2 min-w-[76px] flex flex-col items-center gap-0.5", st.bg, st.border)}>
                 <span className={cn("text-[9px] font-semibold uppercase tracking-wide leading-tight text-center", st.label)}>{item.label}</span>
                 <span className={cn("text-[11px] font-mono font-bold leading-tight", st.price)}>{fmtP(item.price)}</span>
                 {item.sub && <span className={cn("text-[9px] font-mono leading-tight", st.label)}>{item.sub}</span>}
@@ -6097,7 +6091,7 @@ function ForwardEstimatesTable({ ticker, isEn = false }: { ticker: string; isEn?
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Earnings Forecast" : "실적 전망"}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</span>
       </div>
-      <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+      <div className="rounded-[var(--radius)] border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[340px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted">
@@ -6143,7 +6137,7 @@ function SegmentForecastTable({ data, isEn = false }: { data: SegmentForecastDat
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Segment Forecast" : "사업부별 실적 전망"}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-700">{isEn ? "AI Estimate" : "AI 추정"}</span>
       </div>
-      <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+      <div className="rounded-[var(--radius)] border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[380px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted">
@@ -6344,7 +6338,7 @@ function InteractiveDCFPanel({
       {/* 헤더 토글 버튼 */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-muted/50 hover:bg-muted/80 transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius)] bg-muted/50 hover:bg-muted/80 transition-colors text-left"
       >
         <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
         <span className="text-[12px] font-semibold text-muted-foreground flex-1">
@@ -6566,7 +6560,7 @@ const MD_BODY_COMPONENTS = {
 function MdBlock({ src, isEn }: { src: string; isEn: boolean }) {
   if (!src.trim()) return null;
   return (
-    <div className="markdown-body" style={{ fontSize: "16px", lineHeight: "1.95" }}>
+    <div className="markdown-body prose-narrative">
       <RoadmapEnContext.Provider value={isEn}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_BODY_COMPONENTS}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
       </RoadmapEnContext.Provider>
@@ -6580,8 +6574,7 @@ function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card rounded-2xl overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]"
     >
       <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
         <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
@@ -6707,7 +6700,7 @@ function DartFinancialCharts({ ticker, isEn, color }: { ticker: string; isEn: bo
         <div>
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
               {isEn ? "Annual P&L" : "연간 실적 추이"}
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
@@ -6730,7 +6723,7 @@ function DartFinancialCharts({ ticker, isEn, color }: { ticker: string; isEn: bo
         <div>
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-3.5 rounded-full" style={{ background: color }} />
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
               {isEn ? "Quarterly P&L" : "분기 실적 추이"}
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">({UNIT_LABEL})</span>
@@ -6831,8 +6824,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card rounded-2xl overflow-hidden"
-      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+      className="bg-card rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow-card)]"
     >
       {/* ⑪ Accordion header */}
       <div
@@ -6875,7 +6867,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
         {leadPara && (
           <div
-            className="mb-4 px-4 py-3.5 rounded-xl bg-muted/50 text-[15px] leading-[1.95] text-foreground/90 whitespace-pre-line border-l-[3px]"
+            className="mb-4 px-4 py-3.5 rounded-[var(--radius)] bg-muted/50 text-[15px] leading-[1.95] text-foreground/90 whitespace-pre-line border-l-[3px]"
             style={{ borderLeftColor: color }}
           >
             {leadPara}
