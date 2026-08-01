@@ -4052,6 +4052,20 @@ export default function AnalysisDetail() {
       </div>
       </div>
 
+      {/* ── 주가 차트 (헤더 바로 아래) ── */}
+      <div className="rounded-2xl bg-card overflow-hidden print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
+        <ErrorBoundary fallback={null}>
+          <StockChart
+            ticker={analysis.ticker}
+            companyName={analysis.companyName}
+            companyNameEn={analysis.englishName}
+            currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
+            isEn={isEn}
+            validatedTargetPrice={(analysis as any).targetPrice ?? null}
+          />
+        </ErrorBoundary>
+      </div>
+
       {/* ── 분석 파이프라인 미니 진행바 ── */}
       {!isComplete && !isError && (
         <div className="print:hidden flex items-center gap-3 px-1">
@@ -4220,23 +4234,7 @@ export default function AnalysisDetail() {
                 </div>
               ) : null}
 
-              {/* 주가 흐름 */}
-              {(isComplete || !!compStep) && (
-                <div className="px-5 sm:px-6 py-5">
-                  <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-3">
-                    {isEn ? "Price action" : "주가 흐름"}
-                  </p>
-                  <ErrorBoundary fallback={null}>
-                    <StockChart
-                      ticker={analysis.ticker}
-                      companyName={analysis.companyName}
-                      currency={currency}
-                      isEn={isEn}
-                      validatedTargetPrice={(analysis as any).targetPrice ?? null}
-                    />
-                  </ErrorBoundary>
-                </div>
-              )}
+              {/* 주가 흐름 — 상단에 이미 표시되므로 이 섹션에서는 생략 */}
             </div>
           </NarrativeSectionBlock>
           </motion.div>
