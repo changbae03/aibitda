@@ -2603,14 +2603,25 @@ function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
 
   const sectionParts = raw.split(/\n(?=## )/).filter((s: string) => s.trim().startsWith("##"));
 
-  const LENS_STYLES = [
-    { border: "border-indigo-400/50", bg: "bg-indigo-500/[0.04]", badge: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
-    { border: "border-sky-400/50",    bg: "bg-sky-500/[0.04]",    badge: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-    { border: "border-violet-400/50", bg: "bg-violet-500/[0.04]", badge: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-    { border: "border-amber-400/50",  bg: "bg-amber-500/[0.04]",  badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-    { border: "border-orange-400/50", bg: "bg-orange-500/[0.04]", badge: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
-    { border: "border-emerald-400/50",bg: "bg-emerald-500/[0.04]",badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  // 렌즈별 색상 (왼쪽 컬러 바 + 배지)
+  const LENS_COLORS = [
+    { bar: "#6366f1", bg: "bg-indigo-500/[0.04]",  border: "border-indigo-200/60 dark:border-indigo-800/40",  num: "text-indigo-400" },
+    { bar: "#0ea5e9", bg: "bg-sky-500/[0.04]",     border: "border-sky-200/60 dark:border-sky-800/40",        num: "text-sky-400" },
+    { bar: "#8b5cf6", bg: "bg-violet-500/[0.04]",  border: "border-violet-200/60 dark:border-violet-800/40",  num: "text-violet-400" },
+    { bar: "#f59e0b", bg: "bg-amber-500/[0.04]",   border: "border-amber-200/60 dark:border-amber-800/40",    num: "text-amber-400" },
+    { bar: "#f97316", bg: "bg-orange-500/[0.04]",  border: "border-orange-200/60 dark:border-orange-800/40",  num: "text-orange-400" },
+    { bar: "#10b981", bg: "bg-emerald-500/[0.04]", border: "border-emerald-200/60 dark:border-emerald-800/40",num: "text-emerald-400" },
   ];
+
+  // 버딕트 키워드 → 색상
+  const verdictColor = (v?: string) => {
+    if (!v) return { text: "text-muted-foreground", bg: "bg-muted/60" };
+    const pos = /순풍|건재|양호|긍정|강한|우호|상승|우세|견고|Positive|Strong|Favorable|Tailwind/i.test(v);
+    const neg = /역풍|취약|부정|위험|하락|우려|약세|Negative|Weak|Risk|Headwind/i.test(v);
+    if (pos) return { text: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10" };
+    if (neg) return { text: "text-rose-600 dark:text-rose-400",    bg: "bg-rose-500/10" };
+    return   { text: "text-amber-700 dark:text-amber-400",          bg: "bg-amber-500/10" };
+  };
 
   const parsed = sectionParts.map((section: string, i: number) => {
     const lines = section.split("\n");
@@ -2620,7 +2631,7 @@ function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
     const verdict = verdictLine?.replace(/^→\s*\*?\*?/, "").replace(/\*?\*?$/, "").trim();
     const bodyLines = lines.slice(1, verdictIdx >= 0 ? verdictIdx : undefined);
     const body = bodyLines.join("\n").trim();
-    return { header, body, verdict, style: LENS_STYLES[i % LENS_STYLES.length] };
+    return { header, body, verdict, color: LENS_COLORS[i % LENS_COLORS.length] };
   });
 
   if (parsed.length === 0) {
@@ -2629,21 +2640,44 @@ function ThesisView({ step, isEn }: { step: any; isEn: boolean }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {parsed.map((lens: { header: string; body: string; verdict?: string; style: typeof LENS_STYLES[0] }, i: number) => (
-        <div key={i} className={`rounded-[var(--radius)] border ${lens.style.border} ${lens.style.bg} p-4 flex flex-col gap-2.5`}>
-          <p className="text-[13.5px] font-bold text-foreground leading-snug">{lens.header}</p>
-          {lens.body && (
-            <p className="text-[12.5px] leading-[1.85] text-foreground/70 flex-1">{lens.body}</p>
-          )}
-          {lens.verdict && (
-            <div className="pt-1.5 border-t border-border/25">
-              <span className={`inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full ${lens.style.badge}`}>
-                {lens.verdict}
-              </span>
+      {parsed.map((lens, i) => {
+        const vc = verdictColor(lens.verdict);
+        return (
+          <div
+            key={i}
+            className={`rounded-[var(--radius)] border ${lens.color.border} ${lens.color.bg} overflow-hidden flex flex-col`}
+          >
+            {/* 왼쪽 컬러 바 + 본문 */}
+            <div className="flex flex-1">
+              {/* 왼쪽 컬러 바 */}
+              <div className="w-[3px] shrink-0 rounded-l-[var(--radius)]" style={{ backgroundColor: lens.color.bar }} />
+
+              <div className="flex-1 p-4 flex flex-col gap-2.5">
+                {/* 렌즈 번호 + 제목 */}
+                <div className="flex items-start gap-2.5">
+                  <span className={`text-[10px] font-black tabular-nums mt-0.5 ${lens.color.num} shrink-0`}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <p className="text-[13.5px] font-bold text-foreground leading-snug">{lens.header}</p>
+                </div>
+
+                {/* 본문 */}
+                {lens.body && (
+                  <p className="text-[12.5px] leading-[1.85] text-foreground/65 flex-1 pl-[22px]">{lens.body}</p>
+                )}
+
+                {/* 버딕트 */}
+                {lens.verdict && (
+                  <div className="pt-2 border-t border-border/25 flex items-center gap-2 pl-[22px]">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: lens.color.bar }} />
+                    <span className={`text-[11.5px] font-semibold ${vc.text}`}>{lens.verdict}</span>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -4061,6 +4095,7 @@ export default function AnalysisDetail() {
             currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
             isEn={isEn}
             validatedTargetPrice={(analysis as any).targetPrice ?? null}
+            hideHeader
           />
         </ErrorBoundary>
       </div>
