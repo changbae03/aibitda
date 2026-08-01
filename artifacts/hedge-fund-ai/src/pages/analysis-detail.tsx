@@ -3210,16 +3210,22 @@ function NarrativeStepContent({
         )}
         {digests.length > 0 && (
           <div className="divide-y divide-border/30">
-            {digests.map((d, i) => (
-              <div key={i} className={i === 0 ? "pb-4" : "py-4"}>
-                <p className="text-[10.5px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-2">
-                  {d.header}
-                </p>
-                <div className="prose-narrative text-[13.5px] leading-relaxed">
-                  <MdBlock src={d.body} isEn={isEn} />
+            {digests.map((d, i) => {
+              const cleanHeader = d.header
+                .replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, "")
+                .trim() || d.header;
+              return (
+                <div key={i} className={i === 0 ? "pb-4" : "py-4"}>
+                  <h3 className="flex items-center gap-2 text-[13px] font-semibold text-foreground/80 mb-2 mt-0">
+                    <span className="w-[2px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
+                    {cleanHeader}
+                  </h3>
+                  <div className="prose-narrative text-[13.5px] leading-relaxed">
+                    <MdBlock src={d.body} isEn={isEn} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -2712,9 +2712,9 @@ ${companyName}이 속한 산업을 아래 3개 섹션으로 분석하세요.
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Catalyst & Smart Money Analyst입니다.
 역할: 이 기업의 단기·중기 주가를 움직일 촉매(Catalyst)와 수급(Smart Money 동향)을 파악합니다.
 핵심 이슈를 중심으로 시장이 아직 반영하지 못한 이벤트와 기관 수급 변화를 분석합니다.`,
-      userPrompt: `\${baseContextFull}\${previousContext}
+      userPrompt: `${baseContextFull}${previousContext}
 
-\${companyName}의 투자 촉매와 수급을 아래 3개 섹션으로 분석하세요.
+${companyName}의 투자 촉매와 수급을 아래 3개 섹션으로 분석하세요.
 
 ## ⚡ 핵심 촉매 (3–6개월 내)
 
