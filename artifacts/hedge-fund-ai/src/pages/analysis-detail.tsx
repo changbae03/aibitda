@@ -342,6 +342,18 @@ function RoadmapTbody({ children }: { children: React.ReactNode }) {
   const isRoadmap = labels.some((l) => ROADMAP_GROUPS[l] != null);
 
   if (!isRoadmap) {
+    // 빈 테이블(행 없음): 데이터 없음 메시지 행 표시
+    if (rows.length === 0) {
+      return (
+        <tbody>
+          <tr>
+            <td colSpan={99} className="px-3 py-4 text-center text-[13px] text-muted-foreground/50 italic">
+              데이터 없음
+            </td>
+          </tr>
+        </tbody>
+      );
+    }
     return (
       <tbody>
         {rows.map((row: any, i) => {
