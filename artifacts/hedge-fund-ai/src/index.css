@@ -29,33 +29,36 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-card: var(--shadow-card);
+
   --animate-fade-in: fade-in 0.35s ease-out;
   --animate-slide-up: slide-up 0.4s ease-out;
 }
 
 :root {
-  /* Richgo 스타일 — 쿨 그레이 배경, 흰 카드, 높은 대비 */
-  --background: 220 20% 96%;
-  --foreground: 220 25% 8%;
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
   --card: 0 0% 100%;
-  --card-foreground: 220 25% 8%;
+  --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 25% 8%;
+  --popover-foreground: 222 47% 11%;
 
-  --primary: 220 25% 8%;
+  --primary: 7 100% 74%;          /* 코랄 #FF8A7A */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 16% 95%;
-  --secondary-foreground: 220 18% 22%;
+  --secondary: 220 14% 94%;
+  --secondary-foreground: 10 30% 20%;
 
-  /* muted: 쿨 라이트 그레이, foreground 충분히 진하게 */
-  --muted: 220 14% 95%;
-  --muted-foreground: 220 10% 38%;
+  --muted: 220 14% 94%;
+  --muted-foreground: 220 15% 45%;
 
-  --accent: 220 12% 93%;
-  --accent-foreground: 220 25% 8%;
+  --accent: 7 80% 95%;
+  --accent-foreground: 7 60% 40%;
 
-  --destructive: 0 72% 51%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
   --success: 142 71% 38%;
@@ -64,35 +67,39 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  /* 보더: 얇고 선명한 쿨 그레이 */
-  --border: 220 12% 88%;
-  --input: 220 12% 92%;
-  --ring: 220 25% 8%;
+  --border: 220 15% 88%;
+  --input: 220 15% 88%;
+  --ring: 7 100% 74%;
 
-  --radius: 0.5rem;
+  --radius: 0.875rem; /* 14px */
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-card: var(--shadow-sm);
 }
 
 .dark {
-  --background: 224 30% 7%;
-  --foreground: 210 18% 91%;
-  --card: 224 28% 10%;
-  --card-foreground: 210 18% 91%;
-  --popover: 224 28% 10%;
-  --popover-foreground: 210 18% 91%;
+  --background: 220 15% 10%;
+  --foreground: 220 15% 90%;
+  --card: 220 15% 12%;
+  --card-foreground: 220 15% 90%;
+  --popover: 220 15% 12%;
+  --popover-foreground: 220 15% 90%;
 
-  --primary: 210 18% 91%;
-  --primary-foreground: 224 30% 7%;
+  --primary: 7 90% 70%;           /* 다크모드 코랄 (살짝 소프트) */
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 224 22% 16%;
-  --secondary-foreground: 210 18% 78%;
+  --secondary: 220 15% 18%;
+  --secondary-foreground: 220 15% 90%;
 
-  --muted: 224 22% 13%;
-  --muted-foreground: 215 14% 48%;
+  --muted: 220 15% 16%;
+  --muted-foreground: 220 15% 65%;
 
-  --accent: 224 22% 16%;
-  --accent-foreground: 210 18% 91%;
+  --accent: 7 40% 20%;
+  --accent-foreground: 7 90% 70%;
 
-  --destructive: 0 72% 51%;
+  --destructive: 0 62% 30%;
   --destructive-foreground: 0 0% 100%;
 
   --success: 142 71% 38%;
@@ -101,9 +108,14 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  --border: 224 16% 18%;
-  --input: 224 16% 16%;
-  --ring: 210 18% 68%;
+  --border: 220 15% 20%;
+  --input: 220 15% 20%;
+  --ring: 7 90% 70%;
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-card: var(--shadow-sm);
 }
 
 @layer base {
@@ -112,6 +124,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   html {
+    font-size: 16px;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     overflow-x: hidden;
@@ -119,7 +132,7 @@
     scrollbar-gutter: stable;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased text-[15px];
     font-family: var(--font-sans);
     font-feature-settings: 'kern' 1;
     -webkit-font-smoothing: antialiased;
@@ -246,26 +259,24 @@ body {
 .markdown-body li > p:last-child { margin-bottom: 0; }
 .markdown-body ol > li { list-style: decimal; padding-left: 0.3em; }
 
+/* markdown-body h2/h3 — MD_BODY_COMPONENTS의 커스텀 컴포넌트가 처리하므로 fallback만 */
 .markdown-body h2 {
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: #111827;
-  margin-top: 2.4rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1.5px solid #e5e7eb;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
 }
 .markdown-body h2:first-child { margin-top: 0; }
 
 .markdown-body h3 {
-  font-size: 0.875rem;
-  font-weight: 650;
-  color: #1d4ed8;
-  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.8);
+  margin-top: 1.25rem;
   margin-bottom: 0.5rem;
-  padding-left: 0.7rem;
-  border-left: 2.5px solid #1d4ed8;
 }
 .markdown-body h4 {
   font-size: 0.75rem;
@@ -315,12 +326,10 @@ body {
   color: hsl(var(--foreground));
 }
 .dark .markdown-body h2 {
-  color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground) / 0.6);
 }
 .dark .markdown-body h3 {
-  color: #60a5fa;
-  border-left-color: #60a5fa;
+  color: hsl(var(--foreground) / 0.8);
 }
 .dark .markdown-body h4 {
   color: hsl(var(--foreground) / 0.8);
@@ -363,35 +372,37 @@ body {
 }
 
 /* ── 내러티브 산문 영역 ── */
-.prose-narrative .markdown-body p {
-  font-size: 14.5px;
-  line-height: 1.95;
-  color: hsl(var(--foreground) / 0.88);
-  margin-bottom: 0.9em;
+.prose-narrative p {
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: hsl(var(--foreground) / 0.9);
+  margin-bottom: 1.2rem;
 }
-.prose-narrative .markdown-body h2 {
-  font-size: 14px;
+/* prose-narrative h2/h3 — MD_BODY_COMPONENTS 커스텀 컴포넌트가 처리, CSS는 fallback */
+.prose-narrative h2 {
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  margin-top: 1.6em;
-  margin-bottom: 0.5em;
-  color: hsl(var(--foreground));
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
 }
-.prose-narrative .markdown-body h3 {
-  font-size: 13px;
-  font-weight: 700;
-  margin-top: 1.3em;
-  margin-bottom: 0.4em;
+.prose-narrative h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.8);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.prose-narrative ul li,
+.prose-narrative ol li {
+  font-size: 0.9375rem;
+  line-height: 1.8;
   color: hsl(var(--foreground) / 0.9);
 }
-.prose-narrative .markdown-body ul li,
-.prose-narrative .markdown-body ol li {
-  font-size: 14px;
-  line-height: 1.85;
-  color: hsl(var(--foreground) / 0.85);
-}
-.prose-narrative .markdown-body table {
-  font-size: 13px;
+.prose-narrative table {
+  font-size: 0.875rem;
 }
 
 /* ── 인쇄 / PDF ── */

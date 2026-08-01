@@ -208,7 +208,7 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-950/25 text-amber-300 text-[12px] font-medium"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius)] border border-amber-500/40 bg-amber-950/25 text-amber-300 text-[12px] font-medium"
       >
         <Zap className="w-3 h-3 shrink-0" />
         <span>{isEn ? "All credits used · Come back tomorrow" : "오늘 크레딧 소진 · 내일 다시 이용해주세요"}</span>
@@ -526,10 +526,10 @@ export default function NewAnalysis() {
         className="w-full max-w-xl flex flex-col gap-10"
       >
         {/* Headline */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <h1
-            className="text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.1]"
-            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
+            className="text-[2.75rem] md:text-[3.5rem] font-bold tracking-tight text-foreground leading-[1.15]"
+            style={{ wordBreak: 'keep-all' }}
           >
             {isEn ? (
               <>Reading between<br />the lines of<br />great companies.</>
@@ -537,7 +537,7 @@ export default function NewAnalysis() {
               <>애빛다, 기업의<br />행간읽기</>
             )}
           </h1>
-          <p className="text-sm text-muted-foreground leading-relaxed break-keep">
+          <p className="text-[15px] text-muted-foreground/80 leading-relaxed break-keep font-medium">
             {isEn ? (
               <>Which stock would you like to analyze?<br className="hidden sm:block" />Enter a ticker or company name to start.</>
             ) : (
@@ -578,8 +578,7 @@ export default function NewAnalysis() {
             <button
               type="submit"
               disabled={isPending || !ticker.trim()}
-              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: "#FF8A7A", color: "white" }}
+              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius)] text-[13px] font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
             >
               {isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -623,7 +622,7 @@ export default function NewAnalysis() {
                 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.12 }}
-                className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl z-50 overflow-hidden"
+                className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-[var(--radius)] z-50 overflow-hidden"
               >
                 {/* 드롭다운 헤더 */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
@@ -794,21 +793,21 @@ export default function NewAnalysis() {
                   const vm = a.verdict ? VERDICT_MINI[a.verdict] : null;
                   const label = dn(a.companyName, a.englishName, isEn) || a.ticker;
                   return (
-                    <button
+                      <button
                       key={a.id}
                       onClick={() => a.id ? setLocation(`/analysis/${a.id}`) : showConfirm(a.ticker, label)}
                       disabled={isPending}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-card/80 hover:border-primary/30 hover:bg-primary/5 transition-all disabled:opacity-40 group text-left"
+                      className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-border/60 bg-card shadow-[var(--shadow-card)] hover:border-primary/30 hover:shadow-md transition-all disabled:opacity-40 group text-left"
                     >
-                      <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <span className="font-mono text-[9px] font-bold text-muted-foreground/60 leading-none">{a.ticker.slice(0, 4)}</span>
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <span className="font-mono text-[10px] font-bold text-muted-foreground/60 leading-none">{a.ticker.slice(0, 4)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="text-[13px] font-semibold text-foreground group-hover:text-primary transition-colors truncate block">{label}</span>
+                        <span className="text-[14px] font-semibold text-foreground group-hover:text-primary transition-colors truncate block">{label}</span>
                         <span className="text-[11px] text-muted-foreground/50 font-mono">{a.ticker}</span>
                       </div>
                       {vm && <span className={cn("flex items-center shrink-0", vm.color)}>{vm.icon}</span>}
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
                     </button>
                   );
                 })}
@@ -831,7 +830,7 @@ export default function NewAnalysis() {
                 <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                 <span className="text-[11px] font-semibold text-muted-foreground/70 tracking-wide">{isEn ? "Trending" : "많이 찾는 종목"}</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 {trending.map((t, idx) => (
                   <motion.button
                     key={t.ticker}
@@ -839,23 +838,25 @@ export default function NewAnalysis() {
                     onClick={() => showConfirm(t.ticker, dn(t.companyName, t.englishName, isEn) || t.ticker)}
                     disabled={isPending}
                     className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-150 disabled:opacity-40 group",
+                      "flex items-center gap-2 px-3.5 py-2.5 rounded-[var(--radius)] border shadow-[var(--shadow-card)] transition-all duration-150 disabled:opacity-40 group text-left",
                       idx === 0
-                        ? "bg-primary/8 border-primary/30 hover:bg-primary/12 hover:border-primary/50"
-                        : "bg-card border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                        ? "bg-primary/5 border-primary/20 hover:bg-primary/10 hover:border-primary/40"
+                        : "bg-card border-border/60 hover:border-primary/30 hover:shadow-md"
                     )}
                   >
                     {idx < 3 && (
                       <span className={cn(
-                        "font-bold text-[9px] tabular-nums leading-none",
-                        idx === 0 ? "text-primary/70" : "text-muted-foreground/40"
+                        "font-bold text-[11px] tabular-nums leading-none shrink-0 w-3",
+                        idx === 0 ? "text-primary/80" : "text-muted-foreground/40"
                       )}>{idx + 1}</span>
                     )}
-                    <span className={cn(
-                      "text-[12.5px] font-medium transition-colors",
-                      idx === 0 ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
-                    )}>{dn(t.companyName, t.englishName, isEn) || t.ticker}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground/40">{t.ticker}</span>
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className={cn(
+                        "text-[13px] font-semibold truncate transition-colors",
+                        idx === 0 ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
+                      )}>{dn(t.companyName, t.englishName, isEn) || t.ticker}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground/50">{t.ticker}</span>
+                    </div>
                   </motion.button>
                 ))}
               </div>
@@ -882,10 +883,10 @@ export default function NewAnalysis() {
                   key={c.ticker}
                   onClick={() => showConfirm(c.ticker, c.companyName ?? c.ticker)}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius)] border border-border/60 bg-card shadow-[var(--shadow-card)] text-[12.5px] text-muted-foreground hover:border-primary/40 hover:text-foreground hover:shadow-md transition-all disabled:opacity-40"
                 >
-                  <span className="font-mono text-[11px] text-muted-foreground/40">{c.ticker}</span>
-                  <span className="truncate max-w-[120px]">{c.companyName}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground/50">{c.ticker}</span>
+                  <span className="truncate font-medium max-w-[120px] text-foreground/80">{c.companyName}</span>
                 </button>
               ))}
             </div>
@@ -929,7 +930,7 @@ export default function NewAnalysis() {
             </div>
 
             {/* 혜택 목록 */}
-            <div className="rounded-xl bg-muted/50 border border-border/40 px-4 py-3.5 mb-5 space-y-2">
+            <div className="rounded-[var(--radius)] bg-muted/50 border border-border/40 px-4 py-3.5 mb-5 space-y-2">
               {[
                 "매일 무료 분석 크레딧 제공",
                 "분석 기록 저장 및 히스토리",
@@ -949,13 +950,13 @@ export default function NewAnalysis() {
             <div className="flex gap-2.5">
               <button
                 onClick={() => setShowAnonGate(false)}
-                className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+                className="flex-1 py-3 rounded-[var(--radius)] border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
               >
                 닫기
               </button>
               <a
                 href="/login"
-                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                className="flex-1 py-3 rounded-[var(--radius)] text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
                 style={{ backgroundColor: "#FF8A7A" }}
               >
                 <LogIn className="w-4 h-4" />
@@ -985,7 +986,7 @@ export default function NewAnalysis() {
           >
             {/* 헤더 */}
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <div className="w-11 h-11 rounded-[var(--radius)] bg-primary/10 flex items-center justify-center shrink-0">
                 <Building2 className="w-5 h-5 text-primary" />
               </div>
               <div className="min-w-0">
@@ -996,7 +997,7 @@ export default function NewAnalysis() {
             </div>
 
             {/* 설명 */}
-            <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
+            <div className="rounded-[var(--radius)] bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
               {isEn ? (
                 <>
                   <p className="text-[13.5px] text-foreground/85 leading-relaxed">
@@ -1029,7 +1030,7 @@ export default function NewAnalysis() {
 
             {/* 비로그인 → 적정주가 로그인 유도 */}
             {user === null && (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 mb-4 flex items-center gap-3">
+              <div className="rounded-[var(--radius)] border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 mb-4 flex items-center gap-3">
                 <Lock className="w-4 h-4 text-amber-500 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[12.5px] font-semibold text-foreground/80 leading-snug">
@@ -1054,14 +1055,14 @@ export default function NewAnalysis() {
             <div className="flex gap-2.5">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+                className="flex-1 py-3 rounded-[var(--radius)] border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
               >
                 {isEn ? "Cancel" : "취소"}
               </button>
               <button
                 onClick={() => { setConfirmModal(null); handleSubmit(confirmModal.ticker); }}
                 disabled={isPending}
-                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-[var(--radius)] text-[14px] font-bold text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                 style={{ backgroundColor: "#FF8A7A" }}
               >
                 {isPending ? (

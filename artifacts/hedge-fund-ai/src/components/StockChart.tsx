@@ -73,6 +73,8 @@ interface StockChartProps {
   currency?: "KRW" | "USD";
   isEn?: boolean;
   priceScenario?: PriceScenario;
+  /** 분석 페이지처럼 상단 헤더(회사명·현재가·52주)가 이미 있을 때 차트 내부 헤더를 숨김 */
+  hideHeader?: boolean;
 }
 
 const PERIOD_OPTIONS: { value: Period; label: string; labelEn: string }[] = [
@@ -222,7 +224,7 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
 
 const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
 
-export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, validatedTargetPrice, events = [], currency = "KRW", isEn = false, priceScenario }: StockChartProps) {
+export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, validatedTargetPrice, events = [], currency = "KRW", isEn = false, priceScenario, hideHeader = false }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showEvents, setShowEvents] = useState(true);
@@ -366,8 +368,8 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
 
   return (
     <div className="bg-background border border-border rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Header — hideHeader=true 시 숨김 (상위 컴포넌트에서 이미 회사명·가격 표시 중) */}
+      {!hideHeader && <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-foreground">{isEn ? (companyNameEn ?? ticker) : (companyName ?? ticker)}</span>
@@ -451,7 +453,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Controls */}
       <div className="px-4 py-2 border-b border-border flex gap-1.5 items-center overflow-x-auto scrollbar-none bg-muted/30">

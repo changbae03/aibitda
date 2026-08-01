@@ -1153,7 +1153,9 @@ async function executeStep(
 
     const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
     const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
-    const isLast = stepKey === "investment_strategy";
+    // 실제 마지막 스텝(checklist)에서만 completed 처리 — investment_strategy를 isLast로 쓰면
+    // 이후 investment_thesis · checklist 가 파이프라인 루프에서 실행 안 됨
+    const isLast = stepKey === STEP_ORDER[STEP_ORDER.length - 1];
 
     if (isLast) {
       // investment_strategy는 이제 마크다운 산문 — JSON 파싱 불필요
