@@ -6567,6 +6567,36 @@ const MD_BODY_COMPONENTS = {
   h3: ({ children }: any) => (
     <h3 className="text-[16px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
   ),
+  // h2 — 섹션 소제목: 이모지 제거 후 소형 레이블 스타일로 통일
+  h2: ({ children }: any) => {
+    const text = typeof children === "string"
+      ? children
+      : Array.isArray(children) ? children.map((c: any) => typeof c === "string" ? c : "").join("") : String(children ?? "");
+    // 앞쪽 이모지 제거
+    const clean = text.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, "").trim();
+    return (
+      <div className="flex items-center gap-2 mt-7 mb-3 first:mt-0">
+        <span className="h-px flex-1 bg-border/50" />
+        <h2 className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-muted-foreground/60 shrink-0">
+          {clean || text}
+        </h2>
+        <span className="h-px flex-1 bg-border/50" />
+      </div>
+    );
+  },
+  // h3 — 소단원: 본문보다 살짝 강조, 왼쪽 액센트 라인
+  h3: ({ children }: any) => {
+    const text = typeof children === "string"
+      ? children
+      : Array.isArray(children) ? children.map((c: any) => typeof c === "string" ? c : "").join("") : String(children ?? "");
+    const clean = text.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, "").trim();
+    return (
+      <h3 className="flex items-center gap-2 text-[13px] font-semibold text-foreground/80 mt-5 mb-2">
+        <span className="w-[2px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
+        {clean || text}
+      </h3>
+    );
+  },
   h4: ({ children }: any) => (
     <h4 className="text-[15px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
   ),

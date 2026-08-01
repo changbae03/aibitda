@@ -259,26 +259,24 @@ body {
 .markdown-body li > p:last-child { margin-bottom: 0; }
 .markdown-body ol > li { list-style: decimal; padding-left: 0.3em; }
 
+/* markdown-body h2/h3 — MD_BODY_COMPONENTS의 커스텀 컴포넌트가 처리하므로 fallback만 */
 .markdown-body h2 {
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: #111827;
-  margin-top: 2.4rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1.5px solid #e5e7eb;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
 }
 .markdown-body h2:first-child { margin-top: 0; }
 
 .markdown-body h3 {
-  font-size: 0.875rem;
-  font-weight: 650;
-  color: #1d4ed8;
-  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.8);
+  margin-top: 1.25rem;
   margin-bottom: 0.5rem;
-  padding-left: 0.7rem;
-  border-left: 2.5px solid #1d4ed8;
 }
 .markdown-body h4 {
   font-size: 0.75rem;
@@ -328,12 +326,10 @@ body {
   color: hsl(var(--foreground));
 }
 .dark .markdown-body h2 {
-  color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground) / 0.6);
 }
 .dark .markdown-body h3 {
-  color: #60a5fa;
-  border-left-color: #60a5fa;
+  color: hsl(var(--foreground) / 0.8);
 }
 .dark .markdown-body h4 {
   color: hsl(var(--foreground) / 0.8);
@@ -382,22 +378,22 @@ body {
   color: hsl(var(--foreground) / 0.9);
   margin-bottom: 1.2rem;
 }
+/* prose-narrative h2/h3 — MD_BODY_COMPONENTS 커스텀 컴포넌트가 처리, CSS는 fallback */
 .prose-narrative h2 {
-  font-size: 1.125rem;
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 2rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin-top: 1.75rem;
   margin-bottom: 0.75rem;
-  color: hsl(var(--foreground));
-  border-bottom: 1px solid hsl(var(--border) / 0.6);
-  padding-bottom: 0.5rem;
 }
 .prose-narrative h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.8);
+  margin-top: 1.25rem;
   margin-bottom: 0.5rem;
-  color: hsl(var(--foreground) / 0.9);
 }
 .prose-narrative ul li,
 .prose-narrative ol li {
