@@ -116,6 +116,75 @@ export function computeWorkingCapital(rows: DartRow[], bsnsYear: number): Workin
   return out.sort((a, b) => a.year - b.year);
 }
 
+// ─── CapEx(설비투자) — 같은 전체 재무제표 rows에서 파생 ────────────────────────
+//
+// 현금흐름표의 유형·무형자산 취득이 CapEx다. 투자 방향(확장 vs 수확 vs 방어)을
+// 읽는 핵심 지표인데, 예전엔 프롬프트가 값을 안 줘서 "공시 미확인"으로 비어 있었다.
+
+const CAPEX_IDS: readonly string[] = [
+  "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+  "PurchaseOfPropertyPlantAndEquipment",
+  "PurchaseOfIntangibleAssetsClassifiedAsInvestingActivities",
+  "PurchaseOfIntangibleAssets",
+];
+const CAPEX_NAMES: readonly string[] = ["유형자산의취득", "무형자산의취득", "유형자산취득", "무형자산취득"];
+
+export interface CapexYear {
+  year: number;
+  capex: number | null;          // 유형+무형 취득 합 (원)
+  capexToRevenue: number | null; // CapEx ÷ 매출액 (%)
+}
+
+/** 한 term에서 CapEx(유형+무형 취득) 합을 구한다. 없으면 null. */
+function pickCapex(rows: DartRow[], term: Term): number | null {
+  let sum = 0, found = false;
+  const norm = (s: unknown) => String(s ?? "").replace(/\s/g, "");
+  for (const r of rows) {
+    const id = shortId(r.account_id);
+    const nm = norm(r.account_nm);
+    if (CAPEX_IDS.includes(id) || CAPEX_NAMES.includes(nm)) {
+      const v = Math.abs(amount(r[term])); // 유출이라 음수로 오기도 한다
+      if (v > 0) { sum += v; found = true; }
+    }
+  }
+  return found ? sum : null;
+}
+
+export function computeCapex(rows: DartRow[], bsnsYear: number): CapexYear[] {
+  const terms: Array<[Term, number]> = [
+    ["thstrm_amount", bsnsYear],
+    ["frmtrm_amount", bsnsYear - 1],
+    ["bfefrmtrm_amount", bsnsYear - 2],
+  ];
+  const out: CapexYear[] = [];
+  for (const [term, year] of terms) {
+    const capex = pickCapex(rows, term);
+    if (capex == null) continue;
+    const revenue = pick(rows, "revenue", term);
+    const capexToRevenue = revenue && revenue > 0 ? (capex / revenue) * 100 : null;
+    out.push({ year, capex, capexToRevenue });
+  }
+  return out.sort((a, b) => a.year - b.year);
+}
+
+/** CapEx 표. 억원 단위. 계산 가능한 해가 없으면 빈 문자열. */
+export function renderCapex(years: CapexYear[]): string {
+  const usable = years.filter(y => y.capex != null);
+  if (usable.length === 0) return "";
+  const 억 = (v: number | null) => (v == null ? "—" : Math.round(v / 1e8).toLocaleString());
+  const pct = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
+  const lines = [
+    "",
+    "[🏗️ CapEx(설비투자) — 서버가 현금흐름표에서 계산 (유형+무형자산 취득)]",
+    "⚠️ 아래는 코드가 직접 뽑은 값입니다. 이 값으로 투자 방향(확장 vs 수확 vs 방어)을 해석하세요.",
+    "",
+    "| 연도 | CapEx(억원) | CapEx/매출 |",
+    "|---|---|---|",
+  ];
+  for (const y of usable) lines.push(`| ${y.year}년 | ${억(y.capex)} | ${pct(y.capexToRevenue)} |`);
+  return lines.join("\n");
+}
+
 const r0 = (v: number | null) => (v == null ? "—" : Math.round(v).toLocaleString());
 
 /**

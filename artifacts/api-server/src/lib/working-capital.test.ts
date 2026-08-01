@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computeWorkingCapital, renderWorkingCapital, type DartRow } from "./working-capital";
+import {
+  computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, type DartRow,
+} from "./working-capital";
 
 /** SK하이닉스 2025 전체 재무제표에서 운전자본 계정만 옮긴 픽스처(억원 아님, 원 단위) */
 const HYNIX: DartRow[] = [
@@ -66,5 +68,38 @@ describe("계산 불가·잡음 방지", () => {
 
   it("변화 없이 계산 가능한 해가 없으면 렌더는 빈 문자열", () => {
     expect(renderWorkingCapital([])).toBe("");
+  });
+});
+
+describe("CapEx를 현금흐름표에서 계산한다", () => {
+  const CF: DartRow[] = [
+    { sj_div: "CF", account_id: "ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+      account_nm: "유형자산의 취득", thstrm_amount: "275189", frmtrm_amount: "159455", bfefrmtrm_amount: "83251" },
+    { sj_div: "CF", account_id: "ifrs-full_PurchaseOfIntangibleAssetsClassifiedAsInvestingActivities",
+      account_nm: "무형자산의 취득", thstrm_amount: "10604", frmtrm_amount: "7171", bfefrmtrm_amount: "4547" },
+    { sj_div: "CIS", account_id: "ifrs-full_Revenue", account_nm: "매출액",
+      thstrm_amount: "971467", frmtrm_amount: "661930", bfefrmtrm_amount: "327657" },
+  ];
+
+  it("유형+무형 취득을 합해 3개년 CapEx를 낸다", () => {
+    const cx = computeCapex(CF, 2025);
+    expect(cx.map(y => y.year)).toEqual([2023, 2024, 2025]);
+    expect(cx.find(y => y.year === 2025)!.capex).toBe(275189 + 10604);
+  });
+
+  it("CapEx/매출 비율을 계산한다", () => {
+    const y25 = computeCapex(CF, 2025).find(y => y.year === 2025)!;
+    // (285793 / 971467) * 100 = 29.4%
+    expect(y25.capexToRevenue!.toFixed(1)).toBe("29.4");
+  });
+
+  it("CapEx 계정이 없으면 빈 렌더", () => {
+    expect(renderCapex(computeCapex([{ sj_div: "CIS", account_nm: "매출액", thstrm_amount: "100" }], 2025))).toBe("");
+  });
+
+  it("현금 유출이 음수로 와도 절댓값으로 합산한다", () => {
+    const neg: DartRow[] = [{ sj_div: "CF", account_id: "ifrs-full_PurchaseOfPropertyPlantAndEquipment",
+      account_nm: "유형자산의 취득", thstrm_amount: "-50000" }];
+    expect(computeCapex(neg, 2025)[0]!.capex).toBe(50000);
   });
 });

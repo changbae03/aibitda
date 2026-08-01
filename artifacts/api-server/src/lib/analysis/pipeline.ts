@@ -22,7 +22,7 @@ import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBac
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
-import { computeWorkingCapital, renderWorkingCapital } from "../working-capital.js";
+import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -704,11 +704,11 @@ async function executeStep(
         try {
           const all = await fetchAnnualAllRows(analysis.ticker);
           if (all) {
+            // 같은 rows에서 CapEx(투자 방향)와 운전자본(현금 효율)을 함께 뽑는다.
+            const capex = renderCapex(computeCapex(all.rows, all.bsnsYear));
+            if (capex) { dartBlocks.push(capex); console.log(`[dart_report_analysis] CapEx 주입 (${all.bsnsYear})`); }
             const wc = renderWorkingCapital(computeWorkingCapital(all.rows, all.bsnsYear));
-            if (wc) {
-              dartBlocks.push(wc);
-              console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear} 기준)`);
-            }
+            if (wc) { dartBlocks.push(wc); console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear})`); }
           }
         } catch (e) {
           console.warn("[dart_report_analysis] 운전자본 계산 실패:", (e as Error)?.message?.slice(0, 80));
