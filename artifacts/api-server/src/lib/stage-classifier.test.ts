@@ -13,6 +13,12 @@ describe("2축 매트릭스 — 실체 × 기대", () => {
     expect(v.meta.stageNumber).toBe(3);
   });
 
+  it("초고성장(40%+)은 마진·운전자본이 삐끗해도 둔화로 눌리지 않는다 — NVDA 회귀", () => {
+    // 매출 +65%, 마진 -2%p, 운전자본 악화, 프리미엄 → 숫자 싸움이어야 한다(피크아웃 아님)
+    const v = classifyStage({ revGrowthPct: 65, opmDeltaPp: -2, capexTrend: "expanding", cccDeltaDays: 26, valuationPercentile: 65 });
+    expect(v.phase).toBe("numbers");
+  });
+
   it("실체 강함 + 할인 → 실체 확인(2)", () => {
     const v = classifyStage({ revGrowthPct: 40, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 30 });
     expect(v.phase).toBe("proving");
@@ -76,7 +82,7 @@ describe("조용한 판정을 만들지 않는다", () => {
 
   it("모든 기여가 근거로 남는다", () => {
     const r = scoreSubstance({ revGrowthPct: 90, capexTrend: "expanding" });
-    expect(r.reasons.some(x => x.includes("매출성장"))).toBe(true);
+    expect(r.reasons.some(x => x.includes("성장"))).toBe(true);
     expect(r.reasons.some(x => x.includes("설비투자 확대"))).toBe(true);
   });
 

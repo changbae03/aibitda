@@ -110,7 +110,10 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
 
   if (s.revGrowthPct != null) {
     const g = s.revGrowthPct;
-    if (g >= 20) add(25, `매출성장 ${g.toFixed(0)}%`);
+    // 초고성장(40%+)은 20%대 성장과 다른 신호다 — 상한을 하나 더 둬서 마진·운전자본
+    // 감점 하나에 "둔화"로 눌리지 않게 한다(NVDA 매출 +65%가 피크아웃으로 오분류되던 사례).
+    if (g >= 40) add(35, `초고성장 ${g.toFixed(0)}%`);
+    else if (g >= 20) add(25, `매출성장 ${g.toFixed(0)}%`);
     else if (g >= 10) add(12, `매출성장 ${g.toFixed(0)}%`);
     else if (g >= 0) add(3, `매출성장 ${g.toFixed(0)}%`);
     else if (g >= -15) add(-18, `매출역성장 ${g.toFixed(0)}%`);

@@ -48,6 +48,16 @@ async function getCikMap(): Promise<Map<string, number>> {
   return map;
 }
 
+/** ticker → CIK. 미국 재무(companyfacts) 수집에서 재사용한다. 없으면 null. */
+export async function getCik(ticker: string): Promise<number | null> {
+  try {
+    const map = await getCikMap();
+    return map.get(ticker.toUpperCase().split(".")[0]) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── DB 캐시 ────────────────────────────────────────────────────────────────
 
 let _tableReady = false;

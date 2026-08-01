@@ -584,6 +584,28 @@ export async function runMigrations() {
       );
       CREATE INDEX IF NOT EXISTS idx_stock_stage_verdict_ticker
         ON stock_stage_verdict (ticker, computed_at DESC);
+
+      -- 미국 종목 구조화 재무 — SEC EDGAR companyfacts(XBRL)에서 뽑은 연간 값.
+      -- 한국의 ticker_financials·dart_biz_reports에 대응하는 미국판 저장소다.
+      -- 회계연도(fy)별 한 행. 값은 USD, 큰 회사도 담기게 BIGINT.
+      CREATE TABLE IF NOT EXISTS us_financials (
+        ticker           TEXT NOT NULL,
+        fy               INTEGER NOT NULL,
+        revenue          BIGINT,
+        operating_income BIGINT,
+        net_income       BIGINT,
+        capex            BIGINT,
+        rnd              BIGINT,
+        inventory        BIGINT,
+        receivables      BIGINT,
+        payables         BIGINT,
+        cogs             BIGINT,
+        cik              INTEGER,
+        fetched_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        PRIMARY KEY (ticker, fy)
+      );
+      CREATE INDEX IF NOT EXISTS idx_us_financials_ticker
+        ON us_financials (ticker, fy DESC);
     `);
 
     // ── 종목별 정본 ─────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ import {
 } from "../stage-classifier.js";
 import { getSectorBand } from "../valuation/sector-bands.js";
 import { saveStageVerdict, getPriorStageScore } from "../stage-store.js";
+import { collectUSFinancials, usStageSignals } from "../us-financials.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -769,34 +770,47 @@ async function executeStep(
         } catch (e) {
           console.warn("[dart_report_analysis] 운전자본 계산 실패:", (e as Error)?.message?.slice(0, 80));
         }
+      }
 
-        // 사업 국면 판정 — 위에서 모은 신호를 2축 매트릭스에 넣는다.
-        // 실체(펀더멘털)와 기대(밴드 분위)를 조합해 ①~⑤·쇠퇴·턴어라운드를 찍는다.
+      // 미국: SEC EDGAR XBRL(companyfacts)에서 같은 신호를 뽑는다 — DART의 미국판.
+      // 매출성장·OPM추세·CapEx방향·CCC까지 나와 한국과 동일한 신호 밀도다.
+      if (!isKoreanTicker(analysis.ticker)) {
         try {
-          stageSig.segmentsAdded = segCounts.added;
-          stageSig.segmentsDropped = segCounts.dropped;
-          // 기대 축: PER·PBR을 업종 밴드 분위(0~100)로 환산
-          const master = await pool
-            .query<{ per: number | null; pbr: number | null; industry: string | null; kis_industry: string | null }>(
-              `SELECT per, pbr, industry, kis_industry FROM stocks WHERE ticker = $1 LIMIT 1`,
-              [analysis.ticker])
-            .then(r => r.rows[0] ?? null).catch(() => null);
-          if (master) {
-            const sec = classifySector(master.industry ?? analysis.industry ?? "", "KR", master.kis_industry);
-            const band = await getSectorBand(sec).catch(() => null);
-            stageSig.valuationPercentile = expectationPercentile(
-              percentileAgainst(master.per, band?.per ?? null),
-              percentileAgainst(master.pbr, band?.pbr ?? null),
-            );
-          }
-          stageSig.priorSubstanceScore = await getPriorStageScore(analysis.ticker);
-          const verdict = classifyStage(stageSig);
-          dartBlocks.push(renderStageVerdict(verdict));
-          await saveStageVerdict(analysis.ticker, verdict, (analysis as any).id ?? null);
-          console.log(`[dart_report_analysis] 국면 판정: ${verdict.meta.labelKo} (실체 ${verdict.substance.score}, 신뢰도 ${verdict.confidence})`);
+          const usYears = await collectUSFinancials(analysis.ticker);
+          Object.assign(stageSig, usStageSignals(usYears));
+          if (usYears.length >= 2) console.log(`[dart_report_analysis] 미국 재무 ${usYears.length}개년(SEC EDGAR, 저장우선) — 국면 신호 추출`);
         } catch (e) {
-          console.warn("[dart_report_analysis] 국면 판정 실패:", (e as Error)?.message?.slice(0, 80));
+          console.warn("[dart_report_analysis] 미국 재무(SEC) 실패:", (e as Error)?.message?.slice(0, 80));
         }
+      }
+
+      // 사업 국면 판정 — 한·미 공통. 위에서 모은 신호를 2축 매트릭스에 넣는다.
+      // 실체(펀더멘털)와 기대(밴드 분위)를 조합해 ①~⑤·쇠퇴·턴어라운드를 찍는다.
+      try {
+        stageSig.segmentsAdded = segCounts.added;
+        stageSig.segmentsDropped = segCounts.dropped;
+        const stageMarket: "KR" | "US" = isKoreanTicker(analysis.ticker) ? "KR" : "US";
+        // 기대 축: PER·PBR을 업종 밴드 분위(0~100)로 환산
+        const master = await pool
+          .query<{ per: number | null; pbr: number | null; industry: string | null; kis_industry: string | null }>(
+            `SELECT per, pbr, industry, kis_industry FROM stocks WHERE ticker = $1 LIMIT 1`,
+            [analysis.ticker])
+          .then(r => r.rows[0] ?? null).catch(() => null);
+        if (master) {
+          const sec = classifySector(master.industry ?? analysis.industry ?? "", stageMarket, master.kis_industry);
+          const band = await getSectorBand(sec).catch(() => null);
+          stageSig.valuationPercentile = expectationPercentile(
+            percentileAgainst(master.per, band?.per ?? null),
+            percentileAgainst(master.pbr, band?.pbr ?? null),
+          );
+        }
+        stageSig.priorSubstanceScore = await getPriorStageScore(analysis.ticker);
+        const verdict = classifyStage(stageSig);
+        dartBlocks.push(renderStageVerdict(verdict));
+        await saveStageVerdict(analysis.ticker, verdict, (analysis as any).id ?? null);
+        console.log(`[dart_report_analysis] 국면 판정(${stageMarket}): ${verdict.meta.labelKo} (실체 ${verdict.substance.score}, 신뢰도 ${verdict.confidence})`);
+      } catch (e) {
+        console.warn("[dart_report_analysis] 국면 판정 실패:", (e as Error)?.message?.slice(0, 80));
       }
 
       const dartContext = dartBlocks.join("\n\n");
