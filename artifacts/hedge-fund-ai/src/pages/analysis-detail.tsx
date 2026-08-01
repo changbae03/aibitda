@@ -4404,7 +4404,9 @@ export default function AnalysisDetail() {
         const checklistStep = analysis.steps.find((s: any) => s.stepKey === "checklist");
         const streamingChecklist = streamingStep?.key === "checklist";
         const thesisStarted = !!(analysis.steps.find((s: any) => s.stepKey === "investment_thesis") || streamingStep?.key === "investment_thesis");
-        const showSection = !!checklistStep || streamingChecklist || (thesisStarted && !isComplete && !isError);
+        // isComplete 여부와 무관하게 thesis가 시작된 이후엔 섹션 표시
+        // (과거 완료 분석에서 checklist가 없어도 pending 상태로 표시 → 수동 실행 가능)
+        const showSection = !!checklistStep || streamingChecklist || thesisStarted;
         if (!showSection) return null;
         return (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
@@ -6561,12 +6563,6 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
 const BLUR_GATED_STEPS = ["company_analysis", "dart_report_analysis", "investment_strategy"];
 
 const MD_BODY_COMPONENTS = {
-  h2: ({ children }: any) => (
-    <h2 className="text-[18px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
-  ),
-  h3: ({ children }: any) => (
-    <h3 className="text-[16px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
-  ),
   // h2 — 섹션 소제목: 이모지 제거 후 소형 레이블 스타일로 통일
   h2: ({ children }: any) => {
     const text = typeof children === "string"
