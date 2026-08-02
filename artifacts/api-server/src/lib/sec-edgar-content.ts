@@ -202,20 +202,22 @@ function htmlToText(html: string): string {
 // ─── Item 1 Business 섹션 추출 ───────────────────────────────────────────────
 
 function extractBusinessSection(text: string, maxChars = 5_000): string | null {
-  // 시작점: "ITEM 1. BUSINESS" 또는 "ITEM 1 BUSINESS"
-  const startPatterns = [
-    /ITEM\s+1\.?\s+BUSINESS\s*[\n\r]/i,
-    /ITEM\s+1\b[.\s]*\n\s*BUSINESS\b/i,
-    /^ITEM\s+1[\s.]+BUSINESS/im,
-  ];
+  // 현대 10-K는 맨 앞에 목차가 있어 "Item 1. Business" → "Item 1A" 링크가 붙어 나온다.
+  // 목차 조각(둘 사이 간격이 짧음)이 아니라, 둘 사이 **내용이 가장 많은** 실제 섹션을 고른다.
+  // 목차엔 "Item 1.   Business"(공백), 실제 헤더엔 "Item 1.Business"(공백 없음)로 나온다.
+  // 공백 0~4개 모두 허용하고, 둘 사이 내용이 가장 많은 후보(=실제 섹션)를 고른다.
+  const startRe = /ITEM\s+1\.?\s{0,4}BUSINESS/gi;
+  const endRe = /ITEM\s+1A\.?\s{0,4}RISK|ITEM\s+2\.?\s{0,4}PROPERT/i;
 
-  let startIdx = -1;
-  for (const pat of startPatterns) {
-    const m = text.match(pat);
-    if (m?.index !== undefined) {
-      startIdx = m.index + m[0].length;
-      break;
-    }
+  // 각 후보에서 **바로 다음** 끝점까지의 길이를 잰다(오프셋 없이). 목차의 "Item 1"은
+  // 인접한 "Item 1A"에서 곧장 끊겨 짧으므로 걸러지고, 실제 섹션만 길게 남는다.
+  let startIdx = -1, endIdx = -1, bestLen = -1;
+  for (const m of text.matchAll(startRe)) {
+    const s = (m.index ?? 0) + m[0].length;
+    const em = text.slice(s).match(endRe);
+    const e = em?.index !== undefined ? s + em.index : Math.min(text.length, s + maxChars * 3);
+    const len = e - s;
+    if (len > bestLen && len >= 500) { bestLen = len; startIdx = s; endIdx = e; }
   }
 
   if (startIdx === -1) {
@@ -223,22 +225,9 @@ function extractBusinessSection(text: string, maxChars = 5_000): string | null {
     const bi = text.toUpperCase().indexOf("BUSINESS");
     if (bi === -1) return null;
     startIdx = bi + 8;
-  }
-
-  // 끝점: Item 1A Risk Factors 또는 Item 2 Properties
-  const endPatterns = [
-    /ITEM\s+1A\.?\s+RISK\s+FACTOR/i,
-    /ITEM\s+2\.?\s+PROPERT/i,
-    /ITEM\s+2\b/i,
-  ];
-
-  let endIdx = Math.min(text.length, startIdx + maxChars * 3);
-  const searchFrom = startIdx + 200;
-  for (const pat of endPatterns) {
-    const m = text.slice(searchFrom).match(pat);
-    if (m?.index !== undefined) {
-      endIdx = Math.min(endIdx, searchFrom + m.index);
-    }
+    endIdx = Math.min(text.length, startIdx + maxChars * 3);
+    const em = text.slice(startIdx + 200).match(endRe);
+    if (em?.index !== undefined) endIdx = Math.min(endIdx, startIdx + 200 + em.index);
   }
 
   const raw = text.slice(startIdx, endIdx).trim();
@@ -293,6 +282,63 @@ function extractMdaSection(text: string, maxChars = 4_000): string | null {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .slice(0, maxChars) || null;
+}
+
+// ─── 다년치 10-K/20-F 사업 섹션 (행간 읽기용) ─────────────────────────────────
+//
+// 한국이 dart_biz_reports에 여러 해 사업보고서를 쌓듯, 미국도 최근 N개 연차보고서의
+// "Item 1. Business" 본문을 받아 연도별로 비교할 수 있게 한다. 저장은 us-biz-reports가 한다.
+
+export interface AnnualBusinessText {
+  fy: number;       // 보고 대상 회계연도(reportDate 기준)
+  filedDate: string;
+  text: string;     // Item 1 Business 평문
+}
+
+/**
+ * 최근 N개 연차보고서(10-K/20-F)의 사업 섹션 본문을 회계연도 내림차순으로 받는다.
+ * submissions API의 primaryDocument를 직접 써서 인덱스 재조회를 아낀다.
+ * 실패한 개별 파일은 건너뛴다(수집 실패는 분석을 막지 않는다).
+ */
+export async function fetchMultiYearBusiness(ticker: string, n = 4): Promise<AnnualBusinessText[]> {
+  const cik = await getCik(ticker);
+  if (cik == null) return [];
+  const paddedCik = String(cik).padStart(10, "0");
+
+  let recent: any;
+  try {
+    const res = await fetch(`${SEC_DATA}/submissions/CIK${paddedCik}.json`,
+      { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+    if (!res.ok) return [];
+    recent = ((await res.json()) as any).filings?.recent;
+  } catch { return []; }
+  if (!recent) return [];
+
+  const { form = [], accessionNumber = [], filingDate = [], reportDate = [], primaryDocument = [] } = recent;
+  const picks: Array<{ acc: string; filed: string; report: string; doc: string }> = [];
+  for (let i = 0; i < form.length && picks.length < n; i++) {
+    if (form[i] === "10-K" || form[i] === "20-F") {
+      picks.push({ acc: accessionNumber[i], filed: filingDate[i], report: reportDate[i] || filingDate[i], doc: primaryDocument[i] });
+    }
+  }
+
+  const out: AnnualBusinessText[] = [];
+  for (const p of picks) {
+    if (!p.doc) continue;
+    const accNoDash = p.acc.replace(/-/g, "");
+    const url = `${SEC_BASE}/Archives/edgar/data/${cik}/${accNoDash}/${p.doc}`;
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+      if (!res.ok) continue;
+      const html = (await res.text()).slice(0, MAX_HTML_BYTES);
+      const biz = extractBusinessSection(htmlToText(html), 8_000);
+      if (biz && biz.length > 300) {
+        out.push({ fy: Number(String(p.report).slice(0, 4)), filedDate: p.filed, text: biz });
+      }
+    } catch { /* 개별 파일 실패는 건너뛴다 */ }
+    await new Promise(r => setTimeout(r, 150)); // SEC 예의(초당 10회 이내)
+  }
+  return out;
 }
 
 // ─── EDGAR XBRL 구조화 재무 시계열 ────────────────────────────────────────────

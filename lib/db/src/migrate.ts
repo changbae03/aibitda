@@ -606,6 +606,20 @@ export async function runMigrations() {
       );
       CREATE INDEX IF NOT EXISTS idx_us_financials_ticker
         ON us_financials (ticker, fy DESC);
+
+      -- 미국 연차보고서(10-K/20-F) "Item 1. Business" 본문 — 한국 dart_biz_reports의 미국판.
+      -- 다년치를 쌓아 연도별 서술 변화(행간)를 비교한다. 회계연도(fy)별 한 행.
+      CREATE TABLE IF NOT EXISTS us_biz_reports (
+        ticker     TEXT NOT NULL,
+        fy         INTEGER NOT NULL,
+        filed_date TEXT,
+        content    TEXT NOT NULL,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        fetched_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        PRIMARY KEY (ticker, fy)
+      );
+      CREATE INDEX IF NOT EXISTS idx_us_biz_reports_ticker
+        ON us_biz_reports (ticker, fy DESC);
     `);
 
     // ── 종목별 정본 ─────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { buildSignalTimeline, emergingTerms, renderBizSignals } from "../biz-signals.js";
+import { collectUSBizReports } from "../us-biz-reports.js";
 import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import {
@@ -795,6 +796,12 @@ async function executeStep(
           Object.assign(stageSig, usStageSignals(usYears));
           const usTable = renderUSFinancials(usYears);
           if (usTable) { dartBlocks.push(usTable); console.log(`[dart_report_analysis] 미국 재무표 주입 (${usYears.length}개년, SEC EDGAR)`); }
+
+          // 미국 행간 — 10-K "Item 1. Business" 다년치에서 전략 행동 + 새 기술 용어(영어 패턴).
+          const bizRows = await collectUSBizReports(analysis.ticker, 4);
+          const usPeriods = bizRows.map(r => ({ label: `FY${r.fy}`, content: r.content }));
+          const usBizSignals = renderBizSignals(buildSignalTimeline(usPeriods, "en"), emergingTerms(usPeriods));
+          if (usBizSignals) { dartBlocks.push(usBizSignals); console.log(`[dart_report_analysis] 미국 행간(전략 행동) 주입`); }
         } catch (e) {
           console.warn("[dart_report_analysis] 미국 재무(SEC) 실패:", (e as Error)?.message?.slice(0, 80));
         }

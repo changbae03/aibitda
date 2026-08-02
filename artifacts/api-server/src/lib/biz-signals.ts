@@ -19,8 +19,10 @@ export type SignalTheme = "증설·양산" | "신사업·신제품" | "M&A·제�
 
 interface ThemeSpec { theme: SignalTheme; re: RegExp; }
 
-/** 테마별 탐지 패턴. 실제 보고서 문장에서 뽑아 만든 것 — 좁게 잡아 노이즈를 줄인다. */
-const THEMES: ThemeSpec[] = [
+export type Lang = "ko" | "en";
+
+/** 한국어 테마 패턴. 실제 보고서 문장에서 뽑아 만든 것 — 좁게 잡아 노이즈를 줄인다. */
+const THEMES_KO: ThemeSpec[] = [
   { theme: "증설·양산",   re: /증설|신설\s*(공장|라인|설비)|착공|양산\s*(체제|체계|돌입|시작|개시)|생산능력[^.]{0,8}(확대|증설|증가)|캐파|CAPA/ },
   { theme: "신사업·신제품", re: /신규\s*사업|신사업|사업[^.]{0,6}(진출|다각화)|신제품[^.]{0,6}출시|신규\s*(시장|제품|모델)[^.]{0,6}(진출|출시)|파이프라인/ },
   { theme: "M&A·제휴",    re: /인수(?!자)|합병|지분[^.]{0,6}(취득|인수|투자)|합작|(?:^|[^A-Za-z])JV(?![A-Za-z])|전략적?\s*제휴|MOU|협력[^.]{0,6}(체결|구축|강화)/ },
@@ -29,32 +31,49 @@ const THEMES: ThemeSpec[] = [
   { theme: "기술·R&D",    re: /세계\s*최초|업계\s*최초|기술\s*리더십|신기술[^.]{0,6}(개발|확보)|특허[^.]{0,6}(취득|출원|등록)|(?:품목\s*)?허가[^.]{0,6}획득|임상\s*[1-3]상/ },
 ];
 
+/** 영어(SEC 10-K) 테마 패턴. Item 1 Business 서술의 실제 표현에 맞춰 좁게. */
+const THEMES_EN: ThemeSpec[] = [
+  { theme: "증설·양산",   re: /\bnew\s+(facilit|plant|fab|factory)|expand(?:ed|ing)?\s+(?:our\s+)?(?:capacity|production|manufacturing)|increas\w*\s+(?:our\s+)?capacity|ramp(?:ed|ing)?[\s-]?up|commenced\s+(?:production|manufacturing)|began\s+(?:producing|manufacturing)|mass production/i },
+  { theme: "신사업·신제품", re: /\blaunch(?:ed|ing)?\b|introduc(?:ed|ing)\s+(?:a\s+)?(?:new\b)?|\bnew product|enter(?:ed|ing)?\s+(?:the\s+|a\s+|into\s+)[\w\s]{0,18}market|expand(?:ed|ing)?\s+into|new\s+\w+\s+(?:segment|category|platform)/i },
+  { theme: "M&A·제휴",    re: /\bacquir(?:ed|ing|e|es)\b|acquisition of|complet(?:ed|ing)\s+the\s+acquisition|\bmerger\b|joint venture|partner(?:ed|ship)\s+with|strategic\s+(?:alliance|partnership)|\bto acquire\b/i },
+  { theme: "수주·계약",   re: /awarded\s+(?:a\s+)?[\w\s]{0,18}contract|signed\s+(?:a\s+)?[\w\s]{0,18}(?:agreement|contract)|\bbacklog\b|multi-year\s+(?:contract|agreement)|(?:supply|purchase|licensing)\s+agreement|secured\s+(?:a\s+)?[\w\s]{0,12}(?:order|contract)/i },
+  { theme: "축소·철수",   re: /\bdivest(?:ed|iture|ing)?\b|discontinu(?:ed|ing)|exit(?:ed|ing)?\s+(?:the|our)\b|restructur(?:ing|ed)|wind(?:ing)?\s+down|\bshut(?:ting)?\s+down|sold\s+(?:our|the)\s+[\w\s]{0,18}business/i },
+  { theme: "기술·R&D",    re: /FDA\s+(?:approval|clearance|approved|cleared)|received\s+(?:approval|clearance)|granted\s+(?:a\s+)?patent|breakthrough|first[\s-]to[\s-]market|clinical\s+(?:trial|phase)|\b[Pp]hase\s+[123]\b/i },
+];
+
+const themesFor = (lang: Lang) => (lang === "en" ? THEMES_EN : THEMES_KO);
+
 export interface SignalHit {
   theme: SignalTheme;
   sentence: string;
 }
 
-/** 문장을 자른다 — 마침표·줄바꿈 기준, 너무 짧거나 긴 것은 버린다. */
-function sentences(content: string): string[] {
+/** 문장을 자른다 — 언어별 경계·길이. 목차·머리글은 버린다. */
+function sentences(content: string, lang: Lang): string[] {
+  if (lang === "en") {
+    return content
+      .split(/(?<=[.?!])\s+(?=[A-Z"(])|\n/)
+      .map(s => s.replace(/\s+/g, " ").trim())
+      .filter(s => s.length >= 25 && s.length <= 240 && !/^(item\s+\d|table of contents|part\s+i)/i.test(s));
+  }
   return content
     .split(/(?<=다\.)|[.\n]/)
     .map(s => s.replace(/\s+/g, " ").trim())
-    // 목차·표 머리글·번호 목록은 행동이 아니다 — 걸러낸다.
     .filter(s => s.length >= 15 && s.length <= 160 && !/^[(\d①-⑳]|총괄표|연구개발\s*실적|다음과\s*같습니다$/.test(s));
 }
 
 /** 의미가 같은 문장인지 비교할 키 — 공백·숫자·기호를 지워 연도만 다른 반복을 잡는다. */
 function normKey(s: string): string {
-  return s.replace(/[\s\d.,·\-()[\]/%]/g, "").slice(0, 50);
+  return s.toLowerCase().replace(/[\s\d.,·\-()[\]/%]/g, "").slice(0, 50);
 }
 
 /** 한 기간의 텍스트에서 테마별 전략 행동 문장을 뽑는다(테마당 최대 3개). */
-export function extractSignals(content: string): SignalHit[] {
+export function extractSignals(content: string, lang: Lang = "ko"): SignalHit[] {
   const out: SignalHit[] = [];
   const perTheme = new Map<SignalTheme, number>();
   const seen = new Set<string>();
-  for (const s of sentences(content)) {
-    for (const spec of THEMES) {
+  for (const s of sentences(content, lang)) {
+    for (const spec of themesFor(lang)) {
       if ((perTheme.get(spec.theme) ?? 0) >= 3) continue;
       if (!spec.re.test(s)) continue;
       const key = s.slice(0, 40);
@@ -113,11 +132,11 @@ export interface PeriodSignals { label: string; hits: SignalHit[]; }
  * 매년 똑같이 실리는 보일러플레이트(회사 소개·정형 문구)를 걸러 진짜 '변화'만 남긴다.
  * periods는 오래된→최신 순으로 준다.
  */
-export function buildSignalTimeline(periods: Array<{ label: string; content: string }>): PeriodSignals[] {
+export function buildSignalTimeline(periods: Array<{ label: string; content: string }>, lang: Lang = "ko"): PeriodSignals[] {
   const seen = new Set<string>();
   const out: PeriodSignals[] = [];
   for (const p of periods) {
-    const fresh = extractSignals(p.content).filter(h => {
+    const fresh = extractSignals(p.content, lang).filter(h => {
       const k = normKey(h.sentence);
       if (seen.has(k)) return false;
       seen.add(k);

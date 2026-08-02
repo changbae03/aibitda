@@ -61,6 +61,38 @@ describe("새로 등장한 기술·제품 용어", () => {
   });
 });
 
+describe("영어(SEC 10-K) 패턴", () => {
+  it("인수 문장을 M&A로 잡는다", () => {
+    const hits = extractSignals("Our acquisition of Mellanox in 2020 expanded our networking offerings.", "en");
+    expect(hits.some(h => h.theme === "M&A·제휴")).toBe(true);
+  });
+
+  it("신제품 출시를 신사업·신제품으로 잡는다", () => {
+    const hits = extractSignals("In 2024, we launched the NVIDIA Blackwell architecture for data centers.", "en");
+    expect(hits.some(h => h.theme === "신사업·신제품")).toBe(true);
+  });
+
+  it("FDA 승인을 기술·R&D로 잡는다", () => {
+    const hits = extractSignals("The company received FDA approval for its lead drug candidate.", "en");
+    expect(hits.some(h => h.theme === "기술·R&D")).toBe(true);
+  });
+
+  it("한국어 텍스트에 영어 패턴을 쓰면 안 걸린다 — 언어 분리 확인", () => {
+    expect(extractSignals("당사는 반도체를 제조합니다.", "en")).toEqual([]);
+  });
+
+  it("영어도 기간 간 반복을 제거한다", () => {
+    const periods = [
+      { label: "FY2024", content: "We acquired Mellanox to expand networking." },
+      { label: "FY2025", content: "We acquired Mellanox to expand networking. We also launched the Blackwell platform." },
+    ];
+    const tl = buildSignalTimeline(periods, "en");
+    const y25 = tl.find(p => p.label === "FY2025");
+    expect(y25?.hits.some(h => /Mellanox/.test(h.sentence))).toBe(false);
+    expect(y25?.hits.some(h => /Blackwell/.test(h.sentence))).toBe(true);
+  });
+});
+
 describe("렌더", () => {
   it("행동이 하나도 없으면 빈 문자열 — 잡음을 만들지 않는다", () => {
     expect(renderBizSignals([], [])).toBe("");
