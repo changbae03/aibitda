@@ -30,8 +30,9 @@ import {
   percentileAgainst, expectationPercentile, type StageSignals,
 } from "../stage-classifier.js";
 import { getSectorBand } from "../valuation/sector-bands.js";
-import { saveStageVerdict, getPriorStageScore } from "../stage-store.js";
+import { saveStageVerdict, getPriorStageScore, computeStageTrajectory } from "../stage-store.js";
 import { collectUSFinancials, usStageSignals, renderUSFinancials } from "../us-financials.js";
+import { renderTrajectory } from "../stage-trajectory.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -812,6 +813,15 @@ async function executeStep(
         console.log(`[dart_report_analysis] 국면 판정(${stageMarket}): ${verdict.meta.labelKo} (실체 ${verdict.substance.score}, 신뢰도 ${verdict.confidence})`);
       } catch (e) {
         console.warn("[dart_report_analysis] 국면 판정 실패:", (e as Error)?.message?.slice(0, 80));
+      }
+
+      // 국면 흐름 — 저장된 다년치 재무를 연도별로 훑어 실체 궤적 + 주요 전환점을 뽑는다.
+      // "현재 국면"만이 아니라 "과거부터 어떻게 흘러왔나"를 LLM에 준다(행간 읽기의 뼈대).
+      try {
+        const traj = renderTrajectory(await computeStageTrajectory(analysis.ticker));
+        if (traj) { dartBlocks.push(traj); console.log(`[dart_report_analysis] 국면 흐름 주입`); }
+      } catch (e) {
+        console.warn("[dart_report_analysis] 국면 흐름 실패:", (e as Error)?.message?.slice(0, 80));
       }
 
       const dartContext = dartBlocks.join("\n\n");

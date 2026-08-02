@@ -10,7 +10,9 @@
  */
 
 import { pool, readJsonb } from "@workspace/db";
+import { isKoreanTicker } from "@workspace/shared";
 import type { StageVerdict } from "./stage-classifier.js";
+import { buildTrajectory, type FinYear, type Trajectory } from "./stage-trajectory.js";
 
 export async function saveStageVerdict(
   ticker: string,
@@ -77,4 +79,48 @@ export async function getStageHistory(ticker: string, limit = 12): Promise<Stage
       computedAt: r.computed_at instanceof Date ? r.computed_at.toISOString() : String(r.computed_at),
     }))
     .reverse();
+}
+
+// ─── 국면 흐름(연도별 궤적) ───────────────────────────────────────────────────
+
+const num = (v: any): number | null => (v == null ? null : Number(v));
+
+/** us_financials 행에서 CCC(현금전환주기)를 파생 */
+function usCcc(r: any): number | null {
+  const days = (s: number | null, f: number | null) => (s != null && f != null && f > 0 ? s / (f / 365) : null);
+  const dio = days(num(r.inventory), num(r.cogs));
+  const dso = days(num(r.receivables), num(r.revenue));
+  const dpo = days(num(r.payables), num(r.cogs));
+  return dio != null && dso != null && dpo != null ? dio + dso - dpo : null;
+}
+
+/** 종목의 연도별 재무를 회계연도 오름차순으로 읽는다(시장별 출처). */
+async function loadFinYears(ticker: string): Promise<FinYear[]> {
+  if (isKoreanTicker(ticker)) {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (bsns_year) bsns_year, revenue, operating_income
+         FROM ticker_financials
+        WHERE ticker = $1 AND reprt_code = '11011' AND revenue IS NOT NULL
+        ORDER BY bsns_year DESC, revenue DESC`,
+      [ticker],
+    );
+    return rows
+      .map((r: any) => ({ fy: Number(r.bsns_year), revenue: num(r.revenue), operatingIncome: num(r.operating_income) }))
+      .sort((a, b) => a.fy - b.fy);
+  }
+  const { rows } = await pool.query(
+    `SELECT fy, revenue, operating_income, capex, inventory, receivables, payables, cogs
+       FROM us_financials WHERE ticker = $1 ORDER BY fy ASC`,
+    [ticker],
+  );
+  return rows.map((r: any) => ({
+    fy: Number(r.fy), revenue: num(r.revenue), operatingIncome: num(r.operating_income),
+    capex: num(r.capex), ccc: usCcc(r),
+  }));
+}
+
+/** 저장된 다년치 재무로 국면 궤적 + 주요 전환점을 계산한다. */
+export async function computeStageTrajectory(ticker: string): Promise<Trajectory> {
+  const fin = await loadFinYears(ticker).catch(() => [] as FinYear[]);
+  return buildTrajectory(fin);
 }
