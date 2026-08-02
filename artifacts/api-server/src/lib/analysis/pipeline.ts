@@ -23,6 +23,7 @@ import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBac
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
+import { buildSignalTimeline, emergingTerms, renderBizSignals } from "../biz-signals.js";
 import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import {
@@ -603,7 +604,8 @@ async function executeStep(
         await collectBizTimeline(analysis.ticker, 4).catch((e) =>
           console.warn(`[dart_report_analysis] 시계열 수집 실패:`, (e as Error)?.message?.slice(0, 80)));
 
-        const timeline = await getBizTimeline(analysis.ticker).catch(() => []);
+        const timeline = await getBizTimeline(analysis.ticker)
+          .catch(() => [] as Awaited<ReturnType<typeof getBizTimeline>>);
         if (timeline.length >= 2) {
           const body = timeline
             .map(t => `\n───────── ${periodLabel(t.bsnsYear, t.quarter)} (${t.reportNm}) ─────────\n${t.content}`)
@@ -635,6 +637,18 @@ async function executeStep(
           if (segDiff) {
             dartBlocks.push(segDiff);
             console.log(`[dart_report_analysis] 사업부문 변화 진단 주입`);
+          }
+
+          // 행간 읽기 — 서술 속 전략 행동(증설·양산·M&A·수주·철수·기술)을 연도별로,
+          // 그 해 '새로 나온 것'만 짚는다. + 과거엔 없던 새 기술·제품 용어.
+          const annualPeriods = timeline
+            .filter(t => t.quarter === 4)
+            .sort((a, b) => a.bsnsYear - b.bsnsYear)
+            .map(t => ({ label: periodLabel(t.bsnsYear, t.quarter), content: t.content }));
+          const bizSignals = renderBizSignals(buildSignalTimeline(annualPeriods), emergingTerms(annualPeriods));
+          if (bizSignals) {
+            dartBlocks.push(bizSignals);
+            console.log(`[dart_report_analysis] 행간(전략 행동) 주입`);
           }
 
           dartBlocks.push(
