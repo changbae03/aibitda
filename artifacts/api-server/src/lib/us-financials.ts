@@ -208,3 +208,37 @@ export function usStageSignals(years: USFinYear[]): Partial<StageSignals> {
 
   return sig;
 }
+
+/**
+ * 미국 연간 재무를 프롬프트 표로 만든다. **LLM은 이 표 값만 인용한다.**
+ *
+ * 한국이 renderMetricTable·renderCapex·renderWorkingCapital로 "코드가 뽑은 수치"를
+ * 주던 것과 대칭이다. 미국은 이 표가 없어 LLM이 yahoo 요약에서 숫자를 헤맸다.
+ * SEC 원문 값이라 정확하고, R&D·CapEx·CCC 추세를 한 표에서 읽을 수 있다.
+ */
+export function renderUSFinancials(years: USFinYear[]): string {
+  if (years.length < 2) return "";
+  const b = (v: number | null) => (v == null ? "—" : `$${(v / 1e9).toFixed(1)}B`);
+  const ratio = (num: number | null, den: number | null) =>
+    num != null && den != null && den > 0 ? `${((num / den) * 100).toFixed(1)}%` : "—";
+  const cccOf = (y: USFinYear) => { const c = ccc(y); return c == null ? "—" : `${c.toFixed(0)}일`; };
+
+  const lines = [
+    "",
+    "[📐 미국 재무 추이 — 서버가 SEC EDGAR(10-K/20-F)에서 뽑은 값. 이 표만 인용할 것]",
+    "⚠️ 아래는 SEC 공시 원문 값입니다. **yahoo·기억에서 숫자를 찾지 말고 이 표를 쓰세요.**",
+    "⚠️ 표에 \"—\"인 칸은 그 해 공시에서 확인 안 된 값입니다 — 추정하지 마세요.",
+    "",
+    "| 회계연도 | 매출 | 영업이익 | 순이익 | OPM | R&D/매출 | CapEx/매출 | CCC |",
+    "|---|---|---|---|---|---|---|---|",
+  ];
+  for (const y of years) {
+    lines.push(
+      `| FY${y.fy} | ${b(y.revenue)} | ${b(y.operatingIncome)} | ${b(y.netIncome)} | ` +
+      `${ratio(y.operatingIncome, y.revenue)} | ${ratio(y.rnd, y.revenue)} | ` +
+      `${ratio(y.capex, y.revenue)} | ${cccOf(y)} |`,
+    );
+  }
+  lines.push("", "· CCC(현금전환주기)=재고+매출채권−매입채무 회전일수. 낮을수록 현금 효율이 좋습니다.");
+  return lines.join("\n");
+}

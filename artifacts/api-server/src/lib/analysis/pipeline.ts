@@ -31,7 +31,7 @@ import {
 } from "../stage-classifier.js";
 import { getSectorBand } from "../valuation/sector-bands.js";
 import { saveStageVerdict, getPriorStageScore } from "../stage-store.js";
-import { collectUSFinancials, usStageSignals } from "../us-financials.js";
+import { collectUSFinancials, usStageSignals, renderUSFinancials } from "../us-financials.js";
 import { fetchSECEdgarContent } from "../sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../sotp-subsidiary-context.js";
@@ -778,7 +778,8 @@ async function executeStep(
         try {
           const usYears = await collectUSFinancials(analysis.ticker);
           Object.assign(stageSig, usStageSignals(usYears));
-          if (usYears.length >= 2) console.log(`[dart_report_analysis] 미국 재무 ${usYears.length}개년(SEC EDGAR, 저장우선) — 국면 신호 추출`);
+          const usTable = renderUSFinancials(usYears);
+          if (usTable) { dartBlocks.push(usTable); console.log(`[dart_report_analysis] 미국 재무표 주입 (${usYears.length}개년, SEC EDGAR)`); }
         } catch (e) {
           console.warn("[dart_report_analysis] 미국 재무(SEC) 실패:", (e as Error)?.message?.slice(0, 80));
         }
