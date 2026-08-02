@@ -285,11 +285,30 @@ function translateRoadmapTerms(md: string): string {
   return out;
 }
 
+// AI가 표를 만들다 구분선 대시를 수백 개로 폭주시키거나(반복 실패 모드) 데이터 행 없이
+// 헤더만 남기는 경우가 있다. 그대로 두면 빈 표가 노출되므로 여기서 정리한다.
+function cleanBrokenTables(lines: string[]): string[] {
+  // 1) 폭주한 대시(4개 이상 연속)를 정상 구분선(---)으로 축약
+  const norm = lines.map(l => /^\s*\|/.test(l) && /-{4,}/.test(l) ? l.replace(/-{4,}/g, "---") : l);
+  // 2) 헤더+구분선만 있고 데이터 행이 없는 표는 통째로 제거
+  const isRow = (l?: string) => !!l && /^\s*\|.*\|/.test(l);
+  const isSep = (l?: string) => !!l && l.includes("|") && /^\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*$/.test(l);
+  const out: string[] = [];
+  for (let i = 0; i < norm.length; i++) {
+    if (isRow(norm[i]) && isSep(norm[i + 1])) {
+      const hasBody = isRow(norm[i + 2]) && !isSep(norm[i + 2]);
+      if (!hasBody) { i += 1; continue; } // 헤더+구분선 스킵 = 빈 표 제거
+    }
+    out.push(norm[i]);
+  }
+  return out;
+}
+
 function prepareMarkdown(md: string, isEn = false): string {
   if (!md) return md;
 
   // AI가 테이블 행을 여러 줄에 걸쳐 출력하는 경우 병합 후 remark-gfm에 전달
-  const lines = fixSplitTableRows(md.split("\n"));
+  const lines = cleanBrokenTables(fixSplitTableRows(md.split("\n")));
   const out: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
