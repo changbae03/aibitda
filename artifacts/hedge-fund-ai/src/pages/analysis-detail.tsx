@@ -2980,9 +2980,27 @@ function InvestmentPointsView({ step, isEn }: { step: any; isEn: boolean }) {
   const COLORS = ["#6366F1", "#10B981", "#F59E0B"];
 
   if (points.length === 0) {
+    // 옛 포맷(①②③ 없이 JSON 블록만 저장된 분석 등)에서 원본 JSON을 그대로 토하지 않는다.
+    const j = extractJson(content);
+    if (j && (j.plain_verdict || j.summary || j.key_issue)) {
+      return (
+        <div className="space-y-2.5">
+          {j.plain_verdict && <p className="text-[13.5px] text-foreground/80 leading-[1.75]">{j.plain_verdict}</p>}
+          {j.key_issue && <p className="text-[13px] text-foreground/70 leading-[1.75]"><span className="font-semibold text-amber-600 dark:text-amber-400">{isEn ? "Key issue · " : "핵심 이슈 · "}</span>{j.key_issue}</p>}
+          {j.summary && <p className="text-[13px] text-foreground/70 leading-[1.75]">{j.summary}</p>}
+        </div>
+      );
+    }
+    // JSON 블록만 있고 쓸 필드가 없으면 블록을 제거하고 남은 텍스트만 렌더(원본 노출 방지)
+    const stripped = content
+      .replace(/```json[\s\S]*?```/gi, "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/^\s*\{[\s\S]*\}\s*$/g, "")
+      .trim();
+    if (!stripped) return null;
     return (
       <div className="prose-narrative px-1">
-        <MdBlock src={content} isEn={isEn} />
+        <MdBlock src={stripped} isEn={isEn} />
       </div>
     );
   }
