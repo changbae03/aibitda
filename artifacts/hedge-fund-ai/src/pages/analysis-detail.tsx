@@ -863,6 +863,37 @@ const PHASE_UI: Record<string, { ko: string; tag: string; color: string }> = {
   turnaround: { ko: "턴어라운드",  tag: "실체가 바닥에서 반등", color: "#185FA5" },
 };
 
+// 히어로 오른쪽 카드 — 적정주가 자리를 대체한다. 애빛다는 목표가가 아니라 '국면'을 말한다.
+function HeroPhase({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [latest, setLatest] = useState<StageRow | null>(null);
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(getApiUrl(`/api/stage/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setLatest(d?.latest ?? null))
+      .catch(() => setLatest(null));
+  }, [ticker]);
+  if (!latest) return null;
+  const ui = PHASE_UI[latest.phase] ?? { ko: latest.phase, tag: "", color: "#5F5E5A" };
+  const conf = latest.confidence === "high" ? (isEn ? "high" : "높음")
+    : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음");
+  return (
+    <div className="px-5 pt-4 pb-3">
+      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
+        {isEn ? "Business phase" : "현재 사업 국면"}
+      </p>
+      <p className="text-2xl font-black leading-none tracking-tight" style={{ color: ui.color }}>
+        {ui.ko}
+      </p>
+      {ui.tag && <p className="text-[12px] text-muted-foreground mt-1.5">{ui.tag}</p>}
+      <span className="inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+        style={{ background: ui.color + "1f", color: ui.color }}>
+        {isEn ? "confidence " : "신뢰도 "}{conf}
+      </span>
+    </div>
+  );
+}
+
 function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
   const [data, setData] = useState<{ history: StageRow[]; latest: StageRow | null } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -3597,7 +3628,7 @@ export default function AnalysisDetail() {
     return () => {
       document.title = "애빛다 — AI로 기업가치를 밝히다";
       setMeta("og:title", "애빛다 — AI로 기업가치를 밝히다");
-      setMeta("og:description", "AI 7단계 파이프라인이 코스피·코스닥·미국 주식을 분석합니다. DCF·rNPV 기반 적정주가 산출.");
+      setMeta("og:description", "AI가 사업보고서·공시 몇 년치를 읽어 기업의 국면과 행간을 짚어냅니다. 성장·쇠퇴·턴어라운드를 실측으로.");
     };
   }, [analysis?.ticker, analysis?.companyName, analysis?.createdAt]);
 
@@ -3923,9 +3954,6 @@ export default function AnalysisDetail() {
           {analysis.investmentVerdict && (
             <div className="text-right">
               <div className="text-xl font-bold text-gray-900">{isEn ? analysis.investmentVerdict : toKoreanVerdict(analysis.investmentVerdict)}</div>
-              {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">{isEn ? "12M Target Price" : "12개월 적정주가"} {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}</div>
-              )}
             </div>
           )}
         </div>
@@ -4043,10 +4071,10 @@ export default function AnalysisDetail() {
               </div>
 
               {/* 현재가 + 등락률 pill */}
-              <div className="flex items-end gap-3 mb-5">
+              <div className="flex items-end flex-wrap gap-x-3 gap-y-2 mb-5">
                 {headerLivePrice ? (
                   <>
-                    <span className="text-[2.75rem] md:text-[3.25rem] font-black tabular-nums tracking-[-0.035em] leading-none text-foreground">
+                    <span className="text-[2rem] sm:text-[2.75rem] md:text-[3.25rem] font-black tabular-nums tracking-[-0.035em] leading-none text-foreground">
                       {headerLivePrice.currency === "USD"
                         ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : isEn
@@ -4176,51 +4204,22 @@ export default function AnalysisDetail() {
             {/* ── 오른쪽: Verdict Card ── */}
             <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
 
-          {/* Verdict Card */}
-          {isComplete && effectiveVerdict && (
+          {/* Verdict Card — 국면(사업 라이프사이클)이 주인공. 적정주가는 피벗으로 제거됨. */}
+          {isComplete && (
             <div ref={verdictRef} className="w-full md:w-auto md:min-w-[220px]">
-              {(() => {
-                const isSellVerdict = ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
-                const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-                const sp = (analysis as any).startPrice as number | null ?? null;
-                const tp = analysis.targetPrice ?? null;
-                const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
-                const isUp = upsidePct !== null ? upsidePct >= 0 : true;
-                const upColor = isUp
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-rose-500 dark:text-rose-400";
-                return (
-                  <div className="rounded-[var(--radius)] border border-border/60 bg-card overflow-hidden shadow-[var(--shadow-card)]">
-                    {/* 적정주가 */}
-                    <div className="px-5 pt-4 pb-3">
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
-                        {isEn ? "Fair Value (12M)" : "적정주가 (12개월)"}
-                      </p>
-                      <p className={`text-2xl font-black tabular-nums leading-none tracking-tight ${upColor}`}>
-                        {formatCurrency(tp, currency, isEn)}
-                      </p>
-                      {upsidePct !== null && (
-                        <p className={`text-[12px] font-bold mt-1 tabular-nums ${upColor}`}>
-                          {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
-                          <span className="text-[10px] font-normal text-muted-foreground ml-1">
-                            {isEn ? "vs entry" : "상승여지"}
-                          </span>
-                        </p>
-                      )}
-                    </div>
-                    {/* 공유 버튼 */}
-                    <div className="px-3 pb-3">
-                      <button
-                        onClick={() => setShowShareModal(true)}
-                        className="w-full flex items-center justify-center gap-2 py-2 rounded-[var(--radius)] bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        {isEn ? 'Share this analysis' : '이 분석 공유하기'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
+              <div className="rounded-[var(--radius)] border border-border/60 bg-card overflow-hidden shadow-[var(--shadow-card)]">
+                <HeroPhase ticker={analysis.ticker} isEn={isEn} />
+                {/* 공유 버튼 */}
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => setShowShareModal(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-[var(--radius)] bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {isEn ? 'Share this analysis' : '이 분석 공유하기'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           </div>
@@ -4237,7 +4236,7 @@ export default function AnalysisDetail() {
             companyNameEn={analysis.englishName}
             currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
             isEn={isEn}
-            validatedTargetPrice={(analysis as any).targetPrice ?? null}
+            validatedTargetPrice={null}
             hideHeader
           />
         </ErrorBoundary>
@@ -4873,30 +4872,9 @@ export default function AnalysisDetail() {
                 <p className="text-[10px] font-mono text-muted-foreground/60 leading-none mb-0.5">{analysis.ticker}</p>
                 <p className="text-[12.5px] font-bold text-foreground leading-tight truncate">{isEn ? ((analysis as any).englishName ?? analysis.companyName) : analysis.companyName}</p>
               </div>
-              {(() => {
-                const sp = (analysis as any).startPrice as number | null ?? null;
-                const tp = analysis.targetPrice ?? null;
-                const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
-                if (upsidePct == null) return (
-                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{isEn ? (effectiveVerdict ?? '–') : toKoreanVerdict(effectiveVerdict)}</span>
-                );
-                return (
-                  <div className="text-right shrink-0">
-                    <p className={`text-[20px] font-black tabular-nums leading-none ${upsidePct >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                      {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
-                    </p>
-                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{isEn ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여지" : "하락여지")}</p>
-                  </div>
-                );
-              })()}
+              <span className="text-[11px] font-bold text-foreground/80 shrink-0">{isEn ? (effectiveVerdict ?? '–') : toKoreanVerdict(effectiveVerdict)}</span>
             </div>
             <div className="space-y-1 font-mono">
-              {analysis.targetPrice && (
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground/60">{isEn ? "Target Price" : "적정주가"}</span>
-                  <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}</span>
-                </div>
-              )}
               {analysis.entryPrice && (
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground/60">{isEn ? "Entry" : "진입가"}</span>
