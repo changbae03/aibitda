@@ -57,7 +57,7 @@ import SummaryCardsB from "@/components/SummaryCardsB";
 import ETFSection from "@/components/ETFSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LineChart, Line, CartesianGrid, Cell } from "recharts";
 
 // ── 메모 헬퍼 ─────────────────────────────────────────────────────────────────
 const MEMO_KEY = "avitda-memos";
@@ -890,6 +890,121 @@ function HeroPhase({ ticker, isEn = false }: { ticker: string; isEn?: boolean })
         style={{ background: ui.color + "1f", color: ui.color }}>
         {isEn ? "confidence " : "신뢰도 "}{conf}
       </span>
+    </div>
+  );
+}
+
+// 핵심 지표 시각화 — CapEx·R&D·인력·운전자본을 서버가 계산한 값으로 차트화한다.
+interface MetricData {
+  currency: "KRW" | "USD";
+  capex: { year: number; capex: number | null; capexToRevenue: number | null }[];
+  rnd: { year: number; amount: number | null; ratio: number | null }[];
+  headcount: { year: number; total: number; regular: number; contract: number; avgTenure: number | null }[];
+  workingCapital: { year: number; dio: number | null; dso: number | null; dpo: number | null; ccc: number | null }[];
+}
+
+const METRIC_COL = { capex: "#FF8A7A", rnd: "#7F77DD", head: "#1D9E75", ccc: "#378ADD" };
+
+function MetricChartCard({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card rounded-2xl p-4 border border-border/50" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.05)" }}>
+      <div className="mb-2">
+        <h5 className="text-[13px] font-semibold text-foreground">{title}</h5>
+        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+      <div style={{ width: "100%", height: 150 }}>{children}</div>
+    </div>
+  );
+}
+
+function MetricCharts({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [d, setD] = useState<MetricData | null>(null);
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(getApiUrl(`/api/company-metrics/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null)).then(setD).catch(() => setD(null));
+  }, [ticker]);
+  if (!d) return null;
+  const has = (a: any[] | undefined) => Array.isArray(a) && a.length >= 2;
+  if (!has(d.capex) && !has(d.rnd) && !has(d.headcount) && !has(d.workingCapital)) return null;
+
+  const isKRW = d.currency === "KRW";
+  const money = (v: number | null) => v == null ? "—" : isKRW ? `${(v / 1e12).toFixed(1)}조` : `$${(v / 1e9).toFixed(1)}B`;
+  // R&D 절대액: KR은 백만원 단위, US는 원(달러)
+  const rndMoney = (v: number | null) => v == null ? "—" : isKRW ? `${(v / 1e6).toFixed(1)}조` : `$${(v / 1e9).toFixed(1)}B`;
+  const axis = { fontSize: 10, fill: "var(--muted-foreground, #6b7280)" };
+  const grid = "var(--border, #e5e7eb)";
+  const yr = (y: number) => `'${String(y).slice(2)}`;
+
+  const tip = (fmt: (v: number) => string, label: string) => ({ active, payload }: any) =>
+    active && payload?.[0] ? (
+      <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-[11px] shadow-md">
+        <span className="text-muted-foreground">{payload[0].payload.year} {label} </span>
+        <span className="font-semibold text-foreground">{fmt(payload[0].value)}</span>
+      </div>
+    ) : null;
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2.5">
+        <BarChart2 className="w-4 h-4 text-muted-foreground/60" />
+        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Key metrics over time" : "핵심 지표 추이"}</h4>
+        <span className="text-[11px] text-muted-foreground">{isEn ? "computed from filings" : "공시 실측 · 서버 계산"}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {has(d.capex) && (
+          <MetricChartCard title={isEn ? "CapEx (investment)" : "설비투자 (CapEx)"} sub={isEn ? "absolute · won/dollar" : "절대 규모 · 사업 확장 신호"}>
+            <ResponsiveContainer>
+              <BarChart data={d.capex} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => money(v)} tick={axis} axisLine={false} tickLine={false} width={44} />
+                <Tooltip content={tip(money, isEn ? "CapEx" : "설비투자")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                <Bar dataKey="capex" fill={METRIC_COL.capex} radius={[4, 4, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
+          </MetricChartCard>
+        )}
+        {has(d.rnd) && (
+          <MetricChartCard title={isEn ? "R&D intensity" : "R&D 집중도"} sub={isEn ? "R&D / revenue (%)" : "R&D ÷ 매출 (%)"}>
+            <ResponsiveContainer>
+              <BarChart data={d.rnd} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => `${v}%`} tick={axis} axisLine={false} tickLine={false} width={34} />
+                <Tooltip content={tip((v) => `${v?.toFixed?.(1) ?? v}%`, "R&D/매출")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                <Bar dataKey="ratio" fill={METRIC_COL.rnd} radius={[4, 4, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
+          </MetricChartCard>
+        )}
+        {has(d.headcount) && (
+          <MetricChartCard title={isEn ? "Headcount" : "임직원 수"} sub={isEn ? "total employees" : "총원 · 사업 규모의 변화"}>
+            <ResponsiveContainer>
+              <BarChart data={d.headcount} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axis} axisLine={false} tickLine={false} width={38} domain={["auto", "auto"]} />
+                <Tooltip content={tip((v) => v.toLocaleString(), isEn ? "employees" : "명")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                <Bar dataKey="total" fill={METRIC_COL.head} radius={[4, 4, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
+          </MetricChartCard>
+        )}
+        {has(d.workingCapital) && d.workingCapital.some(w => w.ccc != null) && (
+          <MetricChartCard title={isEn ? "Cash conversion cycle" : "운전자본 효율 (CCC)"} sub={isEn ? "days · lower is better" : "현금전환주기(일) · 낮을수록 좋음"}>
+            <ResponsiveContainer>
+              <LineChart data={d.workingCapital} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => `${Math.round(v)}`} tick={axis} axisLine={false} tickLine={false} width={34} />
+                <Tooltip content={tip((v) => `${Math.round(v)}일`, "CCC")} cursor={{ stroke: grid }} />
+                <Line type="monotone" dataKey="ccc" stroke={METRIC_COL.ccc} strokeWidth={2.5} dot={{ r: 3, fill: METRIC_COL.ccc }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </MetricChartCard>
+        )}
+      </div>
     </div>
   );
 }
@@ -4241,6 +4356,13 @@ export default function AnalysisDetail() {
           />
         </ErrorBoundary>
       </div>
+
+      {/* ── 핵심 지표 추이 차트 (CapEx·R&D·인력·운전자본) ── */}
+      {isComplete && (
+        <ErrorBoundary fallback={null}>
+          <MetricCharts ticker={analysis.ticker} isEn={isEn} />
+        </ErrorBoundary>
+      )}
 
       {/* ── 분석 파이프라인 미니 진행바 ── */}
       {!isComplete && !isError && (
