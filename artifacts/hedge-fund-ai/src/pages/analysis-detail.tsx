@@ -872,14 +872,21 @@ interface StageRow {
   computedAt: string;
 }
 
-const PHASE_UI: Record<string, { ko: string; tag: string; color: string }> = {
-  hype:       { ko: "기대 선반영", tag: "실체 없는 프리미엄", color: "#BA7517" },
-  proving:    { ko: "실체 확인",   tag: "저평가 증명 구간",   color: "#0F6E56" },
-  numbers:    { ko: "숫자 싸움",   tag: "실체가 프리미엄 정당화", color: "#0F6E56" },
-  peakout:    { ko: "피크아웃 전조", tag: "기대가 실체 추월",  color: "#BA7517" },
-  value:      { ko: "성장→가치",   tag: "성장 멈추고 재평가", color: "#5F5E5A" },
-  decline:    { ko: "쇠퇴",        tag: "실체·기대 동반 하락", color: "#5F5E5A" },
-  turnaround: { ko: "턴어라운드",  tag: "실체가 바닥에서 반등", color: "#185FA5" },
+const PHASE_UI: Record<string, { ko: string; tag: string; color: string; desc: string }> = {
+  hype:       { ko: "기대 선반영", tag: "실체 없는 프리미엄", color: "#BA7517",
+    desc: "실적은 뒷걸음치는데 주가엔 기대가 잔뜩 붙었어요. 실체 없는 프리미엄 — 거품을 조심할 구간입니다." },
+  proving:    { ko: "실체 확인",   tag: "저평가 증명 구간",   color: "#0F6E56",
+    desc: "실적은 좋아지는데 시장은 아직 싸게 봅니다. 저평가가 증명되면 재평가 여지가 있는 구간이에요." },
+  numbers:    { ko: "숫자 싸움",   tag: "실체가 프리미엄 정당화", color: "#0F6E56",
+    desc: "실적이 강하고 시장 기대도 높습니다. 실적이 높은 주가를 정당화하는 구간 — 관건은 숫자가 기대를 계속 넘느냐입니다." },
+  peakout:    { ko: "피크아웃 전조", tag: "기대가 실체 추월",  color: "#BA7517",
+    desc: "성장은 식는데 기대(밸류에이션)는 여전히 높습니다. 기대가 실체를 앞선 경계 구간이에요." },
+  value:      { ko: "성장→가치",   tag: "성장 멈추고 재평가", color: "#5F5E5A",
+    desc: "성장이 멈추고 시장 기대도 낮아졌습니다. 성장주에서 가치주로 넘어가는 국면이에요." },
+  decline:    { ko: "쇠퇴",        tag: "실체·기대 동반 하락", color: "#5F5E5A",
+    desc: "실적도 기대도 함께 내려갑니다. 사업이 위축되는 국면이에요." },
+  turnaround: { ko: "턴어라운드",  tag: "실체가 바닥에서 반등", color: "#185FA5",
+    desc: "바닥을 찍고 실적이 반등하기 시작했습니다. 방향이 바뀌는 국면이에요." },
 };
 
 // 히어로 오른쪽 카드 — 적정주가 자리를 대체한다. 애빛다는 목표가가 아니라 '국면'을 말한다.
@@ -936,25 +943,16 @@ function MetricChartCard({ title, sub, children }: { title: string; sub?: string
   );
 }
 
-function MetricCharts({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
-  const [d, setD] = useState<MetricData | null>(null);
-  useEffect(() => {
-    if (!ticker) return;
-    fetch(getApiUrl(`/api/company-metrics/${encodeURIComponent(ticker)}`), { credentials: "include" })
-      .then(r => (r.ok ? r.json() : null)).then(setD).catch(() => setD(null));
-  }, [ticker]);
-  if (!d) return null;
-  const has = (a: any[] | undefined) => Array.isArray(a) && a.length >= 2;
-  if (!has(d.capex) && !has(d.rnd) && !has(d.headcount) && !has(d.workingCapital)) return null;
+type MetricKind = "capex" | "rnd" | "head" | "ccc";
 
+// 지표 차트 하나를 그린다 — 보고서 소제목 아래에 인라인으로 끼운다.
+function oneMetricChart(kind: MetricKind, d: MetricData, isEn: boolean): React.ReactNode {
+  const has = (a: any[] | undefined) => Array.isArray(a) && a.length >= 2;
   const isKRW = d.currency === "KRW";
   const money = (v: number | null) => v == null ? "—" : isKRW ? `${(v / 1e12).toFixed(1)}조` : `$${(v / 1e9).toFixed(1)}B`;
-  // R&D 절대액: KR은 백만원 단위, US는 원(달러)
-  const rndMoney = (v: number | null) => v == null ? "—" : isKRW ? `${(v / 1e6).toFixed(1)}조` : `$${(v / 1e9).toFixed(1)}B`;
   const axis = { fontSize: 10, fill: "var(--muted-foreground, #6b7280)" };
   const grid = "var(--border, #e5e7eb)";
   const yr = (y: number) => `'${String(y).slice(2)}`;
-
   const tip = (fmt: (v: number) => string, label: string) => ({ active, payload }: any) =>
     active && payload?.[0] ? (
       <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-[11px] shadow-md">
@@ -963,67 +961,91 @@ function MetricCharts({ ticker, isEn = false }: { ticker: string; isEn?: boolean
       </div>
     ) : null;
 
+  if (kind === "capex" && has(d.capex))
+    return (<MetricChartCard title={isEn ? "CapEx (investment)" : "설비투자 (CapEx)"} sub={isEn ? "absolute · won/dollar" : "절대 규모 · 사업 확장 신호"}>
+      <ResponsiveContainer>
+        <BarChart data={d.capex} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+          <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v) => money(v)} tick={axis} axisLine={false} tickLine={false} width={44} />
+          <Tooltip content={tip(money, isEn ? "CapEx" : "설비투자")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+          <Bar dataKey="capex" fill={METRIC_COL.capex} radius={[4, 4, 0, 0]} maxBarSize={34} />
+        </BarChart>
+      </ResponsiveContainer>
+    </MetricChartCard>);
+
+  if (kind === "rnd" && has(d.rnd))
+    return (<MetricChartCard title={isEn ? "R&D intensity" : "R&D 집중도"} sub={isEn ? "R&D / revenue (%)" : "R&D ÷ 매출 (%)"}>
+      <ResponsiveContainer>
+        <BarChart data={d.rnd} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+          <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v) => `${v}%`} tick={axis} axisLine={false} tickLine={false} width={34} />
+          <Tooltip content={tip((v) => `${v?.toFixed?.(1) ?? v}%`, "R&D/매출")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+          <Bar dataKey="ratio" fill={METRIC_COL.rnd} radius={[4, 4, 0, 0]} maxBarSize={34} />
+        </BarChart>
+      </ResponsiveContainer>
+    </MetricChartCard>);
+
+  if (kind === "head" && has(d.headcount))
+    return (<MetricChartCard title={isEn ? "Headcount" : "임직원 수"} sub={isEn ? "total employees" : "총원 · 사업 규모의 변화"}>
+      <ResponsiveContainer>
+        <BarChart data={d.headcount} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+          <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axis} axisLine={false} tickLine={false} width={38} domain={["auto", "auto"]} />
+          <Tooltip content={tip((v) => v.toLocaleString(), isEn ? "employees" : "명")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+          <Bar dataKey="total" fill={METRIC_COL.head} radius={[4, 4, 0, 0]} maxBarSize={34} />
+        </BarChart>
+      </ResponsiveContainer>
+    </MetricChartCard>);
+
+  if (kind === "ccc" && has(d.workingCapital) && d.workingCapital.some(w => w.ccc != null))
+    return (<MetricChartCard title={isEn ? "Cash conversion cycle" : "운전자본 효율 (CCC)"} sub={isEn ? "days · lower is better" : "현금전환주기(일) · 낮을수록 좋음"}>
+      <ResponsiveContainer>
+        <LineChart data={d.workingCapital} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+          <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v) => `${Math.round(v)}`} tick={axis} axisLine={false} tickLine={false} width={34} />
+          <Tooltip content={tip((v) => `${Math.round(v)}일`, "CCC")} cursor={{ stroke: grid }} />
+          <Line type="monotone" dataKey="ccc" stroke={METRIC_COL.ccc} strokeWidth={2.5} dot={{ r: 3, fill: METRIC_COL.ccc }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </MetricChartCard>);
+
+  return null;
+}
+
+// 보고서 지표 데이터를 마크다운 본문 전체에 흘려보낸다 — 소제목 렌더러가 꺼내 쓴다.
+const ReportMetricsContext = createContext<{ data: MetricData | null; isEn: boolean } | null>(null);
+
+function ReportMetricsProvider({ ticker, isEn, children }: { ticker: string; isEn: boolean; children: React.ReactNode }) {
+  const [data, setData] = useState<MetricData | null>(null);
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(getApiUrl(`/api/company-metrics/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null)).then(setData).catch(() => setData(null));
+  }, [ticker]);
+  return <ReportMetricsContext.Provider value={{ data, isEn }}>{children}</ReportMetricsContext.Provider>;
+}
+
+// 소제목 텍스트로 어떤 차트를 끼울지 정한다 (없으면 빈 배열 → 차트 없음).
+function chartsForHeading(text: string): MetricKind[] {
+  if (/투자\s*방향|설비\s*투자|capex/i.test(text)) return ["capex", "rnd"];
+  if (/운전자본/.test(text)) return ["ccc"];
+  if (/캐파|생산\s*능력|인력|임직원/.test(text)) return ["head"];
+  return [];
+}
+
+// 소제목 아래에 끼워지는 인라인 지표 차트(들). 컨텍스트(=보고서 섹션) 밖에서는 아무것도 안 그린다.
+function InlineMetricChart({ kinds }: { kinds: MetricKind[] }) {
+  const ctx = useContext(ReportMetricsContext);
+  if (!ctx?.data) return null;
+  const charts = kinds.map((k) => oneMetricChart(k, ctx.data!, ctx.isEn)).filter(Boolean);
+  if (charts.length === 0) return null;
   return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2.5">
-        <BarChart2 className="w-4 h-4 text-muted-foreground/60" />
-        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Key metrics over time" : "핵심 지표 추이"}</h4>
-        <span className="text-[11px] text-muted-foreground">{isEn ? "computed from filings" : "공시 실측 · 서버 계산"}</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {has(d.capex) && (
-          <MetricChartCard title={isEn ? "CapEx (investment)" : "설비투자 (CapEx)"} sub={isEn ? "absolute · won/dollar" : "절대 규모 · 사업 확장 신호"}>
-            <ResponsiveContainer>
-              <BarChart data={d.capex} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
-                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => money(v)} tick={axis} axisLine={false} tickLine={false} width={44} />
-                <Tooltip content={tip(money, isEn ? "CapEx" : "설비투자")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                <Bar dataKey="capex" fill={METRIC_COL.capex} radius={[4, 4, 0, 0]} maxBarSize={34} />
-              </BarChart>
-            </ResponsiveContainer>
-          </MetricChartCard>
-        )}
-        {has(d.rnd) && (
-          <MetricChartCard title={isEn ? "R&D intensity" : "R&D 집중도"} sub={isEn ? "R&D / revenue (%)" : "R&D ÷ 매출 (%)"}>
-            <ResponsiveContainer>
-              <BarChart data={d.rnd} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
-                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => `${v}%`} tick={axis} axisLine={false} tickLine={false} width={34} />
-                <Tooltip content={tip((v) => `${v?.toFixed?.(1) ?? v}%`, "R&D/매출")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                <Bar dataKey="ratio" fill={METRIC_COL.rnd} radius={[4, 4, 0, 0]} maxBarSize={34} />
-              </BarChart>
-            </ResponsiveContainer>
-          </MetricChartCard>
-        )}
-        {has(d.headcount) && (
-          <MetricChartCard title={isEn ? "Headcount" : "임직원 수"} sub={isEn ? "total employees" : "총원 · 사업 규모의 변화"}>
-            <ResponsiveContainer>
-              <BarChart data={d.headcount} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
-                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axis} axisLine={false} tickLine={false} width={38} domain={["auto", "auto"]} />
-                <Tooltip content={tip((v) => v.toLocaleString(), isEn ? "employees" : "명")} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                <Bar dataKey="total" fill={METRIC_COL.head} radius={[4, 4, 0, 0]} maxBarSize={34} />
-              </BarChart>
-            </ResponsiveContainer>
-          </MetricChartCard>
-        )}
-        {has(d.workingCapital) && d.workingCapital.some(w => w.ccc != null) && (
-          <MetricChartCard title={isEn ? "Cash conversion cycle" : "운전자본 효율 (CCC)"} sub={isEn ? "days · lower is better" : "현금전환주기(일) · 낮을수록 좋음"}>
-            <ResponsiveContainer>
-              <LineChart data={d.workingCapital} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="2 2" stroke={grid} vertical={false} />
-                <XAxis dataKey="year" tickFormatter={yr} tick={axis} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => `${Math.round(v)}`} tick={axis} axisLine={false} tickLine={false} width={34} />
-                <Tooltip content={tip((v) => `${Math.round(v)}일`, "CCC")} cursor={{ stroke: grid }} />
-                <Line type="monotone" dataKey="ccc" stroke={METRIC_COL.ccc} strokeWidth={2.5} dot={{ r: 3, fill: METRIC_COL.ccc }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </MetricChartCard>
-        )}
-      </div>
+    <div className={`grid grid-cols-1 ${charts.length > 1 ? "sm:grid-cols-2" : ""} gap-3 my-3 not-prose`}>
+      {charts.map((c, i) => <div key={i}>{c}</div>)}
     </div>
   );
 }
@@ -1045,7 +1067,16 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   if (loading || !data || !data.latest) return null;
   const history = (data.history ?? []).slice(-6);
   const latest = data.latest;
-  const ui = PHASE_UI[latest.phase] ?? { ko: latest.phase, tag: "", color: "#5F5E5A" };
+  const ui = PHASE_UI[latest.phase] ?? { ko: latest.phase, tag: "", color: "#5F5E5A", desc: "" };
+
+  // 두 축을 사람 말로 — "실적이 강해지나 / 시장이 비싸게 보나"
+  const subState = latest.substanceScore >= 30 ? { t: "강함", c: "#0F6E56" }
+    : latest.substanceScore <= -15 ? { t: "역성장", c: "#A32D2D" }
+    : { t: "둔화", c: "#92600B" };
+  const expState = latest.expectation === "premium" ? "프리미엄(고평가)"
+    : latest.expectation === "discount" ? "저평가" : "미상";
+  // 점수 칩에서 내부 점수(+35 등)를 떼어 사람이 읽기 좋게
+  const cleanReason = (r: string) => r.replace(/^[+\-]\d+\s*/, "").replace(/^(실체|기대)\s/, "");
 
   // 플롯 좌표계
   const L = 66, R = 344, T = 44, B = 250, W = 360;
@@ -1086,7 +1117,20 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           {isEn ? "confidence" : "신뢰도"} {latest.confidence === "high" ? (isEn ? "high" : "높음") : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mb-2">{isEn ? "Substance (fundamentals) × Expectation (valuation), computed from filings" : "실체(펀더멘털) × 기대(밸류에이션) — 공시 실측으로 서버가 판정"}</p>
+      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Substance (fundamentals) × Expectation (valuation), computed from filings" : "실적이 실제로 강해지나(세로) × 시장이 비싸게 보나(가로) — 공시 실측으로 판정"}</p>
+
+      {/* 한 줄 해석 — "그래서 무슨 뜻인가" */}
+      {!isEn && ui.desc && (
+        <div className="rounded-xl p-3 mb-3" style={{ background: ui.color + "12" }}>
+          <p className="text-[13px] leading-relaxed text-foreground/90">
+            지금 이 회사는 <b style={{ color: ui.color }}>{ui.ko}</b> 국면입니다. {ui.desc}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span>실적(실체) <b style={{ color: subState.c }}>{subState.t}</b></span>
+            <span>시장 기대 <b className="text-foreground/80">{expState}</b></span>
+          </div>
+        </div>
+      )}
 
       <svg viewBox={`0 0 ${W} 288`} width="100%" style={{ maxWidth: 440, color: "var(--muted-foreground, #6b7280)" }} role="img" aria-label={isEn ? "Business phase map" : "사업 국면 지도"}>
         <defs>
@@ -1113,17 +1157,23 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           return (
             <g key={i}>
               <circle cx={p.x} cy={p.y} r={isLast ? 7 : 4} fill="#185FA5" stroke="#fff" strokeWidth={isLast ? 2 : 1.5} />
-              {isLast && <text x={p.x} y={p.y - 11} fontSize={10} textAnchor="middle" fontWeight={700} fill="#185FA5">'{p.year}</text>}
+              {isLast && <text x={p.x} y={p.y - 11} fontSize={9.5} textAnchor="middle" fontWeight={700} fill="#185FA5">{isEn ? "now" : "현재"}</text>}
             </g>
           );
         })}
       </svg>
 
       {latest.reasons?.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {latest.reasons.slice(0, 7).map((r, i) => (
-            <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-muted/60 text-muted-foreground">{r}</span>
-          ))}
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mb-1.5">{isEn ? "why this phase" : "이렇게 판정한 근거"}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {latest.reasons
+              .filter(r => !/^(실체|기대)\s/.test(r) && !r.includes("바닥 반등"))
+              .slice(0, 7)
+              .map((r, i) => (
+                <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-muted/60 text-foreground/70">{cleanReason(r)}</span>
+              ))}
+          </div>
         </div>
       )}
     </div>
@@ -4394,12 +4444,7 @@ export default function AnalysisDetail() {
         </ErrorBoundary>
       </div>
 
-      {/* ── 핵심 지표 추이 차트 (CapEx·R&D·인력·운전자본) ── */}
-      {isComplete && (
-        <ErrorBoundary fallback={null}>
-          <MetricCharts ticker={analysis.ticker} isEn={isEn} />
-        </ErrorBoundary>
-      )}
+      {/* 지표 차트는 보고서 본문의 관련 소제목(설비투자·운전자본·인력) 아래로 인라인 배치됨 */}
 
       {/* ── 분석 파이프라인 미니 진행바 ── */}
       {!isComplete && !isError && (
@@ -4513,8 +4558,10 @@ export default function AnalysisDetail() {
           >
             {dartStep ? (
               <ErrorBoundary fallback={null}>
-                <StageMap ticker={analysis.ticker} isEn={isEn} />
-                <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+                <ReportMetricsProvider ticker={analysis.ticker} isEn={isEn}>
+                  <StageMap ticker={analysis.ticker} isEn={isEn} />
+                  <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+                </ReportMetricsProvider>
               </ErrorBoundary>
             ) : streamingDart ? (
               <div className="flex items-center gap-3 py-6 justify-center">
@@ -6851,14 +6898,18 @@ const MD_BODY_COMPONENTS = {
       : Array.isArray(children) ? children.map((c: any) => typeof c === "string" ? c : "").join("") : String(children ?? "");
     // 앞쪽 이모지 제거
     const clean = text.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, "").trim();
+    const kinds = chartsForHeading(clean || text);
     return (
-      <div className="flex items-center gap-2 mt-7 mb-3 first:mt-0">
-        <span className="h-px flex-1 bg-border/50" />
-        <h2 className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-muted-foreground/60 shrink-0">
-          {clean || text}
-        </h2>
-        <span className="h-px flex-1 bg-border/50" />
-      </div>
+      <>
+        <div className="flex items-center gap-2 mt-7 mb-3 first:mt-0">
+          <span className="h-px flex-1 bg-border/50" />
+          <h2 className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-muted-foreground/60 shrink-0">
+            {clean || text}
+          </h2>
+          <span className="h-px flex-1 bg-border/50" />
+        </div>
+        {kinds.length > 0 && <InlineMetricChart kinds={kinds} />}
+      </>
     );
   },
   // h3 — 소단원: 본문보다 살짝 강조, 왼쪽 액센트 라인
@@ -6867,11 +6918,15 @@ const MD_BODY_COMPONENTS = {
       ? children
       : Array.isArray(children) ? children.map((c: any) => typeof c === "string" ? c : "").join("") : String(children ?? "");
     const clean = text.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, "").trim();
+    const kinds = chartsForHeading(clean || text);
     return (
-      <h3 className="flex items-center gap-2 text-[13px] font-semibold text-foreground/80 mt-5 mb-2">
-        <span className="w-[2px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
-        {clean || text}
-      </h3>
+      <>
+        <h3 className="flex items-center gap-2 text-[13px] font-semibold text-foreground/80 mt-5 mb-2">
+          <span className="w-[2px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
+          {clean || text}
+        </h3>
+        {kinds.length > 0 && <InlineMetricChart kinds={kinds} />}
+      </>
     );
   },
   h4: ({ children }: any) => (
