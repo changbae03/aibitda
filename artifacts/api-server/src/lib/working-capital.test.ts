@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, type DartRow,
+  computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex,
+  computeHealth, renderHealthTrend, type DartRow,
 } from "./working-capital";
 
 /** SK하이닉스 2025 전체 재무제표에서 운전자본 계정만 옮긴 픽스처(억원 아님, 원 단위) */
@@ -101,5 +102,37 @@ describe("CapEx를 현금흐름표에서 계산한다", () => {
     const neg: DartRow[] = [{ sj_div: "CF", account_id: "ifrs-full_PurchaseOfPropertyPlantAndEquipment",
       account_nm: "유형자산의 취득", thstrm_amount: "-50000" }];
     expect(computeCapex(neg, 2025)[0]!.capex).toBe(50000);
+  });
+});
+
+describe("재무 건전성 추이를 재무제표에서 계산한다", () => {
+  // 자본총계·부채총계·순이익만 옮긴 픽스처. 부채비율=부채÷자본, ROE=순이익÷자본.
+  const HEALTH: DartRow[] = [
+    { sj_div: "BS",  account_id: "ifrs-full_Equity", account_nm: "자본총계",
+      thstrm_amount: "1000000", frmtrm_amount: "800000", bfefrmtrm_amount: "600000" },
+    { sj_div: "BS",  account_id: "ifrs-full_Liabilities", account_nm: "부채총계",
+      thstrm_amount: "460000", frmtrm_amount: "496000", bfefrmtrm_amount: "528000" },
+    { sj_div: "CIS", account_id: "ifrs-full_ProfitLoss", account_nm: "당기순이익",
+      thstrm_amount: "360000", frmtrm_amount: "216000", bfefrmtrm_amount: "-102000" },
+  ];
+  const h = computeHealth(HEALTH, 2025);
+
+  it("한 보고서에서 3개년 부채비율을 뽑는다 (개선 흐름)", () => {
+    expect(h.map(y => Math.round(y.debtRatio!))).toEqual([88, 62, 46]);
+  });
+
+  it("ROE는 적자(음수)도 그대로 계산한다", () => {
+    expect(h.map(y => Math.round(y.roe!))).toEqual([-17, 27, 36]);
+  });
+
+  it("자기자본이 없으면 그 해는 비율을 못 내므로 제외한다", () => {
+    const noEq = HEALTH.filter(r => r.account_nm !== "자본총계");
+    expect(computeHealth(noEq, 2025)).toEqual([]);
+  });
+
+  it("표에 '흐름을 서술' 지시가 들어간다 — 최신값만 보지 말라는 장치", () => {
+    const t = renderHealthTrend(h);
+    expect(t).toContain("과거부터의 흐름");
+    expect(t).toContain("88%");
   });
 });

@@ -25,7 +25,7 @@ import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { buildSignalTimeline, emergingTerms, renderBizSignals } from "../biz-signals.js";
 import { collectUSBizReports } from "../us-biz-reports.js";
-import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex } from "../working-capital.js";
+import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, computeHealth, renderHealthTrend } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import {
   classifyStage, renderStageVerdict, pctChange, capexTrendOf,
@@ -632,10 +632,26 @@ async function executeStep(
         for (const r of quarterSorted) t += `| ${r.bsns_year}년 ${rl[r.reprt_code] ?? r.reprt_code} | ${money(r.revenue)} | ${money(r.operating_income)} | ${money(r.net_income)} | ${opm(r.operating_income, r.revenue)} |\n`;
         blocks.push(t);
       }
+      // 재무 건전성 추이 — 최신 스냅샷이 아니라 과거부터의 흐름(개선/악화)을 짚게 한다.
+      // 자본총계·부채총계·순이익은 ticker_financials에 비어 있어(equity NULL), CCC·CapEx와
+      // 같은 전체 재무제표(fetchAnnualAllRows)에서 IFRS 코드로 뽑아 계산한다.
+      let healthCount = 0;
+      if (isKoreanTicker(analysis.ticker)) {
+        try {
+          const all = await fetchAnnualAllRows(analysis.ticker);
+          if (all) {
+            const ht = renderHealthTrend(computeHealth(all.rows, all.bsnsYear));
+            if (ht) { blocks.push(ht); healthCount = 1; }
+          }
+        } catch (e) {
+          console.warn("[company_analysis] 건전성 추이 계산 실패:", (e as Error)?.message?.slice(0, 80));
+        }
+      }
+
       if (blocks.length > 0) {
         const inj = "\n\n" + blocks.join("\n");
         enrichedContext = enrichedContext ? enrichedContext + inj : inj;
-        console.log(`[company_analysis] 서버 손익표 주입 (연간 ${annual.length}, 분기 ${quarter.length})`);
+        console.log(`[company_analysis] 서버 손익표 주입 (연간 ${annual.length}, 분기 ${quarter.length}, 건전성 ${healthCount})`);
       }
     } catch (e) {
       console.warn("[company_analysis] 손익표 주입 실패:", (e as Error)?.message?.slice(0, 80));

@@ -50,6 +50,19 @@ export interface DartRow {
   bfefrmtrm_amount?: string;
 }
 
+// ─── 재무 건전성(부채비율·ROE) — 같은 전체 재무제표 rows에서 파생 ───────────────
+type HealthKey = "equity" | "liabilities" | "netIncome";
+const HEALTH_IDS: Record<HealthKey, readonly string[]> = {
+  equity:      ["Equity"],
+  liabilities: ["Liabilities"],
+  netIncome:   ["ProfitLoss", "ProfitLossAttributableToOwnersOfParent"],
+};
+const HEALTH_NAMES: Record<HealthKey, readonly string[]> = {
+  equity:      ["자본총계"],
+  liabilities: ["부채총계"],
+  netIncome:   ["당기순이익", "당기순이익(손실)", "연결당기순이익"],
+};
+
 type Term = "thstrm_amount" | "frmtrm_amount" | "bfefrmtrm_amount";
 
 /** 한 계정군의 값을 한 term에서 찾는다. 코드 우선, 없으면 한글명 정확 일치. */
@@ -66,6 +79,67 @@ function pick(rows: DartRow[], key: WCKey, term: Term): number | null {
     if (r) { const v = amount(r[term]); if (v !== 0) return v; }
   }
   return null;
+}
+
+/** 건전성 계정 pick — pick과 같은 규칙(코드 우선, 한글명 대비책) */
+function pickH(rows: DartRow[], key: HealthKey, term: Term): number | null {
+  for (const r of rows) {
+    if (HEALTH_IDS[key].includes(shortId(r.account_id))) {
+      const v = amount(r[term]);
+      if (v !== 0) return v;
+    }
+  }
+  const norm = (s: unknown) => String(s ?? "").replace(/\s/g, "");
+  for (const nm of HEALTH_NAMES[key]) {
+    const r = rows.find(x => norm(x.account_nm) === nm);
+    if (r) { const v = amount(r[term]); if (v !== 0) return v; }
+  }
+  return null;
+}
+
+export interface HealthYear {
+  year: number;
+  /** 부채비율 = 부채총계 ÷ 자기자본 (%) */
+  debtRatio: number | null;
+  /** ROE = 당기순이익 ÷ 자기자본 (%) */
+  roe: number | null;
+}
+
+/** 전체 재무제표 rows(한 연간 보고서)에서 3개년 건전성을 계산한다(자본총계 기준). */
+export function computeHealth(rows: DartRow[], bsnsYear: number): HealthYear[] {
+  const terms: Array<[Term, number]> = [
+    ["thstrm_amount", bsnsYear],
+    ["frmtrm_amount", bsnsYear - 1],
+    ["bfefrmtrm_amount", bsnsYear - 2],
+  ];
+  const out: HealthYear[] = [];
+  for (const [term, year] of terms) {
+    const eq = pickH(rows, "equity", term);
+    if (eq == null || eq === 0) continue; // 자기자본 없으면 비율 계산 불가
+    const liab = pickH(rows, "liabilities", term);
+    const ni = pickH(rows, "netIncome", term);
+    out.push({
+      year,
+      debtRatio: liab != null ? (liab / eq) * 100 : null,
+      roe: ni != null ? (ni / eq) * 100 : null,
+    });
+  }
+  return out.sort((a, b) => a.year - b.year);
+}
+
+/** 건전성 추이 표. 최신값이 아니라 흐름을 서술하도록 지시를 붙인다. */
+export function renderHealthTrend(years: HealthYear[]): string {
+  const ys = years.filter(y => y.debtRatio != null || y.roe != null);
+  if (ys.length < 2) return "";
+  const p = (v: number | null) => (v == null ? "—" : `${v.toFixed(0)}%`);
+  const lines = [
+    "",
+    "[📊 서버 제공 · 재무 건전성 추이 — 최신값이 아니라 **과거부터의 흐름(개선/악화)**을 서술하세요]",
+    "| 연도 | 부채비율 | ROE |",
+    "|---|---|---|",
+  ];
+  for (const y of ys) lines.push(`| ${y.year}년 | ${p(y.debtRatio)} | ${p(y.roe)} |`);
+  return lines.join("\n");
 }
 
 export interface WorkingCapitalYear {
