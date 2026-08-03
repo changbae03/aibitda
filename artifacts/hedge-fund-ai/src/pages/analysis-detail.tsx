@@ -950,8 +950,10 @@ function oneMetricChart(kind: MetricKind, d: MetricData, isEn: boolean): React.R
   const has = (a: any[] | undefined) => Array.isArray(a) && a.length >= 2;
   const isKRW = d.currency === "KRW";
   const money = (v: number | null) => v == null ? "—" : isKRW ? `${(v / 1e12).toFixed(1)}조` : `$${(v / 1e9).toFixed(1)}B`;
-  const axis = { fontSize: 10, fill: "var(--muted-foreground, #6b7280)" };
-  const grid = "var(--border, #e5e7eb)";
+  // 이 앱의 CSS 변수는 hsl 성분만("220 15% 65%") 담으므로 반드시 hsl()로 감싼다.
+  // var()만 쓰면 무효값→검정으로 렌더돼 다크모드에서 안 보인다.
+  const axis = { fontSize: 10, fill: "hsl(var(--muted-foreground))" };
+  const grid = "hsl(var(--border))";
   const yr = (y: number) => `'${String(y).slice(2)}`;
   const tip = (fmt: (v: number) => string, label: string) => ({ active, payload }: any) =>
     active && payload?.[0] ? (
@@ -1132,7 +1134,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
         </div>
       )}
 
-      <svg viewBox={`0 0 ${W} 288`} width="100%" style={{ maxWidth: 440, color: "var(--muted-foreground, #6b7280)" }} role="img" aria-label={isEn ? "Business phase map" : "사업 국면 지도"}>
+      <svg viewBox={`0 0 ${W} 288`} width="100%" style={{ maxWidth: 440, color: "hsl(var(--muted-foreground))" }} role="img" aria-label={isEn ? "Business phase map" : "사업 국면 지도"}>
         <defs>
           <marker id="stagearrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -2728,6 +2730,15 @@ function parseCatalystSections(raw: string) {
   return { lead, sections };
 }
 
+// 한 줄짜리 불릿을 MdBlock 없이 렌더할 때 **볼드**만 처리한다(그대로 노출되던 문제).
+function renderInline(text: string): React.ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+    p.startsWith("**") && p.endsWith("**") && p.length > 4
+      ? <strong key={i} className="font-semibold text-foreground">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
 function ForwardTimeline({ body, accent }: { body: string; accent: string }) {
   const lines = body.split("\n").filter(l => l.trim().startsWith("-") || l.trim().match(/^\d+\./));
   if (lines.length === 0) return <p className="text-[13px] text-muted-foreground/70 leading-relaxed">{body}</p>;
@@ -2745,7 +2756,7 @@ function ForwardTimeline({ body, accent }: { body: string; accent: string }) {
               <div className="shrink-0 w-1.5 h-1.5 rounded-full mt-[6px] relative z-10" style={{ background: accent }} />
               <div className="flex-1 min-w-0">
                 {date && <span className="text-[10.5px] font-mono font-semibold block mb-0.5" style={{ color: accent }}>{date}</span>}
-                <p className="text-[13px] text-foreground/80 leading-snug">{event}</p>
+                <p className="text-[13px] text-foreground/80 leading-snug">{renderInline(event)}</p>
               </div>
             </div>
           );
@@ -2768,7 +2779,7 @@ function CatalystBullets({ body }: { body: string }) {
         return (
           <div key={i} className="flex gap-2.5 items-start">
             <div className="w-1.5 h-1.5 rounded-full mt-[6px] shrink-0" style={{ background: dotColor }} />
-            <p className="text-[13px] text-foreground/80 leading-relaxed flex-1">{text}</p>
+            <p className="text-[13px] text-foreground/80 leading-relaxed flex-1">{renderInline(text)}</p>
           </div>
         );
       })}
@@ -2860,6 +2871,9 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   "수익성":     { bg: "bg-emerald-500/10", text: "text-emerald-400" },
   "밸류에이션": { bg: "bg-violet-500/10", text: "text-violet-400" },
   "재무건전성": { bg: "bg-orange-500/10", text: "text-orange-400" },
+  "기대":       { bg: "bg-amber-500/10",  text: "text-amber-400" },
+  "해자":       { bg: "bg-rose-500/10",   text: "text-rose-400" },
+  "신선도":     { bg: "bg-cyan-500/10",   text: "text-cyan-400" },
   "내러티브":   { bg: "bg-teal-500/10",   text: "text-teal-400" },
 };
 
