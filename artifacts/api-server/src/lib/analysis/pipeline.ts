@@ -585,6 +585,61 @@ async function executeStep(
     } catch {
       // optional — 이전 데이터 없어도 무방
     }
+
+    // 서버가 손익 표를 그려 넣는다 — AI가 표를 직접 그리다 구분선(---) 반복으로 스트림이
+    // 끊겨 뒤 섹션(재무 건전성·컨센서스)까지 통째로 날아가던 문제를 없앤다.
+    // 표는 서버가, 해석은 AI가 (조용한 실패·망친 표 방지).
+    try {
+      // 값은 원(raw) 단위이고, 같은 (연도·보고서)에 fs_type이 섞여 중복·NULL 행이 생긴다.
+      // DISTINCT ON으로 매출 있는 행을 연도별 하나만 집는다(CLAUDE.md: 값 있는 행 우선).
+      const [annual, quarter] = await Promise.all([
+        rawQuery(
+          `SELECT DISTINCT ON (bsns_year) bsns_year, revenue, operating_income, net_income
+             FROM ticker_financials WHERE ticker = $1 AND reprt_code = '11011' AND revenue IS NOT NULL
+             ORDER BY bsns_year DESC, revenue DESC LIMIT 4`, [analysis.ticker]),
+        rawQuery(
+          `SELECT DISTINCT ON (bsns_year, reprt_code) bsns_year, reprt_code, revenue, operating_income, net_income
+             FROM ticker_financials WHERE ticker = $1 AND reprt_code != '11011' AND revenue IS NOT NULL
+             ORDER BY bsns_year DESC, reprt_code DESC, revenue DESC LIMIT 8`, [analysis.ticker]),
+      ]);
+      // 보고서 코드는 시간순이 아니다(11013=Q1·11012=반기·11014=Q3). 시간순으로 다시 정렬해
+      // 최근 5개만 최신순으로 — CLAUDE.md가 경고한 "Q1이 최신으로 집히는" 버그 방지.
+      const qOrd: Record<string, number> = { "11013": 1, "11012": 2, "11014": 3 };
+      const chrono = (r: any) => Number(r.bsns_year) * 10 + (qOrd[r.reprt_code] ?? 0);
+      const quarterSorted = [...quarter].sort((a, b) => chrono(b) - chrono(a)).slice(0, 5);
+      // 원 단위를 조/억으로 적응 포맷(대형주는 조, 중소형은 억).
+      const money = (v: any): string => {
+        if (v == null) return "—";
+        const n = Number(v);
+        if (!Number.isFinite(n)) return "—";
+        if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(1)}조`;
+        if (Math.abs(n) >= 1e8) return `${Math.round(n / 1e8).toLocaleString("ko-KR")}억`;
+        return n.toLocaleString("ko-KR");
+      };
+      const opm = (oi: any, rev: any) =>
+        oi != null && rev && Number(rev) !== 0 ? `${((Number(oi) / Number(rev)) * 100).toFixed(1)}%` : "—";
+      const rl: Record<string, string> = { "11012": "반기", "11013": "1분기", "11014": "3분기" };
+      const blocks: string[] = [];
+      if (annual.length > 0) {
+        let t = "\n[📊 서버 제공 · 연간 손익 — 이 표를 그대로 인용하고 직접 표를 다시 그리지 마세요]\n";
+        t += "| 연도 | 매출 | 영업이익 | 순이익 | OPM |\n|---|---|---|---|---|\n";
+        for (const r of annual) t += `| ${r.bsns_year}년 | ${money(r.revenue)} | ${money(r.operating_income)} | ${money(r.net_income)} | ${opm(r.operating_income, r.revenue)} |\n`;
+        blocks.push(t);
+      }
+      if (quarterSorted.length > 0) {
+        let t = "\n[📊 서버 제공 · 최근 분기 손익 — 이 표를 그대로 인용하고 직접 표를 다시 그리지 마세요]\n";
+        t += "| 기간 | 매출 | 영업이익 | 순이익 | OPM |\n|---|---|---|---|---|\n";
+        for (const r of quarterSorted) t += `| ${r.bsns_year}년 ${rl[r.reprt_code] ?? r.reprt_code} | ${money(r.revenue)} | ${money(r.operating_income)} | ${money(r.net_income)} | ${opm(r.operating_income, r.revenue)} |\n`;
+        blocks.push(t);
+      }
+      if (blocks.length > 0) {
+        const inj = "\n\n" + blocks.join("\n");
+        enrichedContext = enrichedContext ? enrichedContext + inj : inj;
+        console.log(`[company_analysis] 서버 손익표 주입 (연간 ${annual.length}, 분기 ${quarter.length})`);
+      }
+    } catch (e) {
+      console.warn("[company_analysis] 손익표 주입 실패:", (e as Error)?.message?.slice(0, 80));
+    }
   }
 
   // ── dart_report_analysis: 사업보고서 원문 + 다기간 재무 데이터 주입 ────────
