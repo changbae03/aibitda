@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
 import { normalizeTicker, isKoreanTicker } from "@workspace/shared";
-import { fetchAnnualAllRows } from "../lib/dart-store.js";
-import { fetchEmployeeCounts } from "../lib/dart-store.js";
-import { computeCapex, computeWorkingCapital } from "../lib/working-capital.js";
+import { fetchAnnualAllRows, fetchEmployeeCounts, fetchLatestQuarterAllRows, fetchLatestQuarterEmployees } from "../lib/dart-store.js";
+import { computeCapex, computeWorkingCapital, computeQuarterWC } from "../lib/working-capital.js";
 import { aggregateEmployees } from "../lib/company-facts.js";
 import { getBizTimeline } from "../lib/biz-timeline.js";
 import { extractMetrics } from "../lib/biz-metrics.js";
@@ -40,14 +39,29 @@ async function krMetrics(ticker: string): Promise<MetricSeries> {
       .map(c => ({ year: c.year, capex: c.capex, capexToRevenue: c.capexToRevenue }));
     out.workingCapital = computeWorkingCapital(all.rows, all.bsnsYear)
       .map(w => ({ year: w.year, dio: w.dio, dso: w.dso, dpo: w.dpo, ccc: w.ccc }));
+    try {
+      const q = await fetchLatestQuarterAllRows(ticker);
+      if (q && q.bsnsYear > all.bsnsYear) {
+        const qwc = computeQuarterWC(q.rows, q.bsnsYear, q.label, q.flowFactor);
+        if (qwc && qwc.ccc != null) out.workingCapital.push({ year: qwc.year, dio: qwc.dio, dso: qwc.dso, dpo: qwc.dpo, ccc: qwc.ccc });
+      }
+    } catch { /* 분기 없으면 연간만 */ }
   }
 
-  // 인력 — 직원현황 API
+  // 인력 — 직원현황 API (+ 최신 분기 스냅샷)
   const emp = await fetchEmployeeCounts(ticker).catch(() => []);
   out.headcount = emp
     .map(e => aggregateEmployees(e.rows, e.year))
     .filter((x): x is NonNullable<typeof x> => x != null)
     .map(h => ({ year: h.year, total: h.total, regular: h.regular, contract: h.contract, avgTenure: h.avgTenure }));
+  try {
+    const qe = await fetchLatestQuarterEmployees(ticker);
+    const lastY = out.headcount.length ? out.headcount[out.headcount.length - 1].year : 0;
+    if (qe && qe.year > lastY) {
+      const qh = aggregateEmployees(qe.rows, qe.year, qe.label);
+      if (qh) out.headcount.push({ year: qh.year, total: qh.total, regular: qh.regular, contract: qh.contract, avgTenure: qh.avgTenure });
+    }
+  } catch { /* 분기 없으면 연간만 */ }
 
   // R&D — 사업보고서 연간에서 코드가 뽑은 값(백만원, 매출대비%)
   const tl = await getBizTimeline(ticker).catch(() => []);

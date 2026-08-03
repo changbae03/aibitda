@@ -27,6 +27,7 @@ export interface EmpRow {
 
 export interface HeadcountYear {
   year: number;
+  label?: string;     // 표시용. 분기 포인트는 "2026 1분기"처럼. 없으면 "{year}년"
   total: number;      // 전체 직원 수
   regular: number;    // 정규직
   contract: number;   // 계약직
@@ -39,7 +40,7 @@ function num(s: unknown): number {
 }
 
 /** 한 해의 empSttus 행들을 합쳐 총원·정규·계약·가중평균 근속을 낸다. */
-export function aggregateEmployees(rows: EmpRow[], year: number): HeadcountYear | null {
+export function aggregateEmployees(rows: EmpRow[], year: number, label?: string): HeadcountYear | null {
   if (!rows.length) return null;
   let total = 0, regular = 0, contract = 0, tenureWeighted = 0, tenureBase = 0;
   for (const r of rows) {
@@ -52,7 +53,7 @@ export function aggregateEmployees(rows: EmpRow[], year: number): HeadcountYear 
   }
   if (total === 0) return null;
   return {
-    year, total, regular, contract,
+    year, label, total, regular, contract,
     avgTenure: tenureBase > 0 ? tenureWeighted / tenureBase : null,
   };
 }
@@ -71,7 +72,7 @@ export function renderHeadcount(years: HeadcountYear[]): string {
     "|---|---|---|---|---|",
   ];
   for (const y of ys) {
-    lines.push(`| ${y.year}년 | ${n(y.total)} | ${n(y.regular)} | ${n(y.contract)} | ${y.avgTenure == null ? "—" : y.avgTenure.toFixed(1)} |`);
+    lines.push(`| ${y.label ?? `${y.year}년`} | ${n(y.total)} | ${n(y.regular)} | ${n(y.contract)} | ${y.avgTenure == null ? "—" : y.avgTenure.toFixed(1)} |`);
   }
   return lines.join("\n");
 }

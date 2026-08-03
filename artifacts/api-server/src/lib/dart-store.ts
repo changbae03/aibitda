@@ -360,6 +360,36 @@ export async function fetchAnnualAllRows(
 }
 
 /**
+ * 최신 **분기** 전체 재무제표. 연간에서 멈춘 지표(운전자본 등)를 최신 분기까지 끌어오는 데 쓴다.
+ * 가장 최근 분기(반기·3분기·1분기 순)를 찾아 돌려준다. flowFactor는 분기 흐름을 연율화하는 배수다
+ * (재고·채권은 시점값이라 그대로지만, 매출·매출원가는 분기 누적이라 연간과 맞추려면 곱해야 한다).
+ */
+export async function fetchLatestQuarterAllRows(
+  stockCode: string,
+): Promise<{ rows: DartRow[]; bsnsYear: number; reprtCode: string; label: string; flowFactor: number } | null> {
+  const key = process.env["DART_API_KEY"];
+  if (!key) return null;
+  const corpCode = await lookupCorpCode(stockCode);
+  if (!corpCode) return null;
+  const thisYear = new Date().getFullYear();
+  // 최신순: 3분기 > 반기 > 1분기. 누적 기준이므로 연율화 배수는 3Q=4/3, 반기=2, 1Q=4.
+  const CANDS: Array<[string, string, number]> = [
+    ["11014", "3분기", 4 / 3], ["11012", "반기", 2], ["11013", "1분기", 4],
+  ];
+  for (const year of [thisYear, thisYear - 1]) {
+    for (const [rc, name, flowFactor] of CANDS) {
+      for (const fs of ["CFS", "OFS"] as const) {
+        const rows = await fetchDartPeriod(corpCode, year, rc, fs, key);
+        if (rows && rows.length > 0) {
+          return { rows, bsnsYear: year, reprtCode: rc, label: `${year} ${name}`, flowFactor };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * DART 직원현황(empSttus) — 최근 3개년 원본 행을 연도별로 돌려준다.
  * 부문·성별로 쪼개져 오므로 합치는 것은 company-facts.aggregateEmployees가 한다.
  */
@@ -387,6 +417,38 @@ export async function fetchEmployeeCounts(
     } catch { /* 개별 연도 실패는 건너뛴다 */ }
   }
   return out;
+}
+
+/**
+ * 최신 **분기** 직원현황 — 연간에서 멈추지 않게 최신 분기 인원 스냅샷을 하나 준다.
+ * 인원은 시점값이라 연율화가 필요 없다(운전자본과 달리 그대로 쓴다).
+ */
+export async function fetchLatestQuarterEmployees(
+  stockCode: string,
+): Promise<{ year: number; rows: import("./company-facts.js").EmpRow[]; label: string } | null> {
+  type EmpRow = import("./company-facts.js").EmpRow;
+  const key = process.env["DART_API_KEY"];
+  if (!key) return null;
+  const corpCode = await lookupCorpCode(stockCode);
+  if (!corpCode) return null;
+  const thisYear = new Date().getFullYear();
+  const CANDS: Array<[string, string]> = [["11014", "3분기"], ["11012", "반기"], ["11013", "1분기"]];
+  for (const year of [thisYear, thisYear - 1]) {
+    for (const [rc, name] of CANDS) {
+      try {
+        const res = await fetch(
+          `https://opendart.fss.or.kr/api/empSttus.json?crtfc_key=${key}` +
+          `&corp_code=${corpCode}&bsns_year=${year}&reprt_code=${rc}`,
+          { signal: AbortSignal.timeout(12000) },
+        );
+        const data = await res.json() as any;
+        if (data.status === "000" && Array.isArray(data.list) && data.list.length > 0) {
+          return { year, rows: data.list as EmpRow[], label: `${year} ${name}` };
+        }
+      } catch { /* 다음 후보 */ }
+    }
+  }
+  return null;
 }
 
 // ─── 메인: 분기·연간 데이터 수집 및 저장 ──────────────────────────────────────

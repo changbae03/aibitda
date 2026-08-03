@@ -144,6 +144,8 @@ export function renderHealthTrend(years: HealthYear[]): string {
 
 export interface WorkingCapitalYear {
   year: number;
+  /** 표시용 라벨. 분기 포인트는 "2026 1분기(연율)" 처럼 준다. 없으면 "{year}년" */
+  label?: string;
   inventory: number | null;
   receivables: number | null;
   payables: number | null;
@@ -188,6 +190,29 @@ export function computeWorkingCapital(rows: DartRow[], bsnsYear: number): Workin
     out.push({ year, inventory, receivables, payables, cogs, revenue, dio, dso, dpo, ccc });
   }
   return out.sort((a, b) => a.year - b.year);
+}
+
+/**
+ * 최신 **분기** 보고서에서 운전자본 한 포인트를 계산한다.
+ * 재고·매출채권·매입채무는 분기말 시점값이라 그대로, 매출·매출원가는 분기 누적이라
+ * flowFactor(1Q=4·반기=2·3Q=4/3)로 **연율화**해 연간 회전일수와 같은 기준으로 맞춘다.
+ */
+export function computeQuarterWC(
+  rows: DartRow[], year: number, label: string, flowFactor: number,
+): WorkingCapitalYear | null {
+  const inventory = pick(rows, "inventory", "thstrm_amount");
+  const receivables = pick(rows, "receivables", "thstrm_amount");
+  const payables = pick(rows, "payables", "thstrm_amount");
+  const cogsQ = pick(rows, "cogs", "thstrm_amount");
+  const revQ = pick(rows, "revenue", "thstrm_amount");
+  if (revQ == null && cogsQ == null && inventory == null) return null;
+  const cogs = cogsQ != null ? cogsQ * flowFactor : null;   // 연율화
+  const revenue = revQ != null ? revQ * flowFactor : null;  // 연율화
+  const dio = days(inventory, cogs);
+  const dso = days(receivables, revenue);
+  const dpo = days(payables, cogs);
+  const ccc = dio != null && dso != null && dpo != null ? dio + dso - dpo : null;
+  return { year, label, inventory, receivables, payables, cogs, revenue, dio, dso, dpo, ccc };
 }
 
 // ─── CapEx(설비투자) — 같은 전체 재무제표 rows에서 파생 ────────────────────────
@@ -279,7 +304,7 @@ export function renderWorkingCapital(years: WorkingCapitalYear[]): string {
     "|---|---|---|---|---|",
   ];
   for (const y of usable) {
-    lines.push(`| ${y.year}년 | ${r0(y.dio)} | ${r0(y.dso)} | ${r0(y.dpo)} | ${r0(y.ccc)} |`);
+    lines.push(`| ${y.label ?? `${y.year}년`} | ${r0(y.dio)} | ${r0(y.dso)} | ${r0(y.dpo)} | ${r0(y.ccc)} |`);
   }
   return lines.join("\n");
 }

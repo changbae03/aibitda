@@ -17,7 +17,7 @@ import { AGENTS, STEP_ORDER, buildPrompt, needsFinancialSector, needsSOTP, type 
 import { getCalibrationContext, classifySector } from "../../routes/performance.js";
 import { triggerModelReview } from "../../routes/model-insights.js";
 import { runQACheck } from "../qa-checker.js";
-import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, fetchEmployeeCounts, type DartAnchorNumerics } from "../dart-store.js";
+import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, fetchEmployeeCounts, fetchLatestQuarterAllRows, fetchLatestQuarterEmployees, type DartAnchorNumerics } from "../dart-store.js";
 import { fetchLatestAnnualText } from "../biz-timeline.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
 import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
@@ -25,7 +25,7 @@ import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { buildSignalTimeline, emergingTerms, renderBizSignals } from "../biz-signals.js";
 import { collectUSBizReports } from "../us-biz-reports.js";
-import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, computeHealth, renderHealthTrend } from "../working-capital.js";
+import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, computeHealth, renderHealthTrend, computeQuarterWC } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import {
   classifyStage, renderStageVerdict, pctChange, capexTrendOf,
@@ -832,10 +832,19 @@ async function executeStep(
             if (capex) { dartBlocks.push(capex); console.log(`[dart_report_analysis] CapEx 주입 (${all.bsnsYear})`); }
             stageSig.capexTrend = capexTrendOf(capexYears.map(c => c.capex));
             const wcYears = computeWorkingCapital(all.rows, all.bsnsYear);
-            const wc = renderWorkingCapital(wcYears);
-            if (wc) { dartBlocks.push(wc); console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear})`); }
+            // 국면 신호는 연간 기준으로만 (분기 연율화 잡음이 판정을 흔들지 않게).
             const cccs = wcYears.filter(w => w.ccc != null);
             if (cccs.length >= 2) stageSig.cccDeltaDays = cccs[cccs.length - 1].ccc! - cccs[cccs.length - 2].ccc!;
+            // 표시용으로 최신 분기 포인트를 덧붙인다 — 연간에서 멈추지 않게(사용자 요청: 1Q26 기준).
+            try {
+              const q = await fetchLatestQuarterAllRows(analysis.ticker);
+              if (q && q.bsnsYear > all.bsnsYear) {
+                const qwc = computeQuarterWC(q.rows, q.bsnsYear, `${q.label}(연율)`, q.flowFactor);
+                if (qwc && qwc.ccc != null) wcYears.push(qwc);
+              }
+            } catch { /* 분기 실패는 연간만으로 진행 */ }
+            const wc = renderWorkingCapital(wcYears);
+            if (wc) { dartBlocks.push(wc); console.log(`[dart_report_analysis] 운전자본 지표 주입 (${all.bsnsYear}+분기)`); }
             const revRow = all.rows.find(r => String(r.account_id ?? "").includes("Revenue"));
             const rev = Number(String(revRow?.thstrm_amount ?? "").replace(/,/g, ""));
             latestRevenue = Number.isFinite(rev) && rev > 0 ? rev : null;
@@ -845,9 +854,19 @@ async function executeStep(
           const emp = await fetchEmployeeCounts(analysis.ticker);
           const hcYears = emp.map(e => aggregateEmployees(e.rows, e.year))
             .filter((x): x is NonNullable<typeof x> => x != null);
+          // 국면 신호(인력 증감)는 연간 기준으로만.
+          if (hcYears.length >= 2) stageSig.headcountGrowthPct = pctChange(hcYears[hcYears.length - 1].total, hcYears[hcYears.length - 2].total);
+          // 표시용으로 최신 분기 인원을 덧붙인다(사용자 요청: 1Q26 기준).
+          try {
+            const qe = await fetchLatestQuarterEmployees(analysis.ticker);
+            const lastYear = hcYears.length ? hcYears[hcYears.length - 1].year : 0;
+            if (qe && qe.year > lastYear) {
+              const qh = aggregateEmployees(qe.rows, qe.year, qe.label);
+              if (qh) hcYears.push(qh);
+            }
+          } catch { /* 분기 실패는 연간만으로 진행 */ }
           const headcount = renderHeadcount(hcYears);
           if (headcount) { dartBlocks.push(headcount); console.log(`[dart_report_analysis] 임직원 수 주입`); }
-          if (hcYears.length >= 2) stageSig.headcountGrowthPct = pctChange(hcYears[hcYears.length - 1].total, hcYears[hcYears.length - 2].total);
 
           // 고객 집중도(재무제표 주석) — 고객명은 익명이어도 단일 대형고객 매출을 금액 공시.
           const rawAnnual = await fetchLatestAnnualText(analysis.ticker);
