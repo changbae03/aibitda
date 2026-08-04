@@ -126,7 +126,7 @@ export function renderMetricTable(periods: PeriodMetrics[]): string {
   lines.push(`| ${head.join(" | ")} |`);
   lines.push(`|${head.map(() => "---").join("|")}|`);
 
-  for (const p of periods) {
+  for (const p of [...periods].reverse()) {
     const row = [p.periodLabel];
     for (const spec of present) {
       const hit = p.hits.find(h => h.key === spec.key);

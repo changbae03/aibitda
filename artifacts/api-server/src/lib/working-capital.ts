@@ -138,7 +138,7 @@ export function renderHealthTrend(years: HealthYear[]): string {
     "| 연도 | 부채비율 | ROE |",
     "|---|---|---|",
   ];
-  for (const y of ys) lines.push(`| ${y.year}년 | ${p(y.debtRatio)} | ${p(y.roe)} |`);
+  for (const y of [...ys].reverse()) lines.push(`| ${y.year}년 | ${p(y.debtRatio)} | ${p(y.roe)} |`);
   return lines.join("\n");
 }
 
@@ -280,7 +280,7 @@ export function renderCapex(years: CapexYear[]): string {
     "| 연도 | CapEx(억원) | CapEx/매출 |",
     "|---|---|---|",
   ];
-  for (const y of usable) lines.push(`| ${y.year}년 | ${억(y.capex)} | ${pct(y.capexToRevenue)} |`);
+  for (const y of [...usable].reverse()) lines.push(`| ${y.year}년 | ${억(y.capex)} | ${pct(y.capexToRevenue)} |`);
   return lines.join("\n");
 }
 
@@ -303,7 +303,7 @@ export function renderWorkingCapital(years: WorkingCapitalYear[]): string {
     "| 연도 | DIO(재고) | DSO(매출채권) | DPO(매입채무) | CCC(현금전환) |",
     "|---|---|---|---|---|",
   ];
-  for (const y of usable) {
+  for (const y of [...usable].reverse()) {
     lines.push(`| ${y.label ?? `${y.year}년`} | ${r0(y.dio)} | ${r0(y.dso)} | ${r0(y.dpo)} | ${r0(y.ccc)} |`);
   }
   return lines.join("\n");

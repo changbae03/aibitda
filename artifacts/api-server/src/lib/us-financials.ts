@@ -232,7 +232,7 @@ export function renderUSFinancials(years: USFinYear[]): string {
     "| 회계연도 | 매출 | 영업이익 | 순이익 | OPM | R&D/매출 | CapEx/매출 | CCC |",
     "|---|---|---|---|---|---|---|---|",
   ];
-  for (const y of years) {
+  for (const y of [...years].reverse()) {
     lines.push(
       `| FY${y.fy} | ${b(y.revenue)} | ${b(y.operatingIncome)} | ${b(y.netIncome)} | ` +
       `${ratio(y.operatingIncome, y.revenue)} | ${ratio(y.rnd, y.revenue)} | ` +

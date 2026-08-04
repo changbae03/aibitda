@@ -71,7 +71,7 @@ export function renderHeadcount(years: HeadcountYear[]): string {
     "| 연도 | 총원 | 정규직 | 계약직 | 평균근속(년) |",
     "|---|---|---|---|---|",
   ];
-  for (const y of ys) {
+  for (const y of [...ys].reverse()) {
     lines.push(`| ${y.label ?? `${y.year}년`} | ${n(y.total)} | ${n(y.regular)} | ${n(y.contract)} | ${y.avgTenure == null ? "—" : y.avgTenure.toFixed(1)} |`);
   }
   return lines.join("\n");
