@@ -2875,6 +2875,11 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   "해자":       { bg: "bg-rose-500/10",   text: "text-rose-400" },
   "신선도":     { bg: "bg-cyan-500/10",   text: "text-cyan-400" },
   "내러티브":   { bg: "bg-teal-500/10",   text: "text-teal-400" },
+  // 바이오 분기 전용 카테고리
+  "파이프라인": { bg: "bg-fuchsia-500/10", text: "text-fuchsia-400" },
+  "임상":       { bg: "bg-sky-500/10",     text: "text-sky-400" },
+  "검증":       { bg: "bg-lime-500/10",    text: "text-lime-400" },
+  "현금":       { bg: "bg-green-500/10",   text: "text-green-400" },
 };
 
 function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
