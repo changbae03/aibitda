@@ -278,24 +278,12 @@ async function executeStep(
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── 종목별 보정 메모 주입: 비활성화 ──────────────────────────────────────
+  // ── 종목별 보정 메모(ticker_notes) 주입: 폐기 ────────────────────────────
   // 밸류에이션(목표주가) 시절 장치였다. 목표가를 접은 뒤로는 대부분 무의미하거나(HARD CAP·DCF
   // 상한) self-review가 만든 틀린 보정이라, 매 분석에 "반드시 반영"으로 주입하면 오히려 오염됐다.
-  // 주입을 끄고 테이블도 비웠다. 되살리려면 아래 블록의 주석을 풀면 된다.
-  try {
-    const row: { memo?: string | null } | null = null;
-    // const row = pipelineCtx !== undefined
-    //   ? pipelineCtx.tickerNote
-    //   : ((await rawQuery(`SELECT memo FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
-    if (row?.memo) {
-      const memoBlock = `\n\n[📝 운영자 종목 보정 메모 — ${analysis.companyName}(${analysis.ticker}) — 반드시 반영하세요]\n${row.memo}`;
-      enrichedContext = enrichedContext ? enrichedContext + memoBlock : memoBlock;
-      console.log(`[ticker-note] Injected operator memo ${memoBlock.length}chars for ${analysis.ticker}`);
-    }
-
-  } catch {
-    // 실패해도 분석 진행
-  }
+  // 그래서 주입을 제거하고 테이블도 비웠다. 되살리려면 아래 원본 로직을 복원한다:
+  //   const row = pipelineCtx?.tickerNote ?? (await rawQuery(`SELECT memo FROM ticker_notes WHERE ticker=$1`, [analysis.ticker]))[0] ?? null;
+  //   if (row?.memo) enrichedContext += `\n\n[📝 운영자 보정 메모 …]\n${row.memo}`;
 
   // ③④ 시장 레짐 + 섹터 학습 노트 주입 (KRW 종목 전용)
   // pipelineCtx가 있으면 파이프라인 시작 시 1회 pre-fetch한 값 재사용 (8회 중복 조회 방지)
