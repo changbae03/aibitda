@@ -278,14 +278,15 @@ async function executeStep(
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── 종목별 관리자 보정 메모 주입 (모든 분석 단계 공통) ──────────────────
-  // pipelineCtx가 있으면 캐시값 사용 (파이프라인 당 1회 DB 조회), 없으면 직접 조회
+  // ── 종목별 보정 메모 주입: 비활성화 ──────────────────────────────────────
+  // 밸류에이션(목표주가) 시절 장치였다. 목표가를 접은 뒤로는 대부분 무의미하거나(HARD CAP·DCF
+  // 상한) self-review가 만든 틀린 보정이라, 매 분석에 "반드시 반영"으로 주입하면 오히려 오염됐다.
+  // 주입을 끄고 테이블도 비웠다. 되살리려면 아래 블록의 주석을 풀면 된다.
   try {
-    const row = pipelineCtx !== undefined
-      ? pipelineCtx.tickerNote
-      : ((await rawQuery(`SELECT memo FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
-
-    // ① 운영자 수동 메모
+    const row: { memo?: string | null } | null = null;
+    // const row = pipelineCtx !== undefined
+    //   ? pipelineCtx.tickerNote
+    //   : ((await rawQuery(`SELECT memo FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
     if (row?.memo) {
       const memoBlock = `\n\n[📝 운영자 종목 보정 메모 — ${analysis.companyName}(${analysis.ticker}) — 반드시 반영하세요]\n${row.memo}`;
       enrichedContext = enrichedContext ? enrichedContext + memoBlock : memoBlock;
