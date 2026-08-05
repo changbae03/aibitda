@@ -28,6 +28,7 @@ import { runQACheck } from "../lib/qa-checker.js";
 import { normalizeTicker } from "@workspace/shared";
 import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
+import { collectBizTimeline } from "../lib/biz-timeline.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent, fetchEdgarTimeSeries, fetchEdgarMDA } from "../lib/sec-edgar-content.js";
 import { fetchDartTimeSeries } from "../lib/dart-timeseries.js";
@@ -244,6 +245,13 @@ router.post("/", async (req, res) => {
   // SEC 목록에도 없는 장외 ADR(NTDOY 등)과 상장 직후 종목이 여기서 메워진다.
   // 응답을 이미 보낸 뒤라 사용자 대기 시간에 영향이 없고, 실패해도 분석을 막지 않는다.
   ensureStockRegistered(upperTicker, companyName).catch(() => {});
+
+  // 사업보고서 시계열을 백그라운드로 미리 수집한다. dart_report_analysis(5번째 단계)가
+  // 그제서야 수집하면 "2번 섹션"이 앞 단계보다 늦게 뜬다. 여기서 머리를 얹어 company_intro~
+  // company_analysis가 도는 동안 겹쳐 받아두면, 5번째에 도달할 땐 대개 DB에서 즉시 읽는다.
+  if (isKoreanTicker) {
+    collectBizTimeline(krxCode, 4).catch(() => {});
+  }
 
   (async () => {
     try {
