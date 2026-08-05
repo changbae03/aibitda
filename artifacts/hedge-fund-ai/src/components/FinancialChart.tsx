@@ -192,13 +192,19 @@ export default function FinancialChart({ ticker, isEn = false }: { ticker: strin
     ? [Math.floor(allMin * 1.3), Math.ceil(allMax * 1.15)]
     : [0, Math.ceil(allMax * 1.15) || 1];
 
+  // 극단 OPM(매출≈0인 적자 구간의 -15505% 같은 값)은 축을 통째로 망가뜨리므로 제외한다.
   const allMargins = entries
     .map((e) => e.operatingMargin)
-    .filter((v): v is number => v != null);
+    .filter((v): v is number => v != null && Math.abs(v) <= 250);
   const minMargin = allMargins.length ? Math.min(...allMargins) : 0;
   const maxMargin = allMargins.length ? Math.max(...allMargins) : 60;
-  const marginMin = Math.min(minMargin - 5, -5);
-  const marginMax = Math.max(maxMargin + 5, 10);
+  const marginMin = Math.max(Math.min(minMargin - 5, -5), -120);
+  const marginMax = Math.min(Math.max(maxMargin + 5, 10), 120);
+  // OPM 선이 극단값에서 급경사로 튀지 않게, |OPM|>250%인 점은 비운다(선이 그 구간을 건너뛴다).
+  const chartEntries = entries.map((e) =>
+    e.operatingMargin != null && Math.abs(e.operatingMargin) > 250
+      ? { ...e, operatingMargin: null }
+      : e);
 
   return (
     <div className="space-y-3">
@@ -229,7 +235,7 @@ export default function FinancialChart({ ticker, isEn = false }: { ticker: strin
       </div>
 
       <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+        <ComposedChart data={chartEntries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(p) => formatPeriodLabel(p, view)} />
           <YAxis yAxisId="left" orientation="left"
@@ -266,7 +272,7 @@ export default function FinancialChart({ ticker, isEn = false }: { ticker: strin
           <Line yAxisId="right" dataKey="operatingMargin" name="operatingMargin"
             stroke={COLORS.margin} strokeWidth={2}
             dot={{ r: 3, fill: COLORS.margin, strokeWidth: 0 }} activeDot={{ r: 4 }}
-            connectNullData={false} />
+            connectNulls={false} />
         </ComposedChart>
       </ResponsiveContainer>
 

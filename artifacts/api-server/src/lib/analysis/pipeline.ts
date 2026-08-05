@@ -1489,9 +1489,11 @@ async function runPipelineBackground(id: number): Promise<void> {
         refreshBriefForTicker(rows[0].ticker).catch(console.error);
         console.log(`[pipeline-bg] ${rows[0].ticker} 포트폴리오 브리핑 갱신 트리거`);
 
-        // 모든 완료 분석에 30초 후 AI 자체 검수 실행
-        scheduleAnalysisSelfReview(id);
-        console.log(`[pipeline-bg] analysis#${id} 자체 검수 스케줄 등록 (30초 후)`);
+        // ⛔ AI 자체 검수(self-review) 비활성화 — 밸류에이션 시절 장치.
+        // 검수 결과를 ticker_notes.memo에 자동으로 써넣고 그게 다음 분석에 "반드시 반영"으로
+        // 주입됐는데, 목표주가를 접은 뒤로는 대상이 없어 오히려 틀린 보정(예: 하이닉스 "10만원대")을
+        // 만들어 이후 분석을 오염시켰다. 사람이 남기는 보정 메모만 남기고 자동 검수는 끈다.
+        // scheduleAnalysisSelfReview(id);
 
       }
     } catch {}
