@@ -272,12 +272,17 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
   }), [chartData, swings]);
 
   const currentPrice = data?.currentPrice ?? 0;
-  const showValidatedTarget = validatedTargetPrice && validatedTargetPrice > 0;
+  // 적정주가(목표가) 라인 비활성화 — 밸류에이션을 접으며 히어로에서 뺀 것과 일관. 차트는 실제 주가만.
+  const showValidatedTarget = false as boolean;
 
   // ── 예측 경로 오버레이 ─────────────────────────────────────────────────────
   const forecastOverlay = useMemo(() => {
+    // ⛔ 예측 경로 비활성화 — 목표가(target1/target2·validatedTargetPrice) 기반이라 밸류에이션을
+    //    접은 지금은 정체성에 안 맞고, 목표가가 현재가의 몇 배일 때 주가 축을 왜곡해 차트가
+    //    "한번씩 이상하게" 나왔다(메디포스트 현재가 9,710 vs 옛 목표 41,325). 되살리려면 true로.
+    const FORECAST_ENABLED: boolean = false;
     const pathType = priceScenario?.pathType;
-    if (!pathType || !chartData.length) return null;
+    if (!FORECAST_ENABLED || !pathType || !chartData.length) return null;
     const cp = currentPrice > 0 ? currentPrice : (chartData[chartData.length - 1]?.close ?? 0);
     if (cp <= 0) return null;
 
@@ -341,14 +346,13 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
     return result;
   }, [chartDataWithSwings, forecastOverlay]);
 
-  const forecastValues = forecastOverlay?.points.map(p => p.forecast) ?? [];
-
+  // 주가 축은 실제 거래 가격에만 고정한다. 예측 경로·목표가를 축에 넣던 옛 밸류에이션 잔재가
+  // 목표가(현재가의 몇 배)로 축을 늘려 실제 주가선을 바닥에 짓눌렀다("한번씩 이상하게").
   const priceMin = chartData.length
-    ? Math.min(...chartData.map((d) => d.low ?? d.close), ...forecastValues) * 0.99
+    ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99
     : 0;
   const dataMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) : 100;
-  const levelMax = Math.max(dataMax, showValidatedTarget ? validatedTargetPrice! : 0, ...forecastValues);
-  const priceMax = levelMax * 1.03;
+  const priceMax = dataMax * 1.05;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
   const volumeDomainMax = maxVolume * 5;
 
