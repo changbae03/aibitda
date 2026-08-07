@@ -62,12 +62,16 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
   },
 };
 
+// 화면 순서와 같게 둔다. 사업보고서 행간(2번)이 이 제품의 본체이므로 먼저 나와야 하고,
+// 재무 분석(3번)은 프롬프트 역할 자체가 "사업보고서에서 읽어낸 변화를 숫자로 검증"이라
+// 행간 결과를 받아야 성립한다. 예전에는 재무가 먼저 돌아 그 검증이 불가능했고,
+// 화면에서도 아래쪽(3번)이 먼저 차고 2번이 늦게 뜨는 역전이 보였다.
 export const STEP_ORDER: AgentKey[] = [
   "company_intro",
   "industry_analysis",
   "catalyst_analysis",
-  "company_analysis",
   "dart_report_analysis",
+  "company_analysis",
   "investment_strategy",
   "investment_thesis",
   "checklist",
