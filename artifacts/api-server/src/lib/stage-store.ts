@@ -11,24 +11,27 @@
 
 import { pool, readJsonb } from "@workspace/db";
 import { isKoreanTicker } from "@workspace/shared";
-import type { StageVerdict } from "./stage-classifier.js";
+import type { StageVerdict, StageSignals } from "./stage-classifier.js";
 import { buildTrajectory, type FinYear, type Trajectory } from "./stage-trajectory.js";
 
 export async function saveStageVerdict(
   ticker: string,
   verdict: StageVerdict,
   analysisId: number | null,
+  /** 판정에 쓴 원자료. 화면의 여정이 이 값(매출성장률 등)으로 그린다 — 점수는 상한에 눌린다. */
+  signals?: StageSignals | null,
 ): Promise<void> {
   await pool.query(
     `INSERT INTO stock_stage_verdict
        (ticker, analysis_id, phase, stage_number, substance_score, substance_state,
-        expectation, confidence, reasons)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        expectation, confidence, reasons, signals)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [
       ticker, analysisId, verdict.phase, verdict.meta.stageNumber,
       verdict.substance.score, verdict.substance.state,
       verdict.expectation, verdict.confidence,
       JSON.stringify(verdict.substance.reasons),
+      signals ? JSON.stringify(signals) : null,
     ],
   ).catch((e) => console.warn(`[stage-store] 저장 실패 ${ticker}:`, (e as Error)?.message?.slice(0, 80)));
 }
@@ -55,6 +58,8 @@ export interface StageHistoryRow {
   expectation: string;
   confidence: string;
   reasons: string[];
+  /** 판정에 쓴 원자료 — 화면 여정이 매출성장률로 그릴 때 쓴다. 옛 행은 null. */
+  signals: StageSignals | null;
   computedAt: string;
 }
 
@@ -62,7 +67,7 @@ export interface StageHistoryRow {
 export async function getStageHistory(ticker: string, limit = 12): Promise<StageHistoryRow[]> {
   const { rows } = await pool.query(
     `SELECT phase, stage_number, substance_score, substance_state,
-            expectation, confidence, reasons, computed_at
+            expectation, confidence, reasons, signals, computed_at
        FROM stock_stage_verdict
       WHERE ticker = $1 ORDER BY computed_at DESC LIMIT $2`,
     [ticker, limit],
@@ -76,6 +81,8 @@ export async function getStageHistory(ticker: string, limit = 12): Promise<Stage
       expectation: r.expectation,
       confidence: r.confidence,
       reasons: readJsonb<string[]>(r.reasons) ?? [],
+      // jsonb는 드라이버가 이미 객체로 준다 — JSON.parse 하면 죽는다(readJsonb 사용)
+      signals: readJsonb<StageSignals>(r.signals) ?? null,
       computedAt: r.computed_at instanceof Date ? r.computed_at.toISOString() : String(r.computed_at),
     }))
     .reverse();

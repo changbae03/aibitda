@@ -869,6 +869,8 @@ interface StageRow {
   expectation: string;
   confidence: string;
   reasons: string[];
+  /** 판정에 쓴 원자료. 여정의 '지금' 지점이 최신 분기 성장률로 그려진다. 옛 분석은 null */
+  signals?: { recentQuarterRevGrowthPct?: number | null } | null;
   computedAt: string;
 }
 
@@ -1053,7 +1055,7 @@ function InlineMetricChart({ kinds }: { kinds: MetricKind[] }) {
 }
 
 /** 연도별 실체 흐름 — "회사가 실제로 지나온 길". 분석 실행 이력(history)과는 다르다. */
-interface TrajYear { fy: number; substanceScore: number; substanceState: string }
+interface TrajYear { fy: number; substanceScore: number; substanceState: string; revGrowthPct?: number | null; opmPct?: number | null }
 interface TrajChange { fy: number; kind: string; detail: string }
 
 /** 실체 상태별 표시 — 색이 곧 메시지다 */
@@ -1108,19 +1110,35 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   // 궤적은 **연간 확정** 실적이라 최신 분기가 빠진다. 그러면 여정 끝(위축)과 배지
   // (턴어라운드)가 어긋나 보인다 — 동양파일이 그랬다(FY2025 적자, 2026 Q1 흑자전환).
   // 그래서 맨 끝에 "지금" 지점을 붙인다. 판정과 그림이 같은 이야기를 해야 한다.
+  // Y축은 **매출성장률**이다. 예전엔 내부 점수(-100~100)를 썼는데 상한에 눌려
+  // +102% 성장과 +47% 성장이 같은 높이로 보였다(SK하이닉스가 평평했다).
+  // 성장률은 누구나 아는 단위이고, 0% 기준선이 성장/역성장을 그대로 가른다.
   const lastFy = trajYears.length ? trajYears[trajYears.length - 1].fy : 0;
+  const nowGrowth = latest.signals?.recentQuarterRevGrowthPct ?? null;
   const traj: Array<TrajYear & { isNow?: boolean }> = [
     ...trajYears,
-    { fy: lastFy + 1, substanceScore: latest.substanceScore, substanceState: stateFromPhase, isNow: true },
+    { fy: lastFy + 1, substanceScore: latest.substanceScore, substanceState: stateFromPhase,
+      revGrowthPct: nowGrowth, isNow: true },
   ];
-  const W = 360, L = 46, R = 340, T = 30, B = 128;
-  const yOf = (score: number) => {
-    const s = Math.max(-60, Math.min(60, score));
-    return T + ((60 - s) / 120) * (B - T);
-  };
+  const growthOf = (r: TrajYear) => (typeof r.revGrowthPct === "number" ? r.revGrowthPct : null);
+  const vals = traj.map(growthOf).filter((v): v is number => v != null);
+  // 눈금은 데이터에 맞춰 잡되 0%는 항상 포함한다(성장/역성장 경계가 보여야 한다).
+  const vMax = Math.max(10, ...vals, 0), vMin = Math.min(-10, ...vals, 0);
+  // T는 라벨(값+상태)이 점 위로 두 줄 들어갈 만큼, L은 첫 점의 라벨이 "0%" 축 라벨과
+  // 부딪히지 않을 만큼 띄운다.
+  const W = 360, L = 62, R = 336, T = 44, B = 122;
+  const yOf = (v: number) => B - ((v - vMin) / (vMax - vMin || 1)) * (B - T);
   const xOf = (i: number) => (traj.length <= 1 ? (L + R) / 2 : L + (i / (traj.length - 1)) * (R - L));
-  const jPts = traj.map((y, i) => ({ x: xOf(i), y: yOf(y.substanceScore), row: y }));
-  const jLine = jPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(0)} ${p.y.toFixed(0)}`).join(" ");
+  const jPts = traj
+    .map((row, i) => ({ x: xOf(i), v: growthOf(row), row }))
+    .filter((p): p is { x: number; v: number; row: TrajYear & { isNow?: boolean } } => p.v != null)
+    .map(p => ({ ...p, y: yOf(p.v) }));
+  const jLine = jPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  // 0% 아래를 채우면 역성장이 한눈에 보인다
+  const zeroY = yOf(0);
+  const jArea = jPts.length >= 2
+    ? `${jLine} L${jPts[jPts.length - 1].x.toFixed(1)} ${zeroY.toFixed(1)} L${jPts[0].x.toFixed(1)} ${zeroY.toFixed(1)} Z`
+    : "";
   const changeCount = new Map<number, number>();
   for (const c of changes) changeCount.set(c.fy, (changeCount.get(c.fy) ?? 0) + 1);
 
@@ -1136,7 +1154,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           {isEn ? "confidence" : "신뢰도"} {latest.confidence === "high" ? (isEn ? "high" : "높음") : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Yearly fundamentals path, computed from filings" : "공시 실적으로 계산한 연도별 흐름 — 성장 · 둔화 · 위축 · 반등"}</p>
+      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Revenue growth by year, computed from filings" : "공시 실적으로 계산한 연도별 매출 성장률 — 색은 그때의 국면"}</p>
 
       {/* 한 줄 해석 — "그래서 무슨 뜻인가" */}
       {!isEn && ui.desc && (
@@ -1155,38 +1173,51 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
       {jPts.length >= 2 && (
         <svg viewBox={`0 0 ${W} 172`} width="100%" style={{ maxWidth: 460, color: "hsl(var(--muted-foreground))" }}
              role="img" aria-label={isEn ? "Business journey" : "연도별 실적 흐름"}>
-          {/* 성장·위축을 가르는 기준선 */}
-          {[{ s: 30, t: isEn ? "strong" : "성장" }, { s: -15, t: isEn ? "weak" : "위축" }].map((g, i) => (
-            <g key={i}>
-              <line x1={L - 4} y1={yOf(g.s)} x2={R + 6} y2={yOf(g.s)} stroke="currentColor" strokeWidth={0.5} strokeDasharray="3 4" opacity={0.25} />
-              <text x={L - 8} y={yOf(g.s) + 3} fontSize={9} textAnchor="end" fill="currentColor" opacity={0.55}>{g.t}</text>
-            </g>
-          ))}
-          {/* 지나온 길 */}
-          <path d={jLine} fill="none" stroke="currentColor" strokeWidth={2} opacity={0.3} strokeLinecap="round" strokeLinejoin="round" />
+          <defs>
+            <linearGradient id="jgrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ui.color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={ui.color} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          {/* 0% 기준선 — 성장과 역성장을 가르는 유일한 눈금 */}
+          <line x1={L - 6} y1={zeroY} x2={R + 8} y2={zeroY} stroke="currentColor" strokeWidth={1} opacity={0.35} />
+          <text x={L - 10} y={zeroY + 3} fontSize={9} textAnchor="end" fill="currentColor" opacity={0.6}>0%</text>
+
+          {/* 0% 위/아래를 채워 성장·역성장 구간이 한눈에 보이게 */}
+          {jArea && <path d={jArea} fill="url(#jgrad)" stroke="none" />}
+          <path d={jLine} fill="none" stroke={ui.color} strokeWidth={2.5} opacity={0.55}
+                strokeLinecap="round" strokeLinejoin="round" />
+
           {jPts.map((p, i) => {
             const isLast = i === jPts.length - 1;
             const st = STATE_UI[p.row.substanceState] ?? { ko: p.row.substanceState, c: "#6B6A64" };
+            const prevState = i > 0 ? jPts[i - 1].row.substanceState : null;
+            // 상태 라벨은 **바뀔 때와 지금만** — "성장 성장 성장" 반복은 잡음이다
+            const showState = isLast || prevState !== p.row.substanceState;
             const marks = changeCount.get(p.row.fy) ?? 0;
             return (
               <g key={i}>
-                <circle cx={p.x} cy={p.y} r={isLast ? 7 : 5} fill={st.c} stroke="hsl(var(--card))" strokeWidth={2} />
-                <text x={p.x} y={p.y - 13} fontSize={isLast ? 11 : 10} textAnchor="middle"
-                      fontWeight={isLast ? 700 : 500} fill={st.c} opacity={isLast ? 1 : 0.75}>{st.ko}</text>
-                <text x={p.x} y={B + 24} fontSize={10} textAnchor="middle"
-                      fill={isLast ? st.c : "currentColor"} fontWeight={isLast ? 700 : 400} opacity={isLast ? 1 : 0.7}>
-                  {isLast ? (isEn ? "now" : "지금") : `${String(p.row.fy).slice(2)}년`}
+                {/* 값·상태 라벨은 **항상 점 위**로. 아래로 두면 역성장 구간(0% 아래)에서
+                    연도 라벨과 겹친다(동양파일 -20% 지점이 그랬다). */}
+                <text x={p.x} y={p.y - 12} fontSize={isLast ? 12 : 11} textAnchor="middle"
+                      fontWeight={700} fill={st.c} opacity={isLast ? 1 : 0.85}>
+                  {p.v >= 0 ? "+" : ""}{Math.round(p.v)}%
                 </text>
-                {!isLast && marks > 0 && (
-                  <text x={p.x} y={B + 38} fontSize={9} textAnchor="middle" fill="currentColor" opacity={0.5}>
-                    변화 {marks}
-                  </text>
+                {showState && (
+                  <text x={p.x} y={p.y - 25} fontSize={9.5} textAnchor="middle"
+                        fontWeight={500} fill={st.c} opacity={0.75}>{st.ko}</text>
                 )}
-                {isLast && (
-                  <text x={p.x} y={B + 38} fontSize={9} textAnchor="middle" fill="currentColor" opacity={0.55}>
-                    {isEn ? "latest qtr" : "최신 분기"}
-                  </text>
-                )}
+                <circle cx={p.x} cy={p.y} r={isLast ? 6.5 : 4.5} fill={st.c} stroke="hsl(var(--card))" strokeWidth={2} />
+                {/* '지금'은 isLast가 아니라 실제 최신 분기 지점만. 옛 분석은 그 지점이
+                    없어서(signals 미저장) 마지막 연도가 "지금"으로 잘못 찍혔다. */}
+                <text x={p.x} y={B + 26} fontSize={10} textAnchor="middle"
+                      fill={isLast ? st.c : "currentColor"} fontWeight={isLast ? 700 : 400} opacity={isLast ? 1 : 0.7}>
+                  {p.row.isNow ? (isEn ? "now" : "지금") : `${String(p.row.fy).slice(2)}년`}
+                </text>
+                <text x={p.x} y={B + 39} fontSize={8.5} textAnchor="middle" fill="currentColor" opacity={0.5}>
+                  {p.row.isNow ? (isEn ? "latest qtr" : "최신 분기") : marks > 0 ? `변화 ${marks}` : ""}
+                </text>
               </g>
             );
           })}

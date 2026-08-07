@@ -938,7 +938,7 @@ async function executeStep(
         stageSig.priorSubstanceScore = await getPriorStageScore(analysis.ticker);
         const verdict = classifyStage(stageSig);
         dartBlocks.push(renderStageVerdict(verdict));
-        await saveStageVerdict(analysis.ticker, verdict, (analysis as any).id ?? null);
+        await saveStageVerdict(analysis.ticker, verdict, (analysis as any).id ?? null, stageSig);
         console.log(`[dart_report_analysis] 국면 판정(${stageMarket}): ${verdict.meta.labelKo} (실체 ${verdict.substance.score}, 신뢰도 ${verdict.confidence})`);
       } catch (e) {
         console.warn("[dart_report_analysis] 국면 판정 실패:", (e as Error)?.message?.slice(0, 80));

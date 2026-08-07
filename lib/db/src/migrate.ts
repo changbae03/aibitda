@@ -584,6 +584,9 @@ export async function runMigrations() {
       );
       CREATE INDEX IF NOT EXISTS idx_stock_stage_verdict_ticker
         ON stock_stage_verdict (ticker, computed_at DESC);
+      -- 판정에 쓴 원자료(매출성장·마진·최신 분기 YoY…). 화면의 '여정'이 이 값으로 그린다.
+      -- 점수는 상한(±100)에 눌려 +102% 성장과 +47% 성장이 같아 보인다 — 원자료가 필요하다.
+      ALTER TABLE stock_stage_verdict ADD COLUMN IF NOT EXISTS signals JSONB;
 
       -- 미국 종목 구조화 재무 — SEC EDGAR companyfacts(XBRL)에서 뽑은 연간 값.
       -- 한국의 ticker_financials·dart_biz_reports에 대응하는 미국판 저장소다.
