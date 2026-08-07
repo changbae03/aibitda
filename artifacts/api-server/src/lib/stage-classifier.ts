@@ -150,8 +150,9 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
     else if (s.headcountGrowthPct <= -3) add(-10, `인력 감축 ${s.headcountGrowthPct.toFixed(0)}%`);
   }
   if (s.cccDeltaDays != null) {
-    if (s.cccDeltaDays <= -10) add(8, `운전자본 개선 ${s.cccDeltaDays.toFixed(0)}일`);
-    else if (s.cccDeltaDays >= 15) add(-8, `운전자본 악화 +${s.cccDeltaDays.toFixed(0)}일`);
+    // 음수 = 현금전환주기가 짧아진 것(개선). "개선 −336일"은 읽기 헷갈려 단축/증가로 쓴다.
+    if (s.cccDeltaDays <= -10) add(8, `운전자본 ${Math.abs(s.cccDeltaDays).toFixed(0)}일 단축`);
+    else if (s.cccDeltaDays >= 15) add(-8, `운전자본 ${s.cccDeltaDays.toFixed(0)}일 증가`);
   }
   const dropped = s.segmentsDropped ?? 0, added = s.segmentsAdded ?? 0;
   if (dropped > added) add(-8, `사업부문 ${dropped}개 소멸`);

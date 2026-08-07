@@ -1052,8 +1052,23 @@ function InlineMetricChart({ kinds }: { kinds: MetricKind[] }) {
   );
 }
 
+/** 연도별 실체 흐름 — "회사가 실제로 지나온 길". 분석 실행 이력(history)과는 다르다. */
+interface TrajYear { fy: number; substanceScore: number; substanceState: string }
+interface TrajChange { fy: number; kind: string; detail: string }
+
+/** 실체 상태별 표시 — 색이 곧 메시지다 */
+const STATE_UI: Record<string, { ko: string; c: string }> = {
+  strong:      { ko: "성장", c: "#0F6E56" },
+  rebounding:  { ko: "반등", c: "#185FA5" },
+  slowing:     { ko: "둔화", c: "#92600B" },
+  contracting: { ko: "위축", c: "#A32D2D" },
+};
+
 function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
-  const [data, setData] = useState<{ history: StageRow[]; latest: StageRow | null } | null>(null);
+  const [data, setData] = useState<{
+    history: StageRow[]; latest: StageRow | null;
+    trajectory?: { years: TrajYear[]; changes: TrajChange[] };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1080,38 +1095,40 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   // 점수 칩에서 내부 점수(+35 등)를 떼어 사람이 읽기 좋게
   const cleanReason = (r: string) => r.replace(/^[+\-]\d+\s*/, "").replace(/^(실체|기대)\s/, "");
 
-  // 플롯 좌표계
-  const L = 66, R = 344, T = 44, B = 250, W = 360;
-  const colX = (exp: string) => (exp === "premium" ? (204 + R) / 2 : (L + 204) / 2);
+  // ── 여정(journey) — 왼쪽에서 오른쪽으로 "지나온 길"을 그린다.
+  //
+  // 예전엔 2축 매트릭스 6칸이었는데 두 가지가 문제였다. 칸 이름(①~⑤)만으로는 뜻이
+  // 읽히지 않았고, 무엇보다 찍히는 점이 **분석을 돌린 이력**이라 같은 칸에 뭉쳐서
+  // 사업 흐름이 보이지 않았다. 여기서는 연도별 실체 궤적(trajectory)을 그린다.
+  const trajYears = data.trajectory?.years ?? [];
+  const changes = data.trajectory?.changes ?? [];
+  // 궤적은 **연간 확정** 실적이라 최신 분기가 빠진다. 그러면 여정 끝(위축)과 배지
+  // (턴어라운드)가 어긋나 보인다 — 동양파일이 그랬다(FY2025 적자, 2026 Q1 흑자전환).
+  // 그래서 맨 끝에 "지금" 지점을 붙인다. 판정과 그림이 같은 이야기를 해야 한다.
+  const nowState = latest.phase === "turnaround" ? "rebounding"
+    : latest.phase === "numbers" || latest.phase === "proving" ? "strong"
+    : latest.phase === "peakout" || latest.phase === "value" ? "slowing" : "contracting";
+  const lastFy = trajYears.length ? trajYears[trajYears.length - 1].fy : 0;
+  const traj: Array<TrajYear & { isNow?: boolean }> = [
+    ...trajYears,
+    { fy: lastFy + 1, substanceScore: latest.substanceScore, substanceState: nowState, isNow: true },
+  ];
+  const W = 360, L = 46, R = 340, T = 30, B = 128;
   const yOf = (score: number) => {
     const s = Math.max(-60, Math.min(60, score));
     return T + ((60 - s) / 120) * (B - T);
   };
-  const yStrong = yOf(30), yContract = yOf(-15);
-
-  const zones = [
-    { x: L, y: T, w: 204 - L, h: yStrong - T, fill: "rgba(29,158,117,0.13)", label: "② 실체 확인", c: "#0F6E56" },
-    { x: 204, y: T, w: R - 204, h: yStrong - T, fill: "rgba(29,158,117,0.13)", label: "③ 숫자 싸움", c: "#0F6E56" },
-    { x: L, y: yStrong, w: 204 - L, h: yContract - yStrong, fill: "rgba(150,148,140,0.12)", label: "⑤ 성장→가치", c: "#5F5E5A" },
-    { x: 204, y: yStrong, w: R - 204, h: yContract - yStrong, fill: "rgba(239,159,39,0.15)", label: "④ 피크아웃", c: "#92600B" },
-    { x: L, y: yContract, w: 204 - L, h: B - yContract, fill: "rgba(150,148,140,0.12)", label: "🔻 쇠퇴", c: "#5F5E5A" },
-    { x: 204, y: yContract, w: R - 204, h: B - yContract, fill: "rgba(239,159,39,0.15)", label: "① 기대 선반영", c: "#92600B" },
-  ];
-
-  // 궤적 점 — 같은 칸에 겹치지 않게 인덱스로 살짝 벌린다
-  const pts = history.map((h, i) => ({
-    x: colX(h.expectation) + (i - (history.length - 1) / 2) * 12,
-    y: yOf(h.substanceScore),
-    row: h,
-    year: h.computedAt.slice(2, 4),
-  }));
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(0)} ${p.y.toFixed(0)}`).join(" ");
+  const xOf = (i: number) => (traj.length <= 1 ? (L + R) / 2 : L + (i / (traj.length - 1)) * (R - L));
+  const jPts = traj.map((y, i) => ({ x: xOf(i), y: yOf(y.substanceScore), row: y }));
+  const jLine = jPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(0)} ${p.y.toFixed(0)}`).join(" ");
+  const changeCount = new Map<number, number>();
+  for (const c of changes) changeCount.set(c.fy, (changeCount.get(c.fy) ?? 0) + 1);
 
   return (
     <div className="bg-card rounded-2xl p-4 mb-4" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-base">🧭</span>
-        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Business phase map" : "사업 국면 지도"}</h4>
+        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Business journey" : "이 기업이 지나온 길"}</h4>
         <span className="ml-1 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: ui.color + "1f", color: ui.color }}>
           {ui.ko}
         </span>
@@ -1119,7 +1136,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           {isEn ? "confidence" : "신뢰도"} {latest.confidence === "high" ? (isEn ? "high" : "높음") : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Substance (fundamentals) × Expectation (valuation), computed from filings" : "실적이 실제로 강해지나(세로) × 시장이 비싸게 보나(가로) — 공시 실측으로 판정"}</p>
+      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Yearly fundamentals path, computed from filings" : "공시 실적으로 계산한 연도별 흐름 — 성장 · 둔화 · 위축 · 반등"}</p>
 
       {/* 한 줄 해석 — "그래서 무슨 뜻인가" */}
       {!isEn && ui.desc && (
@@ -1134,36 +1151,69 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
         </div>
       )}
 
-      <svg viewBox={`0 0 ${W} 288`} width="100%" style={{ maxWidth: 440, color: "hsl(var(--muted-foreground))" }} role="img" aria-label={isEn ? "Business phase map" : "사업 국면 지도"}>
-        <defs>
-          <marker id="stagearrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </marker>
-        </defs>
-        {zones.map((z, i) => (
-          <g key={i}>
-            <rect x={z.x} y={z.y} width={z.w} height={z.h} fill={z.fill} rx={6} />
-            <text x={z.x + 8} y={z.y + 17} fontSize={11} fontWeight={600} fill={z.c}>{z.label}</text>
-          </g>
-        ))}
-        {/* 축 라벨 */}
-        <text x={(L + 204) / 2} y={T - 8} fontSize={11} textAnchor="middle" fill="currentColor">저평가</text>
-        <text x={(204 + R) / 2} y={T - 8} fontSize={11} textAnchor="middle" fill="currentColor">프리미엄 →</text>
-        <text x={L - 6} y={yOf(45)} fontSize={10} textAnchor="end" fill="currentColor">강함</text>
-        <text x={L - 6} y={yOf(7)} fontSize={10} textAnchor="end" fill="currentColor">둔화</text>
-        <text x={L - 6} y={yOf(-38)} fontSize={10} textAnchor="end" fill="currentColor">역성장</text>
-        {/* 궤적 */}
-        {pts.length >= 2 && <path d={line} fill="none" stroke="#185FA5" strokeWidth={2} strokeDasharray="5 4" markerEnd="url(#stagearrow)" />}
-        {pts.map((p, i) => {
-          const isLast = i === pts.length - 1;
-          return (
+      {/* 여정 — 점 하나는 흐름이 아니므로 2기간 미만이면 그리지 않는다 */}
+      {jPts.length >= 2 && (
+        <svg viewBox={`0 0 ${W} 172`} width="100%" style={{ maxWidth: 460, color: "hsl(var(--muted-foreground))" }}
+             role="img" aria-label={isEn ? "Business journey" : "연도별 실적 흐름"}>
+          {/* 성장·위축을 가르는 기준선 */}
+          {[{ s: 30, t: isEn ? "strong" : "성장" }, { s: -15, t: isEn ? "weak" : "위축" }].map((g, i) => (
             <g key={i}>
-              <circle cx={p.x} cy={p.y} r={isLast ? 7 : 4} fill="#185FA5" stroke="#fff" strokeWidth={isLast ? 2 : 1.5} />
-              {isLast && <text x={p.x} y={p.y - 11} fontSize={9.5} textAnchor="middle" fontWeight={700} fill="#185FA5">{isEn ? "now" : "현재"}</text>}
+              <line x1={L - 4} y1={yOf(g.s)} x2={R + 6} y2={yOf(g.s)} stroke="currentColor" strokeWidth={0.5} strokeDasharray="3 4" opacity={0.25} />
+              <text x={L - 8} y={yOf(g.s) + 3} fontSize={9} textAnchor="end" fill="currentColor" opacity={0.55}>{g.t}</text>
             </g>
-          );
-        })}
-      </svg>
+          ))}
+          {/* 지나온 길 */}
+          <path d={jLine} fill="none" stroke="currentColor" strokeWidth={2} opacity={0.3} strokeLinecap="round" strokeLinejoin="round" />
+          {jPts.map((p, i) => {
+            const isLast = i === jPts.length - 1;
+            const st = STATE_UI[p.row.substanceState] ?? { ko: p.row.substanceState, c: "#6B6A64" };
+            const marks = changeCount.get(p.row.fy) ?? 0;
+            return (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r={isLast ? 7 : 5} fill={st.c} stroke="hsl(var(--card))" strokeWidth={2} />
+                <text x={p.x} y={p.y - 13} fontSize={isLast ? 11 : 10} textAnchor="middle"
+                      fontWeight={isLast ? 700 : 500} fill={st.c} opacity={isLast ? 1 : 0.75}>{st.ko}</text>
+                <text x={p.x} y={B + 24} fontSize={10} textAnchor="middle"
+                      fill={isLast ? st.c : "currentColor"} fontWeight={isLast ? 700 : 400} opacity={isLast ? 1 : 0.7}>
+                  {isLast ? (isEn ? "now" : "지금") : `${String(p.row.fy).slice(2)}년`}
+                </text>
+                {!isLast && marks > 0 && (
+                  <text x={p.x} y={B + 38} fontSize={9} textAnchor="middle" fill="currentColor" opacity={0.5}>
+                    변화 {marks}
+                  </text>
+                )}
+                {isLast && (
+                  <text x={p.x} y={B + 38} fontSize={9} textAnchor="middle" fill="currentColor" opacity={0.55}>
+                    {isEn ? "latest qtr" : "최신 분기"}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
+
+      {/* 전환점 — "무엇이 언제 바뀌었나" */}
+      {changes.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mb-1.5">{isEn ? "turning points" : "무엇이 언제 바뀌었나"}</p>
+          <div className="space-y-1">
+            {changes.slice(-5).map((c, i) => {
+              const bad = /적자|악화|역성장|둔화/.test(c.kind);
+              return (
+                <div key={i} className="flex items-start gap-2 text-[11.5px]">
+                  <span className="tabular-nums text-muted-foreground shrink-0">{String(c.fy).slice(2)}년</span>
+                  <span className="px-1.5 rounded shrink-0 font-medium"
+                        style={{ background: bad ? "#A32D2D15" : "#0F6E5615", color: bad ? "#A32D2D" : "#0F6E56" }}>
+                    {c.kind}
+                  </span>
+                  <span className="text-foreground/75">{c.detail}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {latest.reasons?.length > 0 && (
         <div className="mt-3">
