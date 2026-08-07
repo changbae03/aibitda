@@ -178,3 +178,41 @@ export function extractSections(text: string, base = 4_000, quarterly = false): 
   }
   return out.join("\n\n");
 }
+// ─── 프롬프트용 원문 다듬기 ───────────────────────────────────────────────────
+
+/** 원문 본문을 만들 때 쓰는 예산. 실측으로 조정한다. */
+export const BODY_BUDGET = {
+  /** 최근 몇 개 기간을 넉넉히 줄 것인가 */
+  recentCount: 6,
+  /** 최근 기간 1개당 최대 글자 */
+  recentChars: 4_000,
+  /** 과거 기간 1개당 최대 글자 */
+  olderChars: 1_200,
+} as const;
+
+interface BodyPeriod { bsnsYear: number; quarter: number; reportNm?: string | null; content: string }
+
+/**
+ * 사업보고서 원문을 프롬프트 본문으로 만든다 — **최근은 넉넉히, 과거는 짧게.**
+ *
+ * 왜 자르는가. 16개 기간을 통째로 넣으면 10만 자가 넘어가고(동양파일 102,006자),
+ * 그만큼 생성이 느려진다. 그런데 **숫자와 전략 행동은 이미 코드가 뽑아 표로 준다**
+ * (지표표·행간 신호·부문 변화·CapEx·운전자본·임직원·국면 흐름). 원문이 맡는 역할은
+ * "표에 안 잡히는 서술 맥락"이고, 그 맥락은 최근 기간일수록 중요하다.
+ *
+ * 자른 자리는 반드시 표시한다 — 잘린 줄 모르고 "언급 없음"이라 쓰면 조용한 실패가 된다.
+ * 입력은 오래된 순(getBizTimeline 순서)으로 받는다.
+ */
+export function renderTimelineBody(periods: BodyPeriod[]): string {
+  const n = periods.length;
+  const recentFrom = Math.max(0, n - BODY_BUDGET.recentCount);
+  return periods
+    .map((t, i) => {
+      const limit = i >= recentFrom ? BODY_BUDGET.recentChars : BODY_BUDGET.olderChars;
+      const cut = t.content.length > limit;
+      const text = cut ? t.content.slice(0, limit) : t.content;
+      const head = `\n───────── ${periodLabel(t.bsnsYear, t.quarter)}${t.reportNm ? ` (${t.reportNm})` : ""} ─────────`;
+      return `${head}\n${text}${cut ? `\n…(이 기간 원문은 여기서 줄임 — 전체 ${t.content.length.toLocaleString()}자 중 앞 ${limit.toLocaleString()}자)` : ""}`;
+    })
+    .join("\n");
+}

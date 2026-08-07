@@ -20,7 +20,7 @@ import { runQACheck } from "../qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, fetchAnnualAllRows, fetchEmployeeCounts, fetchLatestQuarterAllRows, fetchLatestQuarterEmployees, type DartAnchorNumerics } from "../dart-store.js";
 import { fetchLatestAnnualText } from "../biz-timeline.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../dart-business-content.js";
-import { collectBizTimeline, getBizTimeline, periodLabel } from "../biz-timeline.js";
+import { collectBizTimeline, getBizTimeline, periodLabel, renderTimelineBody } from "../biz-timeline.js";
 import { extractMetrics, renderMetricTable } from "../biz-metrics.js";
 import { diffSegments, renderSegmentDiff, segmentsFromContent } from "../biz-diff.js";
 import { buildSignalTimeline, emergingTerms, renderBizSignals } from "../biz-signals.js";
@@ -668,9 +668,9 @@ async function executeStep(
         const timeline = await getBizTimeline(analysis.ticker)
           .catch(() => [] as Awaited<ReturnType<typeof getBizTimeline>>);
         if (timeline.length >= 2) {
-          const body = timeline
-            .map(t => `\n───────── ${periodLabel(t.bsnsYear, t.quarter)} (${t.reportNm}) ─────────\n${t.content}`)
-            .join("\n");
+          // 원문은 최근을 넉넉히·과거는 짧게. 숫자와 전략은 아래 구조화 블록이 이미 담고
+          // 있어서, 16개 기간을 통째로(10만 자) 넣으면 생성만 느려진다.
+          const body = renderTimelineBody(timeline);
           // 숫자는 코드가 뽑아 표로 먼저 준다.
           //
           // 기간이 4개에서 16개로 늘자 LLM이 다른 해 값을 끌어왔다(근거 확인 100%→41%).

@@ -22,11 +22,12 @@ import { lookupCorpCode } from "./dart-store.js";
 import { parseZip, htmlToText } from "./dart-business-content.js";
 import {
   type BizReportYear, TIMELINE_SECTIONS, extractSections, parsePeriod, periodLabel,
+  renderTimelineBody, BODY_BUDGET,
 } from "./biz-timeline-extract.js";
 
 // 순수 추출 로직은 biz-timeline-extract.ts(DB 무관, 테스트 가능)로 나갔다.
 // 여기서는 그대로 재노출해 기존 import 경로를 유지한다.
-export { TIMELINE_SECTIONS, extractSections, periodLabel };
+export { TIMELINE_SECTIONS, extractSections, periodLabel, renderTimelineBody, BODY_BUDGET };
 export type { BizReportYear };
 
 const DART_API = "https://opendart.fss.or.kr/api";
