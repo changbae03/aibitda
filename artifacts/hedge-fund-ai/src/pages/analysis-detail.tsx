@@ -4633,48 +4633,7 @@ export default function AnalysisDetail() {
         );
       })()}
 
-      {/* ══ 섹션 2 (핵심): 사업보고서로 읽는 이 기업의 진짜 이야기 ══ */}
-      {(() => {
-        const dartStep  = analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis");
-        const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
-        const streamingDart = streamingStep?.key === "dart_report_analysis";
-        const streamingComp = streamingStep?.key === "company_analysis";
-        const sec1Done = !!(
-          analysis.steps.find((s: any) => s.stepKey === "company_intro") ||
-          analysis.steps.find((s: any) => s.stepKey === "industry_analysis")
-        );
-        const showSection = isComplete || !!(dartStep || compStep) || streamingDart || streamingComp || sec1Done;
-        if (!showSection) return null;
-        const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-        return (
-          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
-          <NarrativeSectionBlock
-            num={2}
-            title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
-            subtitle={isEn ? "DART filings · Historical flow · Hidden context · Management signals" : "과거 흐름 · 숨은 맥락 · 사업 변화 · 경영진 신호"}
-            accent="#10B981"
-            pending={!dartStep && !streamingDart}
-            isEn={isEn}
-          >
-            {dartStep ? (
-              <ErrorBoundary fallback={null}>
-                <ReportMetricsProvider ticker={analysis.ticker} isEn={isEn}>
-                  <StageMap ticker={analysis.ticker} isEn={isEn} />
-                  <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
-                </ReportMetricsProvider>
-              </ErrorBoundary>
-            ) : streamingDart ? (
-              <div className="flex items-center gap-3 py-6 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Speed-reading filings… skipping the fluff 📄" : "사업보고서 정독 중… CEO 자랑은 건너뜀 📄"}</span>
-              </div>
-            ) : null}
-          </NarrativeSectionBlock>
-          </motion.div>
-        );
-      })()}
-
-      {/* ══ 실적 분석 카드 ══ */}
+      {/* ══ 섹션 2: 실적과 주가 — 숫자가 먼저, 이유는 3번에서 ══ */}
       {(() => {
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
         const streamingComp = streamingStep?.key === "company_analysis";
@@ -4690,7 +4649,7 @@ export default function AnalysisDetail() {
         return (
           <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
           <NarrativeSectionBlock
-            num={3}
+            num={2}
             title={isEn ? "How are the numbers looking?" : "실적과 주가, 숫자로 보는 기업"}
             subtitle={isEn ? "Earnings trend · Financial deep-dive · Price action" : "실적 추이 · 재무 심층 · 주가 흐름"}
             accent="#10B981"
@@ -4719,6 +4678,47 @@ export default function AnalysisDetail() {
 
               {/* 주가 흐름 — 상단에 이미 표시되므로 이 섹션에서는 생략 */}
             </div>
+          </NarrativeSectionBlock>
+          </motion.div>
+        );
+      })()}
+
+      {/* ══ 섹션 3 (핵심): 사업보고서로 읽는 이 기업의 진짜 이야기 — 2번 숫자의 '왜' ══ */}
+      {(() => {
+        const dartStep  = analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis");
+        const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
+        const streamingDart = streamingStep?.key === "dart_report_analysis";
+        const streamingComp = streamingStep?.key === "company_analysis";
+        const sec1Done = !!(
+          analysis.steps.find((s: any) => s.stepKey === "company_intro") ||
+          analysis.steps.find((s: any) => s.stepKey === "industry_analysis")
+        );
+        const showSection = isComplete || !!(dartStep || compStep) || streamingDart || streamingComp || sec1Done;
+        if (!showSection) return null;
+        const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+        return (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut"}}>
+          <NarrativeSectionBlock
+            num={3}
+            title={isEn ? "What do the filings really say?" : "사업보고서로 읽는 이 기업의 진짜 이야기"}
+            subtitle={isEn ? "DART filings · Historical flow · Hidden context · Management signals" : "과거 흐름 · 숨은 맥락 · 사업 변화 · 경영진 신호"}
+            accent="#10B981"
+            pending={!dartStep && !streamingDart}
+            isEn={isEn}
+          >
+            {dartStep ? (
+              <ErrorBoundary fallback={null}>
+                <ReportMetricsProvider ticker={analysis.ticker} isEn={isEn}>
+                  <StageMap ticker={analysis.ticker} isEn={isEn} />
+                  <NarrativeStepContent step={dartStep} isEn={isEn} ticker={analysis.ticker} accent="#10B981" />
+                </ReportMetricsProvider>
+              </ErrorBoundary>
+            ) : streamingDart ? (
+              <div className="flex items-center gap-3 py-6 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
+                <span className="text-sm text-muted-foreground">{isEn ? "Speed-reading filings… skipping the fluff 📄" : "사업보고서 정독 중… CEO 자랑은 건너뜀 📄"}</span>
+              </div>
+            ) : null}
           </NarrativeSectionBlock>
           </motion.div>
         );
