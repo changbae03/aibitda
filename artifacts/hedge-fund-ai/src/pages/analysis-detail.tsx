@@ -1086,10 +1086,13 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   const latest = data.latest;
   const ui = PHASE_UI[latest.phase] ?? { ko: latest.phase, tag: "", color: "#5F5E5A", desc: "" };
 
-  // 두 축을 사람 말로 — "실적이 강해지나 / 시장이 비싸게 보나"
-  const subState = latest.substanceScore >= 30 ? { t: "강함", c: "#0F6E56" }
-    : latest.substanceScore <= -15 ? { t: "역성장", c: "#A32D2D" }
-    : { t: "둔화", c: "#92600B" };
+  // 두 축을 사람 말로 — "실적이 강해지나 / 시장이 비싸게 보나".
+  // 점수 문턱으로 따로 판정하면 여정의 '지금' 지점과 어긋난다(턴어라운드인데 "둔화"로
+  // 표시되던 문제). 국면에서 상태를 끌어와 그림과 같은 말을 쓰게 한다.
+  const stateFromPhase = latest.phase === "turnaround" ? "rebounding"
+    : latest.phase === "numbers" || latest.phase === "proving" ? "strong"
+    : latest.phase === "peakout" || latest.phase === "value" ? "slowing" : "contracting";
+  const subState = { t: STATE_UI[stateFromPhase].ko, c: STATE_UI[stateFromPhase].c };
   const expState = latest.expectation === "premium" ? "프리미엄(고평가)"
     : latest.expectation === "discount" ? "저평가" : "미상";
   // 점수 칩에서 내부 점수(+35 등)를 떼어 사람이 읽기 좋게
@@ -1105,13 +1108,10 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   // 궤적은 **연간 확정** 실적이라 최신 분기가 빠진다. 그러면 여정 끝(위축)과 배지
   // (턴어라운드)가 어긋나 보인다 — 동양파일이 그랬다(FY2025 적자, 2026 Q1 흑자전환).
   // 그래서 맨 끝에 "지금" 지점을 붙인다. 판정과 그림이 같은 이야기를 해야 한다.
-  const nowState = latest.phase === "turnaround" ? "rebounding"
-    : latest.phase === "numbers" || latest.phase === "proving" ? "strong"
-    : latest.phase === "peakout" || latest.phase === "value" ? "slowing" : "contracting";
   const lastFy = trajYears.length ? trajYears[trajYears.length - 1].fy : 0;
   const traj: Array<TrajYear & { isNow?: boolean }> = [
     ...trajYears,
-    { fy: lastFy + 1, substanceScore: latest.substanceScore, substanceState: nowState, isNow: true },
+    { fy: lastFy + 1, substanceScore: latest.substanceScore, substanceState: stateFromPhase, isNow: true },
   ];
   const W = 360, L = 46, R = 340, T = 30, B = 128;
   const yOf = (score: number) => {
