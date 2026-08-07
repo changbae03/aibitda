@@ -62,6 +62,47 @@ describe("턴어라운드는 궤적으로만 감지된다", () => {
   });
 });
 
+describe("최신 분기가 먼저 돌아서면 턴어라운드로 잡는다 — 동양파일 회귀", () => {
+  /**
+   * 연간만 보면 턴어라운드를 1년 늦게 안다. 동양파일(228340)은 FY2025가 적자(−47억)라
+   * "쇠퇴"로 판정됐지만, 2026 1분기엔 이미 흑자(+10억)로 돌아서 있었다.
+   * 실측: 2026 Q1 매출 157억(+32% YoY), OPM −21.8% → +6.4% (+28%p), 흑자전환.
+   */
+  it("연간 적자여도 최신 분기 흑자전환이면 턴어라운드", () => {
+    const v = classifyStage({
+      revGrowthPct: -1.2, opmDeltaPp: -0.7,          // 연간은 여전히 부진
+      recentQuarterRevGrowthPct: 32, recentQuarterOpmDeltaPp: 28.2,
+      recentQuarterSwungToProfit: true,
+      valuationPercentile: 20,
+    });
+    expect(v.phase).toBe("turnaround");
+  });
+
+  it("분기 정보가 없으면 예전처럼 연간으로 판단한다 — 쇠퇴", () => {
+    const v = classifyStage({ revGrowthPct: -1.2, opmDeltaPp: -0.7, valuationPercentile: 20 });
+    expect(v.phase).toBe("decline");
+  });
+
+  it("최신 분기가 나빠지면 반등으로 오인하지 않는다", () => {
+    const v = classifyStage({
+      revGrowthPct: -1.2, opmDeltaPp: -0.7,
+      recentQuarterRevGrowthPct: -25, recentQuarterOpmDeltaPp: -12,
+      recentQuarterSwungToProfit: false, valuationPercentile: 20,
+    });
+    expect(v.phase).toBe("decline");
+  });
+
+  it("이미 흑자인 회사의 분기 개선은 턴어라운드가 아니다", () => {
+    // 연간도 좋으면(성장·마진개선) 반등이 아니라 성장 국면이어야 한다
+    const v = classifyStage({
+      revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding",
+      recentQuarterRevGrowthPct: 30, recentQuarterOpmDeltaPp: 5,
+      recentQuarterSwungToProfit: false, valuationPercentile: 70,
+    });
+    expect(v.phase).toBe("numbers");
+  });
+});
+
 describe("SK하이닉스 3년 궤적", () => {
   // 2023 다운사이클: 매출 급감·마진 붕괴 → 쇠퇴
   const y2023 = classifyStage({ revGrowthPct: -30, opmDeltaPp: -20, capexTrend: "cutting", headcountGrowthPct: 1, valuationPercentile: 30 });

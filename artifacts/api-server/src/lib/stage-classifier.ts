@@ -78,6 +78,17 @@ export interface StageSignals {
   valuationPercentile?: number | null;
   /** 직전 기 실체 점수 — 궤적/턴어라운드 감지용 */
   priorSubstanceScore?: number | null;
+
+  // ── 최신 확정 분기 YoY (전년 동기 대비) ────────────────────────────────────
+  // 연간만 보면 턴어라운드를 1년 늦게 안다. 동양파일은 FY2025가 적자(−47억)라
+  // "쇠퇴"로 판정됐지만, 2026 1분기에 이미 흑자(+10억)로 돌아서 있었다.
+  // 계절성을 피하려 직전 분기가 아니라 **전년 같은 분기**와 비교한다.
+  /** 최신 분기 매출 YoY(%) */
+  recentQuarterRevGrowthPct?: number | null;
+  /** 최신 분기 OPM YoY 변화(%p) */
+  recentQuarterOpmDeltaPp?: number | null;
+  /** 전년 동기 적자 → 이번 분기 흑자 */
+  recentQuarterSwungToProfit?: boolean | null;
 }
 
 // ─── 가중치 (실측으로 조정) ───────────────────────────────────────────────────
@@ -146,12 +157,38 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
   if (dropped > added) add(-8, `사업부문 ${dropped}개 소멸`);
   else if (added > dropped) add(6, `사업부문 ${added}개 신규`);
 
+  // 최신 확정 분기(YoY) — 연간보다 신선한 신호. 연간이 아직 적자여도 분기가 먼저 돌아선다.
+  if (s.recentQuarterSwungToProfit) add(20, "최근 분기 흑자전환(YoY)");
+  if (s.recentQuarterOpmDeltaPp != null) {
+    const d = s.recentQuarterOpmDeltaPp;
+    if (d >= 10) add(12, `최근 분기 마진 급개선 ${d.toFixed(0)}%p(YoY)`);
+    else if (d >= 3) add(6, `최근 분기 마진개선 ${d.toFixed(1)}%p(YoY)`);
+    else if (d <= -10) add(-12, `최근 분기 마진 급악화 ${d.toFixed(0)}%p(YoY)`);
+    else if (d <= -3) add(-6, `최근 분기 마진악화 ${d.toFixed(1)}%p(YoY)`);
+  }
+  if (s.recentQuarterRevGrowthPct != null) {
+    const g = s.recentQuarterRevGrowthPct;
+    if (g >= 20) add(12, `최근 분기 매출 ${g.toFixed(0)}%(YoY)`);
+    else if (g >= 5) add(6, `최근 분기 매출 ${g.toFixed(0)}%(YoY)`);
+    else if (g <= -20) add(-12, `최근 분기 매출 ${g.toFixed(0)}%(YoY)`);
+  }
+
   score = clamp(score, -100, 100);
 
   // 상태 판정 — 반등은 "직전이 바닥이었는데 이번에 크게 올라온 것"
+  //
+  // 연간 실적이 아직 나쁜데 **최신 분기가 먼저 돌아선** 경우도 반등이다. 연간만 보면
+  // 턴어라운드를 1년 늦게 알게 된다(동양파일: FY2025 적자 → 2026 Q1 흑자전환).
+  const annualWeak = (s.revGrowthPct ?? 0) < 5 || (s.opmDeltaPp ?? 0) < 0;
+  const quarterTurned = !!s.recentQuarterSwungToProfit
+    || (s.recentQuarterOpmDeltaPp != null && s.recentQuarterOpmDeltaPp >= 10);
+
   let state: SubstanceResult["state"];
   const prior = s.priorSubstanceScore;
-  if (prior != null && prior <= W.contracting && score - prior >= W.rebound && score > W.contracting) {
+  if (quarterTurned && annualWeak) {
+    state = "rebounding";
+    reasons.push("연간은 부진하나 최신 확정 분기가 먼저 반등");
+  } else if (prior != null && prior <= W.contracting && score - prior >= W.rebound && score > W.contracting) {
     state = "rebounding";
     reasons.push(`직전 ${prior} → 이번 ${score}: 바닥 반등`);
   } else if (score >= W.strong) state = "strong";

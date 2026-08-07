@@ -758,12 +758,15 @@ async function executeStep(
              LIMIT 4`,
             [analysis.ticker]
           ),
+          // 분기: 전년 동기(YoY) 비교까지 하려면 최근 5개로는 모자라다(같은 분기가 안 잡힘).
+          // fs_type이 섞여 (연도·보고서)에 중복 행이 생기므로 값 있는 행을 하나만 집는다.
           rawQuery(
-            `SELECT bsns_year, reprt_code, revenue, operating_income, net_income,
+            `SELECT DISTINCT ON (bsns_year, reprt_code)
+                    bsns_year, reprt_code, revenue, operating_income, net_income,
                     total_assets
              FROM ticker_financials
-             WHERE ticker = $1 AND reprt_code != '11011'
-             ORDER BY bsns_year DESC, reprt_code DESC LIMIT 5`,
+             WHERE ticker = $1 AND reprt_code != '11011' AND revenue IS NOT NULL
+             ORDER BY bsns_year DESC, reprt_code DESC, revenue DESC LIMIT 12`,
             [analysis.ticker]
           ),
         ]);
@@ -779,6 +782,32 @@ async function executeStep(
             stageSig.revGrowthPct = pctChange(Number(annualRows[0].revenue), Number(annualRows[1].revenue));
             const opmL = opmOf(annualRows[0]), opmP = opmOf(annualRows[1]);
             if (opmL != null && opmP != null) stageSig.opmDeltaPp = (opmL - opmP) * 100;
+          }
+
+          // 국면 신호(신선도): **최신 확정 분기 vs 전년 같은 분기**.
+          // 연간만 보면 턴어라운드를 1년 늦게 안다 — 동양파일은 FY2025가 적자(−47억)라
+          // "쇠퇴"였지만 2026 1분기엔 이미 흑자(+10억)였다. 계절성을 피해 같은 분기끼리 본다.
+          // 보고서 코드는 시간순이 아니다(11013=Q1·11012=반기·11014=Q3) — 정렬을 따로 한다.
+          if (quarterRows.length >= 2) {
+            const qOrder: Record<string, number> = { "11013": 1, "11012": 2, "11014": 3 };
+            const chrono = (r: any) => Number(r.bsns_year) * 10 + (qOrder[String(r.reprt_code)] ?? 0);
+            const sorted = [...quarterRows].sort((a, b) => chrono(b) - chrono(a));
+            const latest = sorted[0];
+            const yoy = sorted.find(r =>
+              String(r.reprt_code) === String(latest.reprt_code) &&
+              Number(r.bsns_year) === Number(latest.bsns_year) - 1);
+            if (latest && yoy) {
+              stageSig.recentQuarterRevGrowthPct = pctChange(Number(latest.revenue), Number(yoy.revenue));
+              const qL = opmOf(latest), qP = opmOf(yoy);
+              if (qL != null && qP != null) stageSig.recentQuarterOpmDeltaPp = (qL - qP) * 100;
+              const oiL = Number(latest.operating_income), oiP = Number(yoy.operating_income);
+              if (Number.isFinite(oiL) && Number.isFinite(oiP)) {
+                stageSig.recentQuarterSwungToProfit = oiP < 0 && oiL >= 0;
+              }
+              console.log(`[stage] 최신 분기 YoY ${latest.bsns_year}/${latest.reprt_code} vs ${yoy.bsns_year}: ` +
+                `매출 ${stageSig.recentQuarterRevGrowthPct?.toFixed(0)}%, OPM ${stageSig.recentQuarterOpmDeltaPp?.toFixed(1)}%p` +
+                `${stageSig.recentQuarterSwungToProfit ? ", 흑자전환" : ""}`);
+            }
           }
           const fmt = (v: any) => (v == null ? "—" : Number(v).toLocaleString("ko-KR"));
           const pct = (v: any) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
