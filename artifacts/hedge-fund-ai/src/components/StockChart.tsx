@@ -368,7 +368,11 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, period, interval, chartData.length, isEn]);
 
-  const axisStyle = { fontSize: 10, fill: "var(--muted-foreground, #a3a3a3)", fontFamily: "'Pretendard', sans-serif" };
+  // ⚠️ 이 프로젝트의 CSS 변수는 **HSL 삼중값**(예: `220 15% 45%`)이다.
+  // `var(--muted-foreground)`를 색 자리에 그대로 쓰면 "220 15% 45%"라는 잘못된 색이 되고
+  // (변수가 정의돼 있으므로 폴백도 안 먹는다) 브라우저가 기본 검정으로 그린다.
+  // 그래서 다크모드에서 축 라벨이 배경에 묻혀 "차트가 깨진" 것처럼 보였다. hsl()로 감싼다.
+  const axisStyle = { fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "'Pretendard', sans-serif" };
 
   return (
     <div className="bg-background border border-border rounded-xl overflow-hidden">
@@ -521,7 +525,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
             )}
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={allChartData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="dateLabel"
                   tick={axisStyle}
@@ -556,7 +560,10 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                 <Tooltip content={<CustomTooltip currency={currency} isEn={isEn} />} />
 
 
-                <Bar yAxisId="volume" dataKey="volume" name={isEn ? "Volume" : "거래량"} fill="#d4d4d4" opacity={0.5} radius={[1, 1, 0, 0]} isAnimationActive={false} />
+                {/* 거래량은 배경 대비로만 보이면 된다 — 밝은 회색 고정이면 다크에서 덩어리로 뜬다 */}
+                <Bar yAxisId="volume" dataKey="volume" name={isEn ? "Volume" : "거래량"}
+                     fill={isDark ? "#4b5563" : "#d4d4d4"} opacity={isDark ? 0.45 : 0.5}
+                     radius={[1, 1, 0, 0]} isAnimationActive={false} />
 
                 <Line
                   yAxisId="price"
