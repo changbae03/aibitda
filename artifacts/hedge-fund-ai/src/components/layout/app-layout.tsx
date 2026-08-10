@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
-  Sparkles, BookOpen, CalendarDays, BarChart2, LineChart,
+  Sparkles, BookOpen, CalendarDays, LineChart,
   User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb, Building2,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
@@ -92,25 +92,34 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   );
 }
 
+/**
+ * 사이드바는 **사용자가 하려는 일**로 묶는다. 예전에는 "매크로 분석 / 기업분석"이라는
+ * 제작자 언어로 나뉘어 있었고, 그 탓에 이 앱의 핵심인 기업 분석이 두 번째 그룹 아래로
+ * 묻혔다. ETF가 매크로에, 테마·수급이 기업분석에 들어간 것도 실제 쓰임과 어긋났다.
+ * 항목 이름에서 반복되는 "분석"도 덜어낸다 — 그룹명이 이미 그 맥락을 준다.
+ */
 const NAV_GROUPS = [
   {
-    label: "매크로 분석",
-    labelEn: "Macro",
+    label: "종목 분석",
+    labelEn: "Stocks",
     items: [
-      { href: "/market-analysis", label: "시장 분석",     labelEn: "Market Analysis",  Icon: TrendingUp },
-      { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
-      { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
-      { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
+      { href: "/analysis/new", label: "기업 분석", labelEn: "Company Analysis", Icon: Sparkles },
     ],
   },
   {
-    label: "기업분석",
-    labelEn: "Company",
+    label: "오늘의 시장",
+    labelEn: "Today",
     items: [
-      { href: "/analysis/new", label: "AI 기업분석",   labelEn: "AI Analysis", Icon: Sparkles },
-      { href: "/themes",       label: "테마 및 수급 분석", labelEn: "Theme & Flow", Icon: Lightbulb },
+      { href: "/market-analysis", label: "시장 브리핑", labelEn: "Market Brief",   Icon: TrendingUp },
+      { href: "/themes",          label: "테마·수급",  labelEn: "Themes & Flows", Icon: Lightbulb },
+      { href: "/news",            label: "뉴스",       labelEn: "News",           Icon: Newspaper },
+      { href: "/calendar",        label: "캘린더",     labelEn: "Calendar",       Icon: CalendarDays },
     ],
   },
+  // ETF 분석(/etf-analysis)은 메뉴에서 뺐다 — 수요가 없다고 판단. 페이지와 라우트는
+  // 그대로 살아 있으므로 주소로 접근하면 열리고, 되살리려면 여기 한 줄만 넣으면 된다:
+  //   { href: "/etf-analysis", label: "ETF", labelEn: "ETFs", Icon: BarChart2 },
+  // (되살릴 때 lucide-react에서 BarChart2 import도 함께 복원할 것)
 ];
 
 const ADMIN_GROUPS = [
