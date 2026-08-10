@@ -1203,7 +1203,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
 
       {/* 여정 — 점 하나는 흐름이 아니므로 2기간 미만이면 그리지 않는다 */}
       {jPts.length >= 2 && (
-        <svg viewBox={`0 0 ${W} ${oPts.length >= 2 ? 250 : 172}`} width="100%"
+        <svg viewBox={`0 0 ${W} ${oPts.length >= 2 ? 262 : 172}`} width="100%"
              style={{ maxWidth: 460, color: "hsl(var(--muted-foreground))" }}
              role="img" aria-label={isEn ? "Business journey" : "연도별 매출 성장률과 영업이익률 흐름"}>
           <defs>
@@ -1288,7 +1288,9 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
             const isLast = i === jPts.length - 1;
             const st = STATE_UI[p.row.substanceState] ?? { ko: p.row.substanceState, c: "#6B6A64" };
             const marks = changeCount.get(p.row.fy) ?? 0;
-            const baseY = oPts.length >= 2 ? B2 + 26 : B + 26;
+            // 이익률이 음수면 값 라벨이 점 아래(p.y+19)로 내려온다 — 연도 라벨과 붙지
+            // 않도록 트랙 바닥에서 넉넉히 띄운다(동양파일 "-8%"와 "24년"이 겹쳤다).
+            const baseY = oPts.length >= 2 ? B2 + 36 : B + 26;
             return (
               <g key={`x${i}`}>
                 {/* '지금'은 isLast가 아니라 실제 최신 분기 지점만. 옛 분석은 그 지점이
