@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyStage, scoreSubstance } from "./stage-classifier.js";
+import { classifyStage, scoreSubstance, phaseMeta } from "./stage-classifier.js";
 
 /**
  * 국면 판정의 안전망. 실제 SK하이닉스 궤적(쇠퇴→턴어라운드→숫자싸움)을 픽스처로 고정한다.
@@ -7,20 +7,22 @@ import { classifyStage, scoreSubstance } from "./stage-classifier.js";
  */
 
 describe("2축 매트릭스 — 실체 × 기대", () => {
+  // 40% 이상은 '폭발 성장'으로 따로 빠지므로, 매트릭스 칸 자체를 보려면 그 아래 성장률을 쓴다.
   it("실체 강함 + 프리미엄 → 숫자 싸움(3)", () => {
-    const v = classifyStage({ revGrowthPct: 40, opmDeltaPp: 4, capexTrend: "expanding", headcountGrowthPct: 7, valuationPercentile: 75 });
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding", headcountGrowthPct: 7, valuationPercentile: 75 });
     expect(v.phase).toBe("numbers");
     expect(v.meta.stageNumber).toBe(3);
   });
 
   it("초고성장(40%+)은 마진·운전자본이 삐끗해도 둔화로 눌리지 않는다 — NVDA 회귀", () => {
-    // 매출 +65%, 마진 -2%p, 운전자본 악화, 프리미엄 → 숫자 싸움이어야 한다(피크아웃 아님)
+    // 매출 +65%, 마진 -2%p, 운전자본 악화 → 실체는 '강함'을 유지해야 한다(둔화로 눌리면 안 됨)
     const v = classifyStage({ revGrowthPct: 65, opmDeltaPp: -2, capexTrend: "expanding", cccDeltaDays: 26, valuationPercentile: 65 });
-    expect(v.phase).toBe("numbers");
+    expect(v.substance.state).toBe("strong");
+    expect(v.phase).toBe("hypergrowth"); // 40%+라 폭발 성장으로 간다
   });
 
   it("실체 강함 + 할인 → 실체 확인(2)", () => {
-    const v = classifyStage({ revGrowthPct: 40, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 30 });
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 30 });
     expect(v.phase).toBe("proving");
     expect(v.meta.stageNumber).toBe(2);
   });
@@ -46,6 +48,60 @@ describe("2축 매트릭스 — 실체 × 기대", () => {
   it("실체 역성장 + 할인 → 쇠퇴", () => {
     const v = classifyStage({ revGrowthPct: -25, opmDeltaPp: -5, headcountGrowthPct: -5, valuationPercentile: 20 });
     expect(v.phase).toBe("decline");
+  });
+});
+
+describe("투자자 언어로 나눈 단계 — 폭발 성장·증명 대기", () => {
+  /**
+   * 같은 "성장"이라도 판단 기준이 다르다. 매출이 40%+ 뛰는 구간에서 투자자는
+   * 밸류에이션을 뒤로 미루고 속도만 본다 — "숫자 싸움"과 한 칸에 두면 안 된다.
+   */
+  it("매출 40%+ 고성장은 프리미엄이어도 '폭발 성장'", () => {
+    const v = classifyStage({ revGrowthPct: 90, opmDeltaPp: 8, capexTrend: "expanding", valuationPercentile: 75 });
+    expect(v.phase).toBe("hypergrowth");
+  });
+
+  it("저평가여도 40%+면 폭발 성장 — 속도가 먼저다", () => {
+    const v = classifyStage({ revGrowthPct: 55, opmDeltaPp: 5, capexTrend: "expanding", valuationPercentile: 20 });
+    expect(v.phase).toBe("hypergrowth");
+  });
+
+  it("연간은 느려도 최신 분기가 40%+면 폭발 성장으로 잡는다", () => {
+    const v = classifyStage({
+      revGrowthPct: 15, opmDeltaPp: 4, capexTrend: "expanding",
+      recentQuarterRevGrowthPct: 62, valuationPercentile: 70,
+    });
+    expect(v.phase).toBe("hypergrowth");
+  });
+
+  it("20~30%대 성장은 폭발이 아니라 숫자 싸움", () => {
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 70 });
+    expect(v.phase).toBe("numbers");
+  });
+
+  /**
+   * 증명 대기와 피크아웃은 둘 다 "기대는 높은데 실체는 아직"이지만 방향이 반대다.
+   * 나아지는 중이면 아직 증명 전, 나빠지는 중이면 정점을 지난 것.
+   */
+  it("기대는 높고 실체가 나아지는 중이면 '증명 대기'", () => {
+    const v = classifyStage({ revGrowthPct: 8, opmDeltaPp: 1, valuationPercentile: 75, priorSubstanceScore: 5 });
+    expect(v.phase).toBe("waiting");
+  });
+
+  it("기대는 높은데 실체가 나빠지는 중이면 '피크아웃 전조'", () => {
+    const v = classifyStage({ revGrowthPct: 3, opmDeltaPp: -1, valuationPercentile: 75, priorSubstanceScore: 28 });
+    expect(v.phase).toBe("peakout");
+  });
+
+  it("직전 점수가 없으면 증명 대기로 지레짐작하지 않는다", () => {
+    const v = classifyStage({ revGrowthPct: 3, valuationPercentile: 75 });
+    expect(v.phase).toBe("peakout");
+  });
+
+  it("모든 단계가 '무엇을 봐야 하나'를 갖는다", () => {
+    for (const p of ["hypergrowth", "numbers", "proving", "turnaround", "waiting", "peakout", "value", "hype", "decline"] as const) {
+      expect(phaseMeta(p).watchKo.length, p).toBeGreaterThan(10);
+    }
   });
 });
 
@@ -113,7 +169,8 @@ describe("SK하이닉스 3년 궤적", () => {
 
   it("2023은 쇠퇴", () => expect(y2023.phase).toBe("decline"));
   it("2024는 턴어라운드", () => expect(y2024.phase).toBe("turnaround"));
-  it("2025는 숫자 싸움", () => expect(y2025.phase).toBe("numbers"));
+  // 2025는 매출 +90% — 눈높이를 증명하는 '숫자 싸움'이 아니라 속도가 전부인 '폭발 성장'이다
+  it("2025는 폭발 성장", () => expect(y2025.phase).toBe("hypergrowth"));
 });
 
 describe("조용한 판정을 만들지 않는다", () => {
@@ -128,8 +185,9 @@ describe("조용한 판정을 만들지 않는다", () => {
   });
 
   it("밴드가 없으면 기대는 미상으로 남고 할인처럼 보수 판정한다", () => {
-    const v = classifyStage({ revGrowthPct: 90, capexTrend: "expanding" });
+    // 40% 미만이라 폭발 성장으로 빠지지 않고, 프리미엄으로 지레짐작하지도 않는다
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding" });
     expect(v.expectation).toBe("unknown");
-    expect(v.phase).toBe("proving"); // 프리미엄으로 지레짐작하지 않는다
+    expect(v.phase).toBe("proving");
   });
 });

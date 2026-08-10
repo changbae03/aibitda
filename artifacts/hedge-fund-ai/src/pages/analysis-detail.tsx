@@ -878,22 +878,44 @@ interface StageRow {
   computedAt: string;
 }
 
-const PHASE_UI: Record<string, { ko: string; tag: string; color: string; desc: string }> = {
-  hype:       { ko: "기대 선반영", tag: "기대만 앞선 상태", color: "#BA7517",
-    desc: "실적은 뒷걸음치는데 주가엔 기대만 잔뜩 실렸어요. 실체 없이 기대만 큰 상태라 거품을 조심할 때예요." },
-  proving:    { ko: "실체 확인",   tag: "실적 좋은데 아직 쌈",   color: "#0F6E56",
-    desc: "실적은 좋아지는데 주가는 아직 싸요. 시장이 이 회사를 아직 덜 알아본 것일 수 있어요." },
-  numbers:    { ko: "숫자 싸움",   tag: "실적도 주가도 높음", color: "#0F6E56",
-    desc: "실적이 진짜 좋고 주가도 그만큼 높아요. 지금은 실적이 높은 주가를 받쳐주고 있는데, 눈높이가 높아서 실적이 계속 잘 나와야 유지돼요." },
-  peakout:    { ko: "피크아웃 전조", tag: "기대가 실적을 앞섬",  color: "#BA7517",
-    desc: "성장은 식어가는데 주가 기대는 아직 높아요. 기대가 실적을 앞서간 상태라 조심할 구간이에요." },
-  value:      { ko: "성장→가치",   tag: "빠른 성장은 끝", color: "#5F5E5A",
-    desc: "빠른 성장은 끝났고 주가 기대도 낮아졌어요. 성장주에서 안정적인 가치주로 넘어가는 중이에요." },
-  decline:    { ko: "쇠퇴",        tag: "실적·주가 동반 하락", color: "#5F5E5A",
-    desc: "실적도 주가도 같이 내려가요. 사업이 힘을 잃어가는 국면이에요." },
-  turnaround: { ko: "턴어라운드",  tag: "바닥 찍고 반등", color: "#185FA5",
-    desc: "바닥을 찍고 실적이 다시 살아나기 시작했어요. 분위기가 바뀌는 국면이에요." },
+/**
+ * 주식 관점의 단계 사전. 백엔드 Phase와 1:1이며 **투자자가 쓰는 말**로 적는다.
+ * watch("지금 봐야 할 것")가 핵심이다 — 판정만으로는 쓸모가 없고, 그 단계에서
+ * 무엇을 확인해야 하는지가 실제 판단을 돕는다.
+ */
+const PHASE_UI: Record<string, { ko: string; tag: string; color: string; emoji: string; desc: string; watch: string }> = {
+  hypergrowth: { ko: "폭발 성장", tag: "속도가 전부", color: "#0F6E56", emoji: "🚀",
+    desc: "매출이 폭발적으로 늘고 있어요. 이런 구간에선 밸류에이션(비싼지 싼지)보다 성장 속도 자체가 주가를 끌고 갑니다.",
+    watch: "성장률이 꺾이는 첫 신호. 속도가 멈추는 순간 평가 기준이 통째로 바뀝니다." },
+  numbers:     { ko: "숫자 싸움", tag: "실적도 기대도 높음", color: "#0F6E56", emoji: "📈",
+    desc: "실적이 좋고 주가도 그만큼 높아요. 높은 눈높이를 실적이 매번 증명해야 유지되는 구간입니다.",
+    watch: "다음 실적이 시장 기대를 넘는지. 눈높이가 높아 '잘 나와도' 부족할 수 있습니다." },
+  proving:     { ko: "실체 확인", tag: "좋은데 아직 쌈", color: "#0F6E56", emoji: "🔍",
+    desc: "실적은 좋아지는데 주가는 아직 싸요. 시장이 아직 덜 알아본 상태일 수 있습니다.",
+    watch: "저평가가 풀릴 계기(실적·수주·정책). 계기가 없으면 오래 방치되기도 합니다." },
+  turnaround:  { ko: "턴어라운드", tag: "바닥 찍고 반등", color: "#185FA5", emoji: "🔄",
+    desc: "바닥을 찍고 실적이 다시 살아나기 시작했어요. 분위기가 바뀌는 국면입니다.",
+    watch: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다." },
+  waiting:     { ko: "증명 대기", tag: "숫자를 기다리는 중", color: "#BA7517", emoji: "⏳",
+    desc: "기대는 이미 주가에 붙었는데 숫자는 아직 안 나왔어요. 다음 실적이 방향을 가릅니다.",
+    watch: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다." },
+  peakout:     { ko: "피크아웃 전조", tag: "기대가 실적을 앞섬", color: "#BA7517", emoji: "⚠️",
+    desc: "정점을 지나 성장이 식는데 주가 기대는 아직 높아요. 기대가 실적을 앞서간 구간입니다.",
+    watch: "둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다." },
+  value:       { ko: "성숙·가치", tag: "빠른 성장은 끝", color: "#5F5E5A", emoji: "🏦",
+    desc: "빠른 성장은 끝났고 기대도 낮아졌어요. 이제는 이익과 배당으로 보는 구간입니다.",
+    watch: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도." },
+  hype:        { ko: "기대 선반영", tag: "기대만 앞섬", color: "#A32D2D", emoji: "🫧",
+    desc: "실적은 뒷걸음치는데 주가엔 기대만 실렸어요. 실체 없이 기대만 큰 상태라 거품을 경계할 자리입니다.",
+    watch: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다." },
+  decline:     { ko: "쇠퇴", tag: "실적·기대 동반 하락", color: "#5F5E5A", emoji: "🔻",
+    desc: "실적도 기대도 같이 내려가요. 사업이 힘을 잃어가는 국면입니다.",
+    watch: "바닥의 신호(구조조정·사업 재편·적자 축소). 싸다는 이유만으론 부족합니다." },
 };
+
+/** 단계 지도 순서 — 좋은 자리부터 나쁜 자리로. 백엔드 PHASE_ORDER와 같아야 한다. */
+const PHASE_ORDER = ["hypergrowth", "numbers", "proving", "turnaround",
+                     "waiting", "peakout", "value", "hype", "decline"] as const;
 
 // 히어로 오른쪽 카드 — 적정주가 자리를 대체한다. 애빛다는 목표가가 아니라 '국면'을 말한다.
 function HeroPhase({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
@@ -1176,30 +1198,67 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
 
   return (
     <div className="bg-card rounded-2xl p-4 mb-4" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-base">🧭</span>
-        <h4 className="font-semibold text-sm text-foreground">{isEn ? "Business journey" : "이 기업이 지나온 길"}</h4>
-        <span className="ml-1 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: ui.color + "1f", color: ui.color }}>
-          {ui.ko}
+      {/* ── 히어로: 지금 어느 단계인가. 이 카드의 주인공은 '단계'다 ──
+          예전엔 여정 그래프가 주인공이고 단계는 작은 배지였다. 사용자가 알고 싶은 건
+          "이 기업이 지금 어떤 단계냐"이고, 지나온 길은 그 판정의 근거일 뿐이다. */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+          {isEn ? "CURRENT STAGE" : "지금 이 기업의 단계"}
         </span>
         <span className="ml-auto text-[11px] text-muted-foreground">
           {isEn ? "confidence" : "신뢰도"} {latest.confidence === "high" ? (isEn ? "high" : "높음") : latest.confidence === "medium" ? (isEn ? "med" : "보통") : (isEn ? "low" : "낮음")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Revenue growth and operating margin by year, from filings" : "공시 실적으로 계산한 연도별 흐름 — 얼마나 팔았고, 남겼나"}</p>
 
-      {/* 한 줄 해석 — "그래서 무슨 뜻인가" */}
-      {!isEn && ui.desc && (
-        <div className="rounded-xl p-3 mb-3" style={{ background: ui.color + "12" }}>
-          <p className="text-[13px] leading-relaxed text-foreground/90">
-            지금 이 회사는 <b style={{ color: ui.color }}>{ui.ko}</b> 국면입니다. {ui.desc}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-            <span>실적(실체) <b style={{ color: subState.c }}>{subState.t}</b></span>
-            <span>시장 기대 <b className="text-foreground/80">{expState}</b></span>
+      <div className="rounded-xl p-3.5 mb-3" style={{ background: ui.color + "12" }}>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xl leading-none">{ui.emoji}</span>
+          <span className="text-[22px] font-bold leading-tight" style={{ color: ui.color }}>{ui.ko}</span>
+          <span className="text-[11px] text-muted-foreground">{ui.tag}</span>
+        </div>
+        {!isEn && ui.desc && (
+          <p className="mt-2 text-[13px] leading-relaxed text-foreground/90">{ui.desc}</p>
+        )}
+        {!isEn && ui.watch && (
+          <div className="mt-2.5 pt-2.5 border-t" style={{ borderColor: ui.color + "26" }}>
+            <span className="text-[11px] font-semibold" style={{ color: ui.color }}>지금 봐야 할 것</span>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-foreground/80">{ui.watch}</p>
+          </div>
+        )}
+        <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          <span>실적(실체) <b style={{ color: subState.c }}>{subState.t}</b></span>
+          <span>시장 기대 <b className="text-foreground/80">{expState}</b></span>
+        </div>
+      </div>
+
+      {/* ── 단계 지도 — 주식 관점의 단계들 중 이 기업이 어디에 있나 ── */}
+      {!isEn && (
+        <div className="mb-4">
+          <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">기업이 놓이는 단계들</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PHASE_ORDER.map(p => {
+              const m = PHASE_UI[p];
+              const on = p === latest.phase;
+              return (
+                <span key={p}
+                  className="text-[11px] px-2 py-1 rounded-lg transition-colors"
+                  style={on
+                    ? { background: m.color, color: "#fff", fontWeight: 600 }
+                    : { background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }}>
+                  {m.emoji} {m.ko}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* ── 판정의 근거: 지나온 길 ── */}
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-base">🧭</span>
+        <h4 className="font-semibold text-sm text-foreground">{isEn ? "How it got here" : "어떻게 여기까지 왔나"}</h4>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">{isEn ? "Revenue growth and operating margin by year, from filings" : "공시 실적으로 계산한 연도별 흐름 — 얼마나 팔았고, 남겼나"}</p>
 
       {/* 여정 — 점 하나는 흐름이 아니므로 2기간 미만이면 그리지 않는다 */}
       {jPts.length >= 2 && (

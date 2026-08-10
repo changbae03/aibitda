@@ -23,32 +23,67 @@
  * 가중치는 실측으로 조정할 수 있도록 상수로 모아 둔다.
  */
 
+/**
+ * 주식 관점에서 기업이 놓이는 자리. **투자자가 실제로 쓰는 말**로 나눈다 —
+ * 같은 "성장"이라도 밸류에이션을 안 보고 속도만 보는 구간(폭발 성장)과, 높은 눈높이를
+ * 매분기 증명해야 하는 구간(숫자 싸움)은 투자 판단이 전혀 다르다.
+ */
 export type Phase =
-  | "hype"        // ① 기대 선반영 — 실체 없는 프리미엄(거품 위험)
-  | "proving"     // ② 실체 확인 — 저평가가 증명되는 구간
-  | "numbers"     // ③ 숫자 싸움 — 실체가 프리미엄을 정당화
-  | "peakout"     // ④ 피크아웃 전조 — 기대가 실체를 추월
-  | "value"       // ⑤ 성장→가치 — 성장 멈추고 재평가
-  | "decline"     // 🔻 쇠퇴 — 실체·기대 동반 하락
-  | "turnaround"; // 🔄 턴어라운드 — 실체 반등
+  | "hypergrowth" // 🚀 폭발 성장 — 성장 속도가 전부인 구간(밸류에이션은 뒷전)
+  | "numbers"     // 📈 숫자 싸움 — 실적이 높은 기대를 매번 증명해야 유지
+  | "proving"     // 🔍 실체 확인 — 실적은 좋은데 시장이 아직 안 알아줌(저평가)
+  | "turnaround"  // 🔄 턴어라운드 — 바닥 찍고 실적이 돌아서는 중
+  | "waiting"     // ⏳ 증명 대기 — 기대는 붙었고 숫자는 아직. 다음 실적이 가른다
+  | "peakout"     // ⚠️ 피크아웃 전조 — 정점을 지나 성장이 식는데 기대는 남아 있음
+  | "value"       // 🏦 성숙·가치 — 성장은 멈췄고 기대도 낮다. 이익·배당으로 보는 구간
+  | "hype"        // 🫧 기대 선반영 — 실적은 뒷걸음인데 주가에 기대만 붙음(거품 경계)
+  | "decline";    // 🔻 쇠퇴 — 실적도 기대도 함께 내려감
 
 export interface PhaseMeta {
   phase: Phase;
-  /** 사용자 모델의 단계 번호(1~5). 쇠퇴·턴어라운드는 없음 */
+  /** 성장 사이클 상의 순번(1~5). 턴어라운드·쇠퇴는 사이클 밖이라 null */
   stageNumber: number | null;
   labelKo: string;
   tagline: string;
+  /** 이 단계에서 **무엇을 봐야 하는가** — 판정보다 이게 실제로 쓸모 있다 */
+  watchKo: string;
 }
 
 const META: Record<Phase, PhaseMeta> = {
-  hype:       { phase: "hype",       stageNumber: 1, labelKo: "기대 선반영", tagline: "실체 없는 주가 프리미엄 — 거품 위험" },
-  proving:    { phase: "proving",    stageNumber: 2, labelKo: "실체 확인",   tagline: "저평가가 증명되는 구간" },
-  numbers:    { phase: "numbers",    stageNumber: 3, labelKo: "숫자 싸움",   tagline: "실체가 프리미엄을 정당화" },
-  peakout:    { phase: "peakout",    stageNumber: 4, labelKo: "피크아웃 전조", tagline: "기대가 실체를 추월" },
-  value:      { phase: "value",      stageNumber: 5, labelKo: "성장→가치",   tagline: "성장 멈추고 재평가" },
-  decline:    { phase: "decline",    stageNumber: null, labelKo: "쇠퇴",     tagline: "실체·기대 동반 하락" },
-  turnaround: { phase: "turnaround", stageNumber: null, labelKo: "턴어라운드", tagline: "실체가 바닥에서 반등" },
+  hypergrowth: { phase: "hypergrowth", stageNumber: 3, labelKo: "폭발 성장",
+    tagline: "성장 속도가 전부인 구간 — 밸류에이션은 뒷전",
+    watchKo: "성장률이 꺾이는 첫 신호. 이 구간은 속도가 멈추는 순간 평가가 통째로 바뀝니다" },
+  numbers:     { phase: "numbers",     stageNumber: 3, labelKo: "숫자 싸움",
+    tagline: "실적이 높은 눈높이를 매번 증명해야 유지",
+    watchKo: "다음 실적이 시장 기대를 넘는지. 눈높이가 이미 높아 '잘 나와도' 부족할 수 있습니다" },
+  proving:     { phase: "proving",     stageNumber: 2, labelKo: "실체 확인",
+    tagline: "실적은 좋은데 시장이 아직 안 알아줌",
+    watchKo: "저평가가 해소될 계기(실적 발표·수주·정책). 계기가 없으면 오래 방치되기도 합니다" },
+  turnaround:  { phase: "turnaround",  stageNumber: null, labelKo: "턴어라운드",
+    tagline: "바닥 찍고 실적이 돌아서는 중",
+    watchKo: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다" },
+  waiting:     { phase: "waiting",     stageNumber: 2, labelKo: "증명 대기",
+    tagline: "기대는 붙었고 숫자는 아직 — 다음 실적이 가른다",
+    watchKo: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다" },
+  peakout:     { phase: "peakout",     stageNumber: 4, labelKo: "피크아웃 전조",
+    tagline: "정점을 지나 성장이 식는데 기대는 남아 있음",
+    watchKo: "성장 둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다" },
+  value:       { phase: "value",       stageNumber: 5, labelKo: "성숙·가치",
+    tagline: "성장은 멈췄고 기대도 낮다 — 이익·배당으로 보는 구간",
+    watchKo: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도" },
+  hype:        { phase: "hype",        stageNumber: 1, labelKo: "기대 선반영",
+    tagline: "실적은 뒷걸음인데 주가에 기대만 붙음",
+    watchKo: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다 — 거품을 경계할 자리" },
+  decline:     { phase: "decline",     stageNumber: null, labelKo: "쇠퇴",
+    tagline: "실적도 기대도 함께 내려감",
+    watchKo: "바닥의 신호(구조조정·사업 재편·적자 축소). 반등 근거 없이 싸다는 이유만으론 부족합니다" },
 };
+
+/** 화면에 단계 지도를 그릴 때 쓰는 순서 — 좋은 자리부터 나쁜 자리로 */
+export const PHASE_ORDER: Phase[] = [
+  "hypergrowth", "numbers", "proving", "turnaround",
+  "waiting", "peakout", "value", "hype", "decline",
+];
 
 export function phaseMeta(p: Phase): PhaseMeta {
   return META[p];
@@ -103,6 +138,7 @@ const W = {
   contracting: -15, // 실체 "역성장" 문턱
   rebound: 20,      // 직전 대비 이만큼 개선되면 반등으로 본다
   premium: 55,      // 밴드 분위 이상이면 프리미엄
+  hyper: 40,        // 매출 성장률이 이 이상이면 '폭발 성장'(밸류에이션보다 속도)
 } as const;
 
 // ─── 실체 채점 ────────────────────────────────────────────────────────────────
@@ -232,10 +268,18 @@ export function classifyStage(s: StageSignals): StageVerdict {
   // 기대를 모르면 실체만으로 근사한다(강함=프리미엄 취급하지 않고 보수적으로 할인 취급)
   const premium = expectation === "premium";
 
+  // 폭발 성장: 매출이 연간이든 최신 분기든 40% 이상 뛰는 구간. 투자자는 이때
+  // 밸류에이션을 뒤로 미루고 성장 속도만 본다 — "숫자 싸움"과는 판단 기준이 다르다.
+  const hyper = (s.revGrowthPct ?? 0) >= W.hyper || (s.recentQuarterRevGrowthPct ?? 0) >= W.hyper;
+
+  // 증명 대기 vs 피크아웃: 둘 다 "기대는 높은데 실체는 아직"이지만 방향이 반대다.
+  // 직전보다 나아지는 중이면 아직 증명 전(대기), 나빠지는 중이면 정점을 지난 것(피크아웃).
+  const improving = s.priorSubstanceScore != null && substance.score > s.priorSubstanceScore;
+
   let phase: Phase;
   if (substance.state === "rebounding") phase = "turnaround";
-  else if (substance.state === "strong") phase = premium ? "numbers" : "proving";
-  else if (substance.state === "slowing") phase = premium ? "peakout" : "value";
+  else if (substance.state === "strong") phase = hyper ? "hypergrowth" : premium ? "numbers" : "proving";
+  else if (substance.state === "slowing") phase = premium ? (improving ? "waiting" : "peakout") : "value";
   else /* contracting */ phase = premium ? "hype" : "decline";
 
   const filled = SIGNAL_KEYS.filter(k => s[k] != null).length;
@@ -298,7 +342,8 @@ export function expectationPercentile(perPct: number | null, pbrPct: number | nu
 // ─── 프롬프트 블록 ────────────────────────────────────────────────────────────
 
 const PHASE_ICON: Record<Phase, string> = {
-  hype: "①", proving: "②", numbers: "③", peakout: "④", value: "⑤", decline: "🔻", turnaround: "🔄",
+  hypergrowth: "🚀", numbers: "📈", proving: "🔍", turnaround: "🔄", waiting: "⏳",
+  peakout: "⚠️", value: "🏦", hype: "🫧", decline: "🔻",
 };
 
 /**
@@ -315,6 +360,7 @@ export function renderStageVerdict(v: StageVerdict): string {
     `· 기대(시장): ${v.expectation === "unknown" ? "밴드 없음" : v.expectation}`,
     `· 판정 신뢰도: ${confKo}`,
     `· 근거 신호: ${v.substance.reasons.join(", ") || "없음"}`,
+    `· 이 단계에서 볼 것: ${v.meta.watchKo}`,
     "",
     "⚠️ 이 국면은 서버가 계산한 것입니다. 본문에서 이 판정을 **지지하거나 반박하는 정황**을",
     "   사업보고서 원문(경영진 언어·투자 계획·신사업·리스크)에서 찾아 설명하세요.",
