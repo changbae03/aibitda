@@ -29,39 +29,72 @@ interface MacroData {
 }
 
 const PIPELINE_KO = [
-  { step: "01", title: "기업 개요", desc: "사업모델·경영진·주요제품·성장전략·지배구조 분석" },
-  { step: "02", title: "재무 분석", desc: "매출·이익·현금흐름·부채·WACC 등 정량 지표 심층 분석" },
-  { step: "03", title: "산업·경쟁", desc: "TAM·경쟁 포지셔닝·시장점유율·해자 강도 평가" },
-  { step: "04", title: "절대 가치", desc: "DCF / 배당할인·rNPV·NAV·AFFO 등 섹터별 절대가치 산출" },
-  { step: "05", title: "상대 가치", desc: "P/E·EV/EBITDA·P/B·EV/R 등 피어 멀티플 비교 분석" },
-  { step: "06", title: "리스크 분석", desc: "매크로·규제·경쟁·재무·이벤트 리스크 5축 평가" },
-  { step: "07", title: "최종 조율", desc: "6단계 결과를 종합해 목표주가·투자의견·핵심 논거 도출" },
+  { step: "01", title: "기업 개요", desc: "무슨 사업으로 어떻게 돈을 버는지 — 사업모델·주요제품·산업 내 위치" },
+  { step: "02", title: "산업 분석", desc: "이 산업이 지금 어디로 가는지 — 시장 구조·경쟁 구도·전방 수요" },
+  { step: "03", title: "촉매 분석", desc: "주가를 움직일 재료 — 실적·수주·규제·이벤트와 그 반영도" },
+  { step: "04", title: "실적·재무", desc: "숫자가 무엇을 말하는지 — 연간·분기 손익, 재무 건전성, 컨센서스" },
+  { step: "05", title: "사업보고서 행간", desc: "숫자의 '왜' — 몇 년치 공시를 대조해 사업 구성 이동·캐파·고객 집중도·전략 행동을 읽는다" },
+  { step: "06", title: "투자 전략", desc: "관점 정리 — 강세·약세 논거와 확인해야 할 조건" },
+  { step: "07", title: "6렌즈 행간읽기", desc: "내러티브·조류·사이클·배수 온도·재료의 깊이·정합 — 그리고 종합 한 줄" },
+  { step: "08", title: "체크리스트", desc: "12개 항목 점검. 임상 바이오는 파이프라인·현금 런웨이 기준으로 전환" },
 ];
 
 const PIPELINE_EN = [
-  { step: "01", title: "Company Overview", desc: "Business model, management, key products, growth strategy, governance analysis" },
-  { step: "02", title: "Financial Analysis", desc: "Deep quantitative analysis of revenue, earnings, cash flow, debt, WACC, and more" },
-  { step: "03", title: "Industry & Competition", desc: "TAM, competitive positioning, market share, and moat strength assessment" },
-  { step: "04", title: "Absolute Valuation", desc: "Sector-specific intrinsic value: DCF, DDM, rNPV, NAV, AFFO, etc." },
-  { step: "05", title: "Relative Valuation", desc: "Peer multiple comparison: P/E, EV/EBITDA, P/B, EV/R, and more" },
-  { step: "06", title: "Risk Analysis", desc: "5-axis risk assessment: macro, regulatory, competitive, financial, event-driven" },
-  { step: "07", title: "Final Synthesis", desc: "Integrates all 6 steps to produce a target price, investment opinion, and key thesis" },
+  { step: "01", title: "Company Overview", desc: "What the business is and how it makes money — model, products, position" },
+  { step: "02", title: "Industry Analysis", desc: "Where the industry is heading — structure, competition, end demand" },
+  { step: "03", title: "Catalysts", desc: "What can move the stock — earnings, orders, regulation, events" },
+  { step: "04", title: "Earnings & Financials", desc: "What the numbers say — annual/quarterly P&L, balance-sheet health, consensus" },
+  { step: "05", title: "Reading Between the Lines", desc: "Why the numbers moved — multi-year filings compared for segment shifts, capacity, customer concentration, strategic moves" },
+  { step: "06", title: "Investment Strategy", desc: "Bull and bear cases, and the conditions to verify" },
+  { step: "07", title: "Six Lenses", desc: "Narrative, tide, cycle, multiple temperature, depth of catalyst, coherence — plus a one-line verdict" },
+  { step: "08", title: "Checklist", desc: "12-point check; clinical-stage biotech switches to pipeline and cash-runway criteria" },
+];
+
+/** 주식 관점의 9개 단계 — 백엔드 stage-classifier.ts의 Phase와 같은 순서·같은 말 */
+const STAGES = [
+  { emoji: "🚀", ko: "폭발 성장", en: "Explosive Growth", tag: "속도가 전부", tagEn: "Speed is everything",
+    desc: "매출이 폭발적으로 늘고 있어요. 밸류에이션보다 성장 속도 자체가 주가를 끌고 갑니다.",
+    descEn: "Revenue is compounding fast. Growth rate, not valuation, drives the stock here." },
+  { emoji: "📈", ko: "숫자 싸움", en: "Proving the Numbers", tag: "실적도 기대도 높음", tagEn: "High bar, high price",
+    desc: "실적이 좋고 주가도 그만큼 높아요. 높은 눈높이를 매번 증명해야 유지됩니다.",
+    descEn: "Strong results with a price to match. The bar must be cleared every quarter." },
+  { emoji: "🔍", ko: "실체 확인", en: "Undervalued but Improving", tag: "좋은데 아직 쌈", tagEn: "Good, still cheap",
+    desc: "실적은 좋아지는데 주가는 아직 싸요. 시장이 아직 덜 알아본 상태일 수 있습니다.",
+    descEn: "Fundamentals improving while the price lags. The market may not have caught on." },
+  { emoji: "🔄", ko: "턴어라운드", en: "Turnaround", tag: "바닥 찍고 반등", tagEn: "Off the bottom",
+    desc: "바닥을 찍고 실적이 다시 살아나기 시작했어요. 분위기가 바뀌는 국면입니다.",
+    descEn: "Results have started to recover from a trough. The direction is changing." },
+  { emoji: "⏳", ko: "증명 대기", en: "Awaiting Proof", tag: "숫자를 기다리는 중", tagEn: "Waiting on numbers",
+    desc: "기대는 이미 주가에 붙었는데 숫자는 아직 안 나왔어요. 다음 실적이 방향을 가릅니다.",
+    descEn: "Expectations are priced in but the numbers haven't arrived. The next print decides." },
+  { emoji: "⚠️", ko: "피크아웃 전조", en: "Past the Peak", tag: "기대가 실적을 앞섬", tagEn: "Hope outruns results",
+    desc: "정점을 지나 성장이 식는데 주가 기대는 아직 높아요. 기대가 실적을 앞서간 구간입니다.",
+    descEn: "Growth is cooling while expectations stay elevated." },
+  { emoji: "🏦", ko: "성숙·가치", en: "Mature / Value", tag: "빠른 성장은 끝", tagEn: "Growth has plateaued",
+    desc: "빠른 성장은 끝났고 기대도 낮아졌어요. 이제는 이익과 배당으로 보는 구간입니다.",
+    descEn: "Rapid growth is over and expectations are low. Judged on earnings and payout." },
+  { emoji: "🫧", ko: "기대 선반영", en: "Priced on Hope", tag: "기대만 앞섬", tagEn: "Story without substance",
+    desc: "실적은 뒷걸음치는데 주가엔 기대만 실렸어요. 거품을 경계할 자리입니다.",
+    descEn: "Results are sliding while the price carries only expectation." },
+  { emoji: "🔻", ko: "쇠퇴", en: "Decline", tag: "실적·기대 동반 하락", tagEn: "Both falling",
+    desc: "실적도 기대도 같이 내려가요. 사업이 힘을 잃어가는 국면입니다.",
+    descEn: "Both fundamentals and expectations are falling." },
 ];
 
 const DATA_SOURCES_KO = [
-  { name: "Yahoo Finance",    role: "재무제표 · WACC 핵심 수치",    detail: "EPS·매출·EBITDA·총부채·시가총액·베타·발행주식수 등 글로벌 재무 데이터",                                                                   accent: "border-l-purple-500", dot: "bg-purple-500" },
+  { name: "Yahoo Finance",    role: "재무제표 · 시세 · 지표",    detail: "EPS·매출·EBITDA·총부채·시가총액·발행주식수 등 글로벌 재무 데이터",                                                                   accent: "border-l-purple-500", dot: "bg-purple-500" },
   { name: "DART (금융감독원)", role: "한국 기업 원천 재무상태표",     detail: "연결·별도 재무상태표 (현금·자산·부채·자본·금융부채 직접 조회) — Yahoo Finance 수치보다 우선 적용",                                          accent: "border-l-blue-500",   dot: "bg-blue-500"   },
   { name: "KRX (한국거래소)", role: "KOSPI·KOSDAQ 종목 목록",         detail: "2,700+ 상장 종목의 정확한 거래소·티커 매핑 — AI의 심볼 오류 자동 교정",                                                                      accent: "border-l-teal-500",   dot: "bg-teal-500"   },
-  { name: "ECOS (한국은행)",  role: "한국 실시간 거시지표",            detail: "기준금리·CPI·원달러환율·GDP 성장률 — WACC 무위험수익률·환율 환산에 실시간 반영",                                                              accent: "border-l-amber-500",  dot: "bg-amber-500"  },
-  { name: "FRED (연준)",      role: "미국 실시간 거시지표",            detail: "Fed 금리·10Y/2Y 국채수익률·장단기 스프레드·CPI·GDP·실업률 — 미국 주식 WACC Rf에 실시간 반영",                                                accent: "border-l-red-500",    dot: "bg-red-500"    },
+  { name: "ECOS (한국은행)",  role: "한국 실시간 거시지표",            detail: "기준금리·CPI·원달러환율·GDP 성장률 — 업황과 환율 맥락에 실시간 반영",                                                              accent: "border-l-amber-500",  dot: "bg-amber-500"  },
+  { name: "FRED (연준)",      role: "미국 실시간 거시지표",            detail: "Fed 금리·10Y/2Y 국채수익률·장단기 스프레드·CPI·GDP·실업률 — 미국 업황 국면 판단에 반영",                                                accent: "border-l-red-500",    dot: "bg-red-500"    },
 ];
 
 const DATA_SOURCES_EN = [
-  { name: "Yahoo Finance",    role: "Financials · Core WACC inputs",      detail: "EPS, revenue, EBITDA, total debt, market cap, beta, shares outstanding — global financial data",                                              accent: "border-l-purple-500", dot: "bg-purple-500" },
+  { name: "Yahoo Finance",    role: "Financials · Prices · Metrics",      detail: "EPS, revenue, EBITDA, total debt, market cap, shares outstanding — global financial data",                                              accent: "border-l-purple-500", dot: "bg-purple-500" },
   { name: "DART (FSS Korea)", role: "Korean company balance sheets",       detail: "Consolidated & separate balance sheets (cash, assets, liabilities, equity, financial debt direct lookup) — takes precedence over Yahoo Finance", accent: "border-l-blue-500",   dot: "bg-blue-500"   },
   { name: "KRX (Korea Exchange)", role: "KOSPI · KOSDAQ listings",         detail: "Accurate exchange and ticker mapping for 2,700+ listed stocks — auto-corrects AI symbol errors",                                                accent: "border-l-teal-500",   dot: "bg-teal-500"   },
-  { name: "ECOS (Bank of Korea)", role: "Korean real-time macro data",     detail: "Base rate, CPI, USD/KRW, GDP growth — live inputs for WACC risk-free rate and FX conversion",                                                  accent: "border-l-amber-500",  dot: "bg-amber-500"  },
-  { name: "FRED (Fed Reserve)",   role: "US real-time macro data",         detail: "Fed funds rate, 10Y/2Y Treasury yields, yield spread, CPI, GDP, unemployment — live Rf input for US stock WACC",                              accent: "border-l-red-500",    dot: "bg-red-500"    },
+  { name: "ECOS (Bank of Korea)", role: "Korean real-time macro data",     detail: "Base rate, CPI, USD/KRW, GDP growth — live context for industry conditions and FX",                                                  accent: "border-l-amber-500",  dot: "bg-amber-500"  },
+  { name: "FRED (Fed Reserve)",   role: "US real-time macro data",         detail: "Fed funds rate, 10Y/2Y Treasury yields, yield spread, CPI, GDP, unemployment — live context for US cycle reads",                              accent: "border-l-red-500",    dot: "bg-red-500"    },
 ];
 
 type MethodTag = { label: string; color: string };
@@ -120,93 +153,93 @@ const sectorGroups: SectorGroup[] = [
 ];
 
 const DIFFERENTIATORS_KO = [
-  { title: "자기검증 반론 에이전트", badge: "Self-Adversarial Review", badgeColor: "bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700", desc: "재무 전망과 밸류에이션 단계 완료 후, AI가 스스로 핵심 가정에 대해 3가지 각도로 반론을 생성합니다. WACC 과소/과대 여부, 성장률 낙관성, 멀티플 정당성을 별도 에이전트가 비판적으로 검토합니다.", icon: "⚔️" },
-  { title: "WACC 자동 가드레일", badge: "Auto WACC Guardrail", badgeColor: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700", desc: "한국 WACC 정상 범위 8~14%, 미국 7~12%를 코드에 하드코딩했습니다. WACC < 8% 감지 시 '과소 경고'와 함께 10%로 자동 상향, WACC > 15% 시 과대 경고 후 재검토를 강제합니다. 임의로 낮은 할인율을 써서 목표주가를 부풀리는 오류를 원천 차단합니다.", icon: "🛡️" },
-  { title: "섹터별 지표 오용 차단", badge: "Metric Prohibition System", badgeColor: "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700", desc: "리츠에는 DCF·EV/EBITDA 단독 사용을 명시적으로 금지하고, 은행·금융주에는 EV/EBITDA를 금지합니다. MLP·BDC에는 EPS·PER을 완전 금지합니다. 섹터 특성을 무시한 잘못된 배수 적용이 불가능합니다.", icon: "🚫" },
-  { title: "3단 데이터 우선순위 체계", badge: "Multi-Source Priority Stack", badgeColor: "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700", desc: "한국 기업의 재무상태표는 DART(1순위) → Yahoo Finance(2순위) → Naver(3순위)로 자동 폴백합니다. Yahoo Finance가 한국 주식 주가를 IPO 가격으로 반환하는 버그를 Naver 실시간 종가로 교정하고, KRX 기준 발행주식수를 재계산해 EPS 왜곡을 방지합니다.", icon: "🗂️" },
-  { title: "롤링 컨텍스트 누적", badge: "Rolling Context Pipeline", badgeColor: "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700", desc: "7단계 파이프라인에서 각 에이전트는 이전 단계의 분석 결과 전체를 읽고 명시적으로 반영합니다. 팀장 브리핑 → 산업 분석 → 재무 분석 → 밸류에이션 → 최종 조율로 이어지는 누적 컨텍스트가 일관된 논리를 보장합니다.", icon: "🔗" },
-  { title: "FDA 지정별 PoS 자동 보정", badge: "FDA Designation PoS Adjuster", badgeColor: "bg-pink-100 text-pink-900 border border-pink-300 dark:bg-pink-900/50 dark:text-pink-200 dark:border-pink-700", desc: "미국 바이오 분석 시 FDA Breakthrough Therapy 지정(+5~10%p), Priority Review(+3~5%p), Fast Track(+2~3%p)에 따라 임상 성공 확률을 자동 상향합니다. PDUFA 날짜와 AdCom 반대 다수 시 CRL 리스크를 별도 시나리오로 강제 산출합니다.", icon: "💊" },
-  { title: "실시간 뉴스·이벤트 반영", badge: "News & Catalyst Integration", badgeColor: "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700", desc: "실적 서프라이즈·FDA 결정·M&A·규제 이슈·경영진 교체 등 주가에 직접 영향을 미칠 수 있는 뉴스와 카탈리스트를 분석에 반영합니다. 단순 재무 수치를 넘어 시장 이벤트 드리븐 관점까지 목표주가에 통합합니다.", icon: "📰" },
-  { title: "모델 자기보정 시스템", badge: "Self-Calibrating Model", badgeColor: "bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700", desc: "분석 30일 후 실제 주가 방향과 AI 판정을 자동 대조해 섹터별 정확도를 누적합니다. 특정 섹터에서 낙관 편향이 반복될 경우, 다음 분석 시 밸류에이션·투자의견 단계 프롬프트에 보정 맥락을 자동 주입합니다. 사람이 손대지 않아도 모델이 스스로 과거 실수를 다음 판단에 반영하는 구조입니다.", icon: "🔄" },
+  { title: "숫자는 코드가 뽑습니다", badge: "Server-Extracted Metrics", badgeColor: "bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700", desc: "매출·설비투자·R&D·생산능력·가동률·임직원 수·운전자본을 서버가 공시 원문에서 직접 추출해 표로 만든 뒤 AI에 넘깁니다. AI가 수백 쪽에서 숫자를 찾게 하면 다른 해의 값이 섞입니다 — 찾을 일 자체를 없앴습니다.", icon: "📐" },
+  { title: "사라진 것을 찾아냅니다", badge: "Disappearance Detection", badgeColor: "bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700", desc: "회사는 접은 사업을 굳이 말하지 않습니다. 연도별 매출 비중 표의 사업부문 목록을 집합으로 비교해, 조용히 사라진 부문과 새로 등장한 부문을 기간까지 짚어 보여줍니다.", icon: "🔎" },
+  { title: "9개 단계 자동 판정", badge: "Business Stage Classifier", badgeColor: "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700", desc: "성장률·이익률 추세·설비투자 방향·운전자본·인력 변화와 업종 배수 대비 위치를 조합해 폭발 성장·숫자 싸움·턴어라운드 등 9개 단계 중 하나로 판정합니다. 판정에 쓰인 신호를 전부 공개합니다.", icon: "🧭" },
+  { title: "최신 분기가 먼저 반영됩니다", badge: "Quarter-First Signals", badgeColor: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700", desc: "연간 실적만 보면 턴어라운드를 1년 늦게 압니다. 최신 확정 분기를 전년 같은 분기와 비교(계절성 제거)해, 연간이 아직 적자여도 분기가 먼저 돌아선 것을 잡아냅니다.", icon: "⚡" },
+  { title: "고객 집중도를 숫자로", badge: "Customer Concentration", badgeColor: "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700", desc: "회사가 고객명을 밝히지 않아도, 재무제표 주석의 '단일 외부고객 매출 10% 초과' 공시에서 금액을 뽑아 매출 대비 비중과 전년 대비 증감을 계산합니다.", icon: "🎯" },
+  { title: "새로 등장한 기술을 포착", badge: "Emerging Terms", badgeColor: "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700", desc: "과거 보고서엔 없다가 최근에 반복 등장한 기술·제품 용어를 추려냅니다. 회사가 어디로 가고 있는지는 새 단어에서 먼저 드러납니다.", icon: "🆕" },
+  { title: "뉴스로 행간을 보충", badge: "News Cross-Reference", badgeColor: "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700", desc: "공시는 6~12개월 전 회사가 밝힌 방향이고, 뉴스는 지금 벌어지는 일입니다. 각 지표 해설에 관련 뉴스를 엮어 '왜 이렇게 변했는가'를 채웁니다.", icon: "📰" },
+  { title: "없는 것은 없다고 적습니다", badge: "No Silent Gaps", badgeColor: "bg-slate-100 text-slate-900 border border-slate-300 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-600", desc: "공시에 없는 항목은 추정하지 않고 '공시 미확인'으로 남깁니다. 수집이 실패하면 실패한 사실을 드러냅니다 — 조용히 빈칸을 지어내는 것이 가장 위험합니다.", icon: "🚧" },
 ];
 
 const DIFFERENTIATORS_EN = [
-  { title: "Self-Adversarial Review Agent", badge: "Self-Adversarial Review", badgeColor: "bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700", desc: "After completing the financial forecast and valuation steps, the AI generates counterarguments from 3 angles against its own key assumptions. A separate agent critically reviews whether WACC is under/overestimated, whether growth assumptions are too optimistic, and whether multiples are justified.", icon: "⚔️" },
-  { title: "Auto WACC Guardrail", badge: "Auto WACC Guardrail", badgeColor: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700", desc: "Normal WACC ranges (Korea: 8–14%, US: 7–12%) are hard-coded. If WACC < 8%, an underestimation warning is triggered and it's automatically raised to 10%. If WACC > 15%, an overestimation warning forces re-review. This prevents inflated target prices from artificially low discount rates.", icon: "🛡️" },
-  { title: "Sector Metric Abuse Prevention", badge: "Metric Prohibition System", badgeColor: "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700", desc: "Standalone DCF/EV/EBITDA is explicitly prohibited for REITs. EV/EBITDA is banned for banks and financials. EPS/PER is completely prohibited for MLPs and BDCs. Wrong multiples that ignore sector characteristics simply cannot be applied.", icon: "🚫" },
-  { title: "3-Tier Data Priority Stack", badge: "Multi-Source Priority Stack", badgeColor: "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700", desc: "Korean company balance sheets auto-fallback: DART (1st) → Yahoo Finance (2nd) → Naver (3rd). Yahoo Finance's bug of returning IPO prices for Korean stocks is corrected with Naver real-time closing prices, and shares outstanding are recalculated from KRX data to prevent EPS distortion.", icon: "🗂️" },
-  { title: "Rolling Context Pipeline", badge: "Rolling Context Pipeline", badgeColor: "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700", desc: "In the 7-step pipeline, each agent explicitly reads and incorporates the full output of all previous steps. The cumulative context — briefing → industry → financials → valuation → final synthesis — ensures consistent reasoning throughout.", icon: "🔗" },
-  { title: "FDA Designation PoS Adjuster", badge: "FDA Designation PoS Adjuster", badgeColor: "bg-pink-100 text-pink-900 border border-pink-300 dark:bg-pink-900/50 dark:text-pink-200 dark:border-pink-700", desc: "For US biotech analysis, clinical success probabilities are automatically adjusted upward based on FDA designations: Breakthrough Therapy (+5–10%p), Priority Review (+3–5%p), Fast Track (+2–3%p). PDUFA dates and AdCom negative majority votes force a separate CRL risk scenario.", icon: "💊" },
-  { title: "Real-time News & Catalyst Integration", badge: "News & Catalyst Integration", badgeColor: "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700", desc: "Earnings surprises, FDA decisions, M&A, regulatory issues, management changes — news and catalysts that can directly impact stock prices are incorporated into the analysis. Event-driven perspectives are integrated into the target price, going beyond simple financial figures.", icon: "📰" },
-  { title: "Self-Calibrating Model System", badge: "Self-Calibrating Model", badgeColor: "bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700", desc: "30 days after analysis, the AI's verdict is automatically compared against actual price movement to accumulate sector-level accuracy. If optimism bias repeats in a sector, a calibration context is automatically injected into the valuation and opinion steps in subsequent analyses — without human intervention.", icon: "🔄" },
+  { title: "Metrics Extracted by Code", badge: "Server-Extracted Metrics", badgeColor: "bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700", desc: "Revenue, capex, R&D, capacity, utilization, headcount and working capital are pulled straight from the filings by the server and handed to the AI as a table. Letting an AI hunt through hundreds of pages mixes up years — so we removed the hunting.", icon: "📐" },
+  { title: "Detecting What Disappeared", badge: "Disappearance Detection", badgeColor: "bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700", desc: "Companies rarely announce a business they quietly shut. We compare segment lists across years as sets, surfacing divisions that vanished and ones that newly appeared — with the period pinpointed.", icon: "🔎" },
+  { title: "Nine-Stage Classifier", badge: "Business Stage Classifier", badgeColor: "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700", desc: "Growth, margin trend, capex direction, working capital, headcount and position versus sector multiple bands combine into one of nine stages. Every signal behind the verdict is disclosed.", icon: "🧭" },
+  { title: "Latest Quarter Leads", badge: "Quarter-First Signals", badgeColor: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700", desc: "Annual-only reading spots a turnaround a year late. We compare the latest reported quarter against the same quarter a year earlier, catching a turn even while the full year is still in the red.", icon: "⚡" },
+  { title: "Customer Concentration in Numbers", badge: "Customer Concentration", badgeColor: "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700", desc: "Even when the customer is unnamed, the footnote disclosing revenue from a single external customer above 10% gives an amount — we turn it into a share of revenue and a year-over-year change.", icon: "🎯" },
+  { title: "Newly Emerging Technology", badge: "Emerging Terms", badgeColor: "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700", desc: "Technical and product terms absent from older filings but repeated in recent ones are surfaced. Where a company is heading usually shows up in its new vocabulary first.", icon: "🆕" },
+  { title: "News Fills the Gaps", badge: "News Cross-Reference", badgeColor: "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700", desc: "Filings state where the company said it was going 6–12 months ago; news says what is happening now. Related headlines are woven into each metric to explain why it moved.", icon: "📰" },
+  { title: "No Silent Gaps", badge: "No Silent Gaps", badgeColor: "bg-slate-100 text-slate-900 border border-slate-300 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-600", desc: "What isn't disclosed is marked as such rather than estimated. When collection fails, the failure is surfaced — quietly inventing the blanks is the most dangerous outcome.", icon: "🚧" },
 ];
 
 const ASSUMPTIONS_KO = [
   {
-    title: "WACC 무위험수익률 (Rf)",
+    title: "단계 판정에 쓰는 신호",
     items: [
-      "한국 주식: 한국은행 ECOS 기준금리 실시간 반영",
-      "미국 주식: FRED 10년 국채수익률(DGS10) 실시간 반영",
-      "글로벌 평균 ERP: 5~6% 적용 (Damodaran 방법론 기반)",
+      "실적: 매출 성장률, 영업이익률 추세, 설비투자 방향",
+      "체력: 운전자본(현금전환주기), 임직원 증감, 가동률",
+      "구조: 사업부문 신규·소멸, 최신 확정 분기의 전년 동기 대비",
     ],
   },
   {
-    title: "DCF 터미널 성장률",
+    title: "시장 기대(밸류에이션) 축",
     items: [
-      "한국 성숙기업: 1~2% (GDP 장기 성장률 근사)",
-      "미국 성숙기업: 2~2.5%",
-      "고성장 섹터(바이오·플랫폼): 3~5% 기간 성장 후 수렴",
+      "업종별 PER·PBR 실측 밴드에서 이 종목이 놓인 분위(0~100)",
+      "밴드는 매일 장마감 후 종목 마스터에서 사분위수로 재집계",
+      "표본이 5종목 미만이면 밴드를 쓰지 않습니다 — 틀린 숫자는 없는 숫자보다 나쁩니다",
     ],
   },
   {
-    title: "섹터별 Cap Rate (미국 리츠)",
+    title: "단계 구분 문턱",
     items: [
-      "데이터센터: 4.5~5.5% / 셀타워: 3.5~5%",
-      "산업·물류: 4~6% / 헬스케어: 5~6.5%",
-      "주거: 4~5.5% / 오피스: 6~9% (위기 섹터 할증)",
+      "폭발 성장: 매출 성장률 40% 이상(연간 또는 최신 분기)",
+      "실체 강함/역성장: 신호 합산 점수 +30 이상 / −15 이하",
+      "턴어라운드: 직전 바닥 대비 큰 폭 개선, 또는 최신 분기 흑자전환",
     ],
   },
   {
-    title: "바이오 임상 확률 (PoS)",
+    title: "수집 범위",
     items: [
-      "Phase I→II: 63% / Phase II→III: 31%",
-      "Phase III→승인: 58% / 누적 승인 확률: ~11%",
-      "PDUFA 일정·AdCom 결과로 개별 보정",
+      "한국: DART 사업·반기·분기보고서 원문 (최근 4년)",
+      "미국: SEC EDGAR 10-K/20-F 본문과 XBRL 재무 (최근 4~5년)",
+      "직원 현황·재무제표 주석 등 구조화 공시는 전용 API로 별도 수집",
     ],
   },
 ];
 
 const ASSUMPTIONS_EN = [
   {
-    title: "WACC Risk-Free Rate (Rf)",
+    title: "Signals Behind the Stage",
     items: [
-      "Korean stocks: Bank of Korea ECOS base rate (real-time)",
-      "US stocks: FRED 10-year Treasury yield (DGS10, real-time)",
-      "Global average ERP: 5–6% (based on Damodaran methodology)",
+      "Results: revenue growth, operating-margin trend, capex direction",
+      "Health: cash conversion cycle, headcount change, utilization",
+      "Structure: segments added or dropped, latest quarter versus the same quarter last year",
     ],
   },
   {
-    title: "DCF Terminal Growth Rate",
+    title: "The Market-Expectation Axis",
     items: [
-      "Korean mature companies: 1–2% (approximating long-term GDP growth)",
-      "US mature companies: 2–2.5%",
-      "High-growth sectors (biotech, platforms): 3–5% converging after growth period",
+      "Where the stock sits (0–100) within measured PER/PBR bands for its sector",
+      "Bands are recomputed daily after the close as quartiles across the stock master",
+      "Bands with fewer than 5 constituents are not used — a wrong number is worse than none",
     ],
   },
   {
-    title: "Sector Cap Rates (US REITs)",
+    title: "Stage Thresholds",
     items: [
-      "Data centers: 4.5–5.5% / Cell towers: 3.5–5%",
-      "Industrial/logistics: 4–6% / Healthcare: 5–6.5%",
-      "Residential: 4–5.5% / Office: 6–9% (distressed sector premium)",
+      "Explosive growth: revenue up 40%+ (annual or latest quarter)",
+      "Strong / contracting fundamentals: combined signal score above +30 / below −15",
+      "Turnaround: large improvement off a trough, or the latest quarter swinging to profit",
     ],
   },
   {
-    title: "Biotech Clinical Probabilities (PoS)",
+    title: "Collection Scope",
     items: [
-      "Phase I→II: 63% / Phase II→III: 31%",
-      "Phase III→Approval: 58% / Cumulative approval: ~11%",
-      "Individually adjusted by PDUFA dates and AdCom outcomes",
+      "Korea: DART annual, semi-annual and quarterly filings (last 4 years)",
+      "US: SEC EDGAR 10-K/20-F narrative plus XBRL financials (last 4–5 years)",
+      "Structured disclosures such as headcount and footnotes are collected via dedicated APIs",
     ],
   },
 ];
@@ -247,14 +280,14 @@ export default function AboutPage() {
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           {t(
-            "AI로 기업가치를 밝히다 — 기관급 밸류에이션 방법론을 누구나 사용할 수 있도록 설계된 AI 주식 리서치 플랫폼입니다.",
-            "Illuminating value with AI — an AI-powered stock research platform designed to give everyone access to institutional-grade valuation methodology."
+            "AI로 기업가치를 밝히다 — 사업보고서 몇 년치를 나란히 놓고 행간을 읽어, 이 기업이 지금 어떤 단계에 있는지 알려주는 AI 주식 리서치 플랫폼입니다.",
+            "Illuminating value with AI — a stock research platform that reads between the lines of multi-year filings to tell you what stage a company is actually in."
           )}
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           {(isEn
-            ? ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "17 Valuation Models", "7-Step AI Pipeline", "Live Macro Data", "AI Market Outlook"]
-            : ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "16개 전용 밸류에이션 모델", "7단계 AI 파이프라인", "실시간 거시지표", "AI 시장 전망"]
+            ? ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "Multi-year Filings", "9 Business Stages", "8-Step AI Pipeline", "Live Macro Data"]
+            : ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "사업보고서 다년치 대조", "9개 사업 단계 판정", "8단계 AI 파이프라인", "실시간 거시지표"]
           ).map((tag) => (
             <span key={tag} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
               {tag}
@@ -310,8 +343,8 @@ export default function AboutPage() {
               </p>
               <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
                 {t(
-                  "테마와 모멘텀은 사라지지만 현금흐름과 이익은 남습니다. 버핏·린치·클라만이 증명했듯, 초과 수익의 원천은 결국 시장이 오판한 내재가치를 찾아내는 능력입니다. 주가와 기업가치의 괴리가 클수록 — 그 수렴 과정에서 수익이 발생합니다.",
-                  "Themes and momentum fade, but cash flows and earnings remain. As Buffett, Lynch, and Klarman have proven, the source of excess returns is ultimately the ability to identify intrinsic value that the market has mispriced. The wider the gap between price and value — the greater the profit potential in its convergence."
+                  "테마와 모멘텀은 사라지지만 사업의 방향은 공시에 남습니다. 증설했는지, 사업을 접었는지, 고객이 한 곳에 몰렸는지 — 회사가 이미 밝혀 놓은 사실입니다. 다만 수백 쪽 보고서 여러 해치를 나란히 놓고 대조하는 일을 개인이 하기 어려울 뿐입니다.",
+                  "Themes and momentum fade, but a company's direction is recorded in its filings. Capacity added, a business quietly dropped, customers concentrating — the company has already disclosed it. The hard part is placing hundreds of pages across several years side by side and comparing them."
                 )}
               </p>
             </div>
@@ -325,45 +358,45 @@ export default function AboutPage() {
               </p>
               <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
                 {t(
-                  "7단계 분석 — 재무 모델링, 섹터별 밸류에이션, 리스크 시나리오 — 을 AI를 통해 누구에게나 제공합니다. DCF·P/B-ROE·rNPV·SOTP·NAV 등 업종에 맞는 방법론을 자동 선택해 \"이 주식이 지금 비싼가, 싼가\"를 수치로 답합니다. 분석의 민주화가 곧 투자 기회의 균등입니다.",
-                  "We deliver 7-step analysis — financial modeling, sector-specific valuation, risk scenarios — to everyone through AI. We auto-select the right methodology for each sector (DCF, P/B-ROE, rNPV, SOTP, NAV, etc.) to answer in numbers: \"Is this stock cheap or expensive right now?\" Democratizing analysis means equalizing opportunity."
+                  "그 대조를 서버가 대신합니다. 몇 년치 공시에서 매출 구성의 이동, 생산능력, 고객 집중도, 임직원 수, 운전자본을 뽑아내고 — 사라진 사업과 새로 등장한 기술까지 짚습니다. 그리고 \"이 기업이 지금 어떤 단계인가\"를 9개 단계 중 하나로 판정합니다. 목표주가를 맞히는 대신, 공시된 사실로 흐름을 읽습니다.",
+                  "We do that comparison for you. The server extracts segment shifts, capacity, customer concentration, headcount, and working capital from years of filings — and flags businesses that quietly disappeared and technologies that newly appeared. Then it classifies the company into one of nine business stages. Instead of predicting a target price, we read the trajectory from disclosed facts."
                 )}
               </p>
             </div>
           </div>
         </div>
 
-        {/* 밸류에이션 방법론 철학 */}
+        {/* 분석 원칙 */}
         <div className="rounded-xl border border-border bg-muted/20 px-4 py-4 space-y-2.5">
           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-            {t("밸류에이션 방법론 원칙", "Valuation Methodology Principles")}
+            {t("분석 원칙", "How We Analyze")}
           </p>
           <div className="space-y-2 text-[12px] text-muted-foreground/80 leading-relaxed">
             <p>
               <span className="font-semibold text-foreground">
-                {t("① 업종에 맞는 모델을 씁니다.", "① Use the right model for the sector.")}
+                {t("① 숫자는 코드가 뽑고, AI는 해석만 합니다.", "① Code extracts the numbers; the AI only interprets.")}
               </span>{" "}
               {t(
-                "영업적자 바이오 기업에 DCF를 적용하면 현재 주가의 1/100 수준의 비현실적 값이 나옵니다. 금융주에 EV/EBITDA를 쓰면 이자비용이 왜곡됩니다. 애빛다는 업종을 감지하고 가장 신뢰할 수 있는 방법론을 자동 선택합니다.",
-                "Applying DCF to an operating-loss biotech produces a value 1/100th of the current price. Using EV/EBITDA on a bank distorts interest expense. AiBITDA auto-detects the sector and selects the most reliable methodology."
+                "매출·설비투자·R&D·생산능력·임직원 수·운전자본을 서버가 공시 원문에서 직접 뽑아 표로 만든 뒤 AI에 넘깁니다. AI가 수백 쪽에서 숫자를 찾게 하면 다른 해의 값이 섞입니다 — 찾을 일 자체를 없앴습니다.",
+                "The server pulls revenue, capex, R&D, capacity, headcount, and working capital straight from the filings and hands the AI a table. Letting an AI hunt for numbers across hundreds of pages mixes up years — so we removed the hunting."
               )}
             </p>
             <p>
               <span className="font-semibold text-foreground">
-                {t("② 가정은 투명하게 명시합니다.", "② Assumptions are stated transparently.")}
+                {t("② 단계는 실측 신호로 판정합니다.", "② Stages are decided by measured signals.")}
               </span>{" "}
               {t(
-                "WACC·성장률·터미널 밸류 등 핵심 가정을 숨기지 않습니다. 낮은 할인율로 목표주가를 부풀리는 행위를 원천 차단하는 가드레일을 코드에 직접 구현했습니다.",
-                "WACC, growth rates, terminal value — key assumptions are never hidden. Guardrails are built directly into the code to prevent inflated target prices from artificially low discount rates."
+                "매출 성장률·이익률 추세·설비투자 방향·운전자본·인력 변화, 그리고 업종 배수 대비 위치를 조합해 9개 단계 중 하나로 판정합니다. 판정에 쓰인 신호를 모두 공개하므로 근거를 되짚을 수 있습니다.",
+                "Revenue growth, margin trend, capex direction, working capital, headcount, and where the multiple sits versus its sector band combine into one of nine stages. Every signal used is shown, so the verdict can be traced."
               )}
             </p>
             <p>
               <span className="font-semibold text-foreground">
-                {t("③ 반론을 스스로 제기합니다.", "③ The AI challenges its own conclusions.")}
+                {t("③ 없는 것은 없다고 적습니다.", "③ If it isn't disclosed, we say so.")}
               </span>{" "}
               {t(
-                "분석 후 AI가 자체적으로 핵심 가정에 반론을 제시합니다. 낙관론에 빠지지 않도록 비판적 시각을 파이프라인 안에 내재화했습니다.",
-                "After analysis, the AI generates counterarguments against its own key assumptions. Critical perspective is built into the pipeline to prevent optimism bias."
+                "공시에 없는 항목은 추정하지 않고 \"공시 미확인\"으로 남깁니다. 수집이 실패하면 실패한 사실을 드러냅니다 — 조용히 빈칸을 지어내는 것이 가장 위험합니다.",
+                "What the filings don't disclose is left as \"not disclosed\" rather than estimated. When collection fails, we surface the failure — quietly inventing the blanks is the most dangerous outcome."
               )}
             </p>
           </div>
@@ -447,39 +480,24 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* 섹터별 밸류에이션 */}
+      {/* 9개 사업 단계 */}
       <section>
         <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
-          {t("섹터별 전문 밸류에이션 방법론 (17개)", "Sector-Specific Valuation Methods (17)")}
+          {t("기업이 놓이는 9개 단계", "Nine Business Stages")}
         </h2>
 
-        <div className="space-y-4">
-          {sectorGroups.map((group) => (
-            <div key={group.market} className={cn("rounded-xl border overflow-hidden", group.headerCls)}>
-              <div className={cn("px-4 py-2.5 border-b flex items-center justify-between", group.headerCls)}>
-                <span className="text-[13px] font-black tracking-tight text-foreground">
-                  {isEn ? group.marketEn : group.market}
-                </span>
-                <span className="text-[10.5px] font-semibold text-muted-foreground/75 font-mono">{group.subtitle}</span>
-              </div>
-              <div className="bg-card grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x-0">
-                {group.items.map((item) => (
-                  <div
-                    key={item.name}
-                    className={cn("flex flex-col gap-1.5 px-3.5 py-3 border-l-[3px] border-b border-border/50", group.borderCls)}
-                  >
-                    <span className="text-[12.5px] font-semibold text-foreground">
-                      {isEn ? item.nameEn : item.name}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {item.tags.map((tag) => (
-                        <span key={tag.label} className={cn("text-[10.5px] font-bold px-2 py-0.5 rounded-md", tag.color)}>
-                          {tag.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+        <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+          {STAGES.map((s) => (
+            <div key={s.ko} className="px-4 py-3 flex gap-3">
+              <span className="text-[17px] leading-none mt-0.5 shrink-0 select-none">{s.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-[13px] font-semibold text-foreground">{isEn ? s.en : s.ko}</span>
+                  <span className="text-[11px] text-muted-foreground/70">{isEn ? s.tagEn : s.tag}</span>
+                </div>
+                <p className="text-[12px] text-muted-foreground/75 leading-relaxed mt-0.5">
+                  {isEn ? s.descEn : s.desc}
+                </p>
               </div>
             </div>
           ))}
@@ -487,8 +505,8 @@ export default function AboutPage() {
 
         <p className="text-[11px] text-muted-foreground/50 px-1 mt-2.5 leading-relaxed">
           {t(
-            "AI가 종목명·산업을 자동 감지해 해당 섹터 전용 밸류에이션 프레임을 적용합니다. 일반 DCF와 별도로 섹터 고유 지표(AFFO·Backlog·rNPV 등)를 의무 산출합니다.",
-            "The AI auto-detects the company name and industry, then applies the sector-specific valuation framework. Sector-unique metrics (AFFO, Backlog, rNPV, etc.) are calculated in addition to standard DCF."
+            "실적(성장률·이익률 추세·설비투자·운전자본·인력)과 시장 기대(업종 배수 대비 위치)를 조합해 판정합니다. 같은 '성장'이라도 속도가 전부인 구간과 눈높이를 증명해야 하는 구간은 판단 기준이 다르므로 나눕니다.",
+            "Stages combine fundamentals (growth, margin trend, capex, working capital, headcount) with market expectation (position versus sector multiple bands). Explosive growth and 'prove the expectations' are separated because they demand different judgments."
           )}
         </p>
       </section>
@@ -591,7 +609,7 @@ export default function AboutPage() {
                   {
                     label: t("국고채 10Y", "KTB 10Y"),
                     value: macroData?.ecos?.bondYield10Y != null ? `${macroData.ecos.bondYield10Y.toFixed(2)}%` : "—",
-                    sub: t("Rf (WACC 기준)", "Rf (WACC basis)"),
+                    sub: t("장기 금리", "Long-term rate"),
                   },
                   {
                     label: "GDP (QoQ)",
@@ -711,17 +729,17 @@ export default function AboutPage() {
         </p>
 
         <div className="space-y-3">
-          {/* WACC 실시간 연동 */}
+          {/* 금리 환경 반영 */}
           <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-blue-500">
             <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">📐</div>
             <div className="flex-1 min-w-0 space-y-1.5">
               <p className="text-[13.5px] font-bold text-foreground">
-                {t("WACC에 실시간 거시지표 자동 반영", "Macro Data Wired Live into WACC")}
+                {t("금리 환경을 국면 판단에 반영", "Rate Environment Feeds the Stage Read")}
               </p>
               <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
                 {t(
-                  "무위험수익률(Rf)을 고정값이 아닌 실시간으로 갱신합니다. 한국 주식은 ECOS 기준금리 및 국고채 10Y, 미국 주식은 FRED 10년 국채(DGS10)를 Rf로 자동 채택합니다. 금리가 1%p 오르면 WACC가 오르고, 목표주가는 하락합니다 — 이 연산이 분석마다 자동으로 실행됩니다.",
-                  "The risk-free rate (Rf) is updated in real-time, not fixed. Korean stocks use the Bank of Korea base rate and KTB 10Y via ECOS; US stocks use FRED's DGS10. When rates rise 1%p, WACC increases and target prices fall — this calculation runs automatically on every analysis."
+                  "금리는 업황과 투자 여력을 가릅니다. 한국은 ECOS 기준금리·국고채 10Y, 미국은 FRED 10년 국채(DGS10)를 실시간으로 받아 산업 분석과 촉매 판단의 배경으로 씁니다. 금리가 오르면 설비투자 확대와 차입 부담을 다르게 읽어야 합니다.",
+                  "Rates decide industry conditions and a company's room to invest. Korean names pull the Bank of Korea base rate and KTB 10Y via ECOS; US names pull FRED's DGS10 — live context for the industry read and catalyst judgment. When rates rise, capex expansion and debt load must be read differently."
                 )}
               </p>
               <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -865,12 +883,12 @@ export default function AboutPage() {
           <ul className="space-y-1.5">
             {(isEn ? [
               "AiBITDA's analysis results are AI-generated reference materials based on publicly available data and do not constitute investment advice or solicitation.",
-              "Target prices and investment opinions are based on data and assumptions at the time of analysis and may change with market conditions.",
+              "Stage classifications and interpretations rest on data disclosed at the time of analysis and may change with new filings or market conditions.",
               "All investment decisions and resulting gains or losses are the sole responsibility of the investor.",
               "CBST and AiBITDA do not guarantee the accuracy or completeness of analysis results and bear no responsibility for losses from investments.",
             ] : [
               "애빛다의 분석 결과는 AI가 공개된 데이터를 기반으로 생성한 참고 자료이며, 투자 권유·자문이 아닙니다.",
-              "목표주가 및 투자의견은 분석 시점의 데이터와 가정에 근거하며, 시장 상황 변화에 따라 달라질 수 있습니다.",
+              "사업 단계 판정과 해석은 분석 시점에 공시된 데이터에 근거하며, 새 공시·시장 상황에 따라 달라질 수 있습니다.",
               "모든 투자 결정과 그에 따른 손익은 투자자 본인이 책임집니다.",
               "CBST 및 애빛다 서비스는 분석 결과의 정확성·완전성을 보장하지 않으며, 투자로 인한 손실에 대해 어떠한 책임도 지지 않습니다.",
             ]).map((text, i) => (

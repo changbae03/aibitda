@@ -532,16 +532,16 @@ export default function NewAnalysis() {
             style={{ wordBreak: 'keep-all' }}
           >
             {isEn ? (
-              <>Reading between<br />the lines of<br />great companies.</>
+              <>What stage is<br />this company<br />actually in?</>
             ) : (
-              <>애빛다, 기업의<br />행간읽기</>
+              <>이 기업은 지금,<br />어느 단계인가</>
             )}
           </h1>
           <p className="text-[15px] text-muted-foreground/80 leading-relaxed break-keep font-medium">
             {isEn ? (
-              <>Which stock would you like to analyze?<br className="hidden sm:block" />Enter a ticker or company name to start.</>
+              <>We compare years of filings to place a company on its curve.<br className="hidden sm:block" />Enter a ticker or company name to start.</>
             ) : (
-              <>어떤 종목이든 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다</>
+              <>몇 년치 사업보고서를 나란히 놓고 대조해, 지금의 단계를 짚어드립니다<br className="hidden sm:block" />종목코드나 회사명으로 검색해보세요</>
             )}
           </p>
           <CreditsBadge credits={credits} />
