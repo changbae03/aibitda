@@ -800,12 +800,15 @@ async function executeStep(
               stageSig.recentQuarterRevGrowthPct = pctChange(Number(latest.revenue), Number(yoy.revenue));
               const qL = opmOf(latest), qP = opmOf(yoy);
               if (qL != null && qP != null) stageSig.recentQuarterOpmDeltaPp = (qL - qP) * 100;
+              // 수준도 함께 남긴다 — 여정 그래프가 "적자 → 흑자"로 0선을 넘는 걸 그린다.
+              if (qL != null) stageSig.recentQuarterOpmPct = qL * 100;
               const oiL = Number(latest.operating_income), oiP = Number(yoy.operating_income);
               if (Number.isFinite(oiL) && Number.isFinite(oiP)) {
                 stageSig.recentQuarterSwungToProfit = oiP < 0 && oiL >= 0;
               }
               console.log(`[stage] 최신 분기 YoY ${latest.bsns_year}/${latest.reprt_code} vs ${yoy.bsns_year}: ` +
                 `매출 ${stageSig.recentQuarterRevGrowthPct?.toFixed(0)}%, OPM ${stageSig.recentQuarterOpmDeltaPp?.toFixed(1)}%p` +
+                ` (수준 ${stageSig.recentQuarterOpmPct?.toFixed(1) ?? "없음"}%)` +
                 `${stageSig.recentQuarterSwungToProfit ? ", 흑자전환" : ""}`);
             }
           }

@@ -87,6 +87,11 @@ export interface StageSignals {
   recentQuarterRevGrowthPct?: number | null;
   /** 최신 분기 OPM YoY 변화(%p) */
   recentQuarterOpmDeltaPp?: number | null;
+  /**
+   * 최신 분기 영업이익률 **수준**(%). 채점에는 쓰지 않고 화면(여정 그래프)이 쓴다 —
+   * 변화폭(%p)만으로는 "적자에서 흑자로 넘어왔다"를 그릴 수 없다.
+   */
+  recentQuarterOpmPct?: number | null;
   /** 전년 동기 적자 → 이번 분기 흑자 */
   recentQuarterSwungToProfit?: boolean | null;
 }
