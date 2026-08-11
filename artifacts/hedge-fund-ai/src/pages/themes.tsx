@@ -551,10 +551,16 @@ function TomorrowCandidates({ onAnalyze }: { onAnalyze: (ticker: string, name: s
 function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
   const [showLegend, setShowLegend] = useState(false);
 
+  // "돈이 쏠리는 순서"라고 써놓고 실제로는 phase → themeSmartMoney로 정렬하고 있었다.
+  // 그런데 실측하면 phase는 8개 전부 "quiet", themeSmartMoney는 전부 null이라 둘 다
+  // 무승부가 되어 **원래 배열 순서**가 그대로 나왔다 — 막대가 가장 긴 테마가 3위에
+  // 있던 이유다. 화면에 보이는 막대(force.avg)가 곧 기준이므로 그걸로 정렬한다.
   const phaseRank: Record<string, number> = { hot: 4, momentum: 3, emerging: 2, quiet: 1 };
   const ranked = feed
     .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
     .sort((a, b) => {
+      const fd = (b.force?.avg ?? 0) - (a.force?.avg ?? 0);
+      if (Math.abs(fd) > 0.01) return fd;
       const pr = (phaseRank[b.phase ?? "quiet"] ?? 1) - (phaseRank[a.phase ?? "quiet"] ?? 1);
       if (pr !== 0) return pr;
       return (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);

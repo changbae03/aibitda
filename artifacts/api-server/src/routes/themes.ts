@@ -993,8 +993,15 @@ async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedI
       if (!q?.symbol) continue;
       const change = typeof q.regularMarketChangePercent === "number" ? q.regularMarketChangePercent : 0;
       const vol    = typeof q.regularMarketVolume === "number" ? q.regularMarketVolume : 0;
-      const avg    = typeof q.averageVolume === "number" && q.averageVolume > 0 ? q.averageVolume : vol || 1;
-      momentumMap.set(q.symbol, { priceChange: change, volumeRatio: vol / avg });
+      // ⚠️ 야후 quote에는 `averageVolume`이라는 필드가 **없다**(항상 undefined).
+      // 그래서 예전 폴백 `vol || 1`이 걸려 비율이 언제나 정확히 1(거래량 있음) 또는
+      // 0(없음)으로만 나왔다 — 실측 50종목 중 35개가 1, 13개가 0. 거래량 축이 통째로
+      // 죽어 있었고, 그 값으로 계산한 "수급 강도"는 사실상 주가변화율만 본 셈이다.
+      // 실제 필드는 averageDailyVolume3Month(없으면 10Day)다.
+      const avg = [q.averageDailyVolume3Month, q.averageDailyVolume10Day]
+        .find((v: unknown) => typeof v === "number" && v > 0) as number | undefined;
+      // 평균 거래량을 못 구하면 비율을 지어내지 않는다 — 1(=중립)로 두어 점수에서 빠지게 한다.
+      momentumMap.set(q.symbol, { priceChange: change, volumeRatio: avg ? vol / avg : 1 });
     }
     console.log(`[themes][momentum] YF quote 완료: ${momentumMap.size}/${yfSymbols.length}개`);
   } catch (e: any) {
@@ -1012,10 +1019,15 @@ async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedI
   if (krTickers.length > 0) {
     try {
       // 오늘 데이터 시도 → 모든 flow가 0이면(장 열리기 전/장중 미확정) 전 영업일 폴백
+      // ⚠️ 여기서 toISOString()을 쓰면 안 된다. KST 자정으로 만든 날짜를 다시 UTC로
+      // 돌려 9시간이 깎이면서 **하루 전으로 밀린다**. 실제로 화요일(0811)의 전 영업일이
+      // 월요일(0810)이 아니라 일요일(0809)로 나왔고, 일요일엔 거래가 없으니 수급 조회가
+      // 0/37개로 통째로 비었다 — "기관·외국인 순매수" 화면이 빈 채 돌던 원인이다.
+      // 날짜 계산은 UTC 정오 기준으로 하고, 문자열은 자릿수로 직접 만든다.
       const prevBizDate = (d: string): string => {
-        const dt = new Date(`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T00:00:00+09:00`);
-        do { dt.setDate(dt.getDate() - 1); } while (dt.getDay() === 0 || dt.getDay() === 6);
-        return dt.toISOString().slice(0,10).replace(/-/g, "");
+        const dt = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), 12));
+        do { dt.setUTCDate(dt.getUTCDate() - 1); } while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6);
+        return `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, "0")}${String(dt.getUTCDate()).padStart(2, "0")}`;
       };
       const kstDate = new Date(Date.now() + 9 * 3600_000);
       let flowDate = kstDate.toISOString().slice(0, 10).replace(/-/g, "");
@@ -1030,9 +1042,19 @@ async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedI
       for (const f of flows) {
         flowMap.set(f.ticker, { institution: f.institution ?? 0, foreign: f.foreign ?? 0 });
       }
-      console.log(`[themes][flow] KR 수급 조회 완료: ${flowMap.size}/${krTickers.length}개 (날짜: ${flowDate})`);
+      // 0건은 "오늘 순매수가 없다"가 아니라 **수집이 고장 났다**는 뜻이다. 실제로
+      // pykrx가 안 깔린 환경에서 계속 0/37로 돌았는데, 화면은 "기관·외국인 순매수가
+      // 집중된 테마"라고 말하고 있었다. 조용히 지나가지 말고 크게 남긴다.
+      if (flowMap.size === 0 && krTickers.length > 0) {
+        console.error(
+          `[themes][flow] ⚠️ 수급 0건 (${flowDate}) — pykrx 설치·PYTHON_BIN을 확인하세요. ` +
+          `수급 축이 빠진 채 테마 순위가 매겨집니다.`,
+        );
+      } else {
+        console.log(`[themes][flow] KR 수급 조회 완료: ${flowMap.size}/${krTickers.length}개 (날짜: ${flowDate})`);
+      }
     } catch (e: any) {
-      console.warn("[themes][flow] 수급 조회 실패 (무시):", e?.message ?? e);
+      console.error("[themes][flow] ⚠️ 수급 조회 실패 — 수급 축 없이 진행:", e?.message ?? e);
     }
   }
 
