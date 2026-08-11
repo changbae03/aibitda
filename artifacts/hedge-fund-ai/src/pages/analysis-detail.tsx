@@ -1154,7 +1154,8 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
   const growthOf = (r: TrajYear) => (typeof r.revGrowthPct === "number" ? r.revGrowthPct : null);
   const opmOf = (r: TrajYear) => (typeof r.opmPct === "number" ? r.opmPct : null);
 
-  const W = 360, L = 62, R = 336;
+  // L은 트랙 제목("얼마나 팔았나")이 첫 점의 값 라벨과 겹치지 않을 만큼 띄운다.
+  const W = 360, L = 80, R = 336;
   const T = 52, B = 108;    // ① 매출 성장률 트랙
   const T2 = 152, B2 = 202; // ② 영업이익률 트랙
   const xOf = (i: number) => (traj.length <= 1 ? (L + R) / 2 : L + (i / (traj.length - 1)) * (R - L));
@@ -1262,7 +1263,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
 
       {/* 여정 — 점 하나는 흐름이 아니므로 2기간 미만이면 그리지 않는다 */}
       {jPts.length >= 2 && (
-        <svg viewBox={`0 0 ${W} ${oPts.length >= 2 ? 262 : 172}`} width="100%"
+        <svg viewBox={`0 0 ${W} ${oPts.length >= 2 ? 278 : 186}`} width="100%"
              style={{ maxWidth: 460, color: "hsl(var(--muted-foreground))" }}
              role="img" aria-label={isEn ? "Business journey" : "연도별 매출 성장률과 영업이익률 흐름"}>
           <defs>
@@ -1291,23 +1292,21 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
 
           {jPts.map((p, i) => {
             const isLast = i === jPts.length - 1;
-            const st = STATE_UI[p.row.substanceState] ?? { ko: p.row.substanceState, c: "#6B6A64" };
-            const prevState = i > 0 ? jPts[i - 1].row.substanceState : null;
-            // 상태 라벨은 **바뀔 때와 지금만** — "성장 성장 성장" 반복은 잡음이다
-            const showState = isLast || prevState !== p.row.substanceState;
+            // 점 색은 **그 트랙의 값**을 따른다. 그 해 전체 판정(substanceState)을 여기
+            // 붙이면 "매출 +69%인데 위축"처럼 그림과 글이 어긋난다 — 판정은 연도축에 둔다.
+            const c = p.v >= 0 ? "#0F6E56" : "#A32D2D";
             return (
               <g key={`g${i}`}>
-                {/* 라벨은 값의 부호를 따라 반대편에 둔다. 음수인데 위에 두면 0% 기준선의
-                    축 라벨("0%")과 붙어버린다 — 동양파일 −20% 지점이 그랬다. */}
-                <text x={p.x} y={p.v >= 0 ? p.y - 12 : p.y + 20} fontSize={isLast ? 12 : 11}
-                      textAnchor="middle" fontWeight={700} fill={st.c} opacity={isLast ? 1 : 0.85}>
+                {/* 라벨 위치: 양수는 점 위, 음수는 점 아래가 기본이다(0% 축 라벨과의 충돌 회피).
+                    다만 음수 라벨을 아래로 내리면 두 번째 트랙(이익률) 값과 붙는다 —
+                    알테오젠 마지막 지점에서 매출 −14%와 이익률 +55%가 겹쳤다.
+                    아래 트랙이 있으면 음수여도 위쪽에 둬서 트랙 간 혼동을 없앤다. */}
+                <text x={p.x} y={p.v >= 0 || oPts.length >= 2 ? p.y - 12 : p.y + 20}
+                      fontSize={isLast ? 12 : 11}
+                      textAnchor="middle" fontWeight={700} fill={c} opacity={isLast ? 1 : 0.85}>
                   {p.v >= 0 ? "+" : ""}{Math.round(p.v)}%
                 </text>
-                {showState && (
-                  <text x={p.x} y={p.v >= 0 ? p.y - 25 : p.y + 32} fontSize={9.5} textAnchor="middle"
-                        fontWeight={500} fill={st.c} opacity={0.75}>{st.ko}</text>
-                )}
-                <circle cx={p.x} cy={p.y} r={isLast ? 6.5 : 4.5} fill={st.c} stroke="hsl(var(--card))" strokeWidth={2} />
+                <circle cx={p.x} cy={p.y} r={isLast ? 6.5 : 4.5} fill={c} stroke="hsl(var(--card))" strokeWidth={2} />
               </g>
             );
           })}
@@ -1316,7 +1315,7 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           {oPts.length >= 2 && (
             <g>
               <text x={6} y={T2 - 22} fontSize={10} fontWeight={600} fill="currentColor" opacity={0.75}>
-                {isEn ? "Profitability" : "남겼나"}
+                {isEn ? "Profitability" : "얼마나 남겼나"}
               </text>
               <text x={6} y={T2 - 10} fontSize={8.5} fill="currentColor" opacity={0.5}>
                 {isEn ? "Op. margin" : "영업이익률"}
@@ -1358,8 +1357,13 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
                       fill={isLast ? st.c : "currentColor"} fontWeight={isLast ? 700 : 400} opacity={isLast ? 1 : 0.7}>
                   {p.row.isNow ? (isEn ? "now" : "지금") : `${String(p.row.fy).slice(2)}년`}
                 </text>
-                <text x={p.x} y={baseY + 13} fontSize={8.5} textAnchor="middle" fill="currentColor" opacity={0.5}>
-                  {p.row.isNow ? (isEn ? "latest qtr" : "최신 분기") : marks > 0 ? `변화 ${marks}` : ""}
+                {/* 그 시점의 종합 판정 — 매출·이익을 합쳐 본 결과라 트랙이 아니라 여기 둔다 */}
+                <text x={p.x} y={baseY + 13} fontSize={9} textAnchor="middle"
+                      fill={st.c} fontWeight={500} opacity={isLast ? 0.95 : 0.7}>
+                  {st.ko}
+                </text>
+                <text x={p.x} y={baseY + 25} fontSize={8.5} textAnchor="middle" fill="currentColor" opacity={0.45}>
+                  {p.row.isNow ? (isEn ? "최신 분기" : "최신 분기") : marks > 0 ? `변화 ${marks}` : ""}
                 </text>
               </g>
             );
