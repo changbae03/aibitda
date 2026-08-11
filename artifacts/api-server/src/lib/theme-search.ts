@@ -24,6 +24,50 @@ export interface ThemeHit {
   /** 근거 — 구문이 등장한 문장 */
   evidence: string | null;
   bsnsYear: number;
+  /** 그 지역에 생산시설이 있다고 적어놓았나 (지역 검색일 때만) */
+  regionMatch?: boolean;
+  /** 지역 근거 문장 */
+  regionEvidence?: string | null;
+}
+
+// ─── 지역 인식 ───────────────────────────────────────────────────────────────
+//
+// 지역 인프라 테마(광주공항 이전·국가산단)는 **그 지역에 시설이 있는 회사**가 수혜를 본다.
+// 다만 지역명을 그냥 찾으면 안 된다 — NHN·쏘카·BGF리테일이 걸린다(지점·매장 목록에
+// 지역명이 있을 뿐이다). **공장·사업장·생산 같은 말 근처**에 있을 때만 시설로 본다.
+//
+// 실측: 근접 매칭으로 90곳이 걸렸고 SK시그넷(전남영광공장)·세아제강(순천공장)·
+// 삼성전자(광주사업장)처럼 실제 시설이 잡혔다.
+
+/** 광역 지명 → 그 권역에서 함께 볼 지명들. 사람은 "광주"라 치지만 시설은 인근 시·군에 있다. */
+const REGION_MAP: Record<string, string[]> = {
+  광주: ["광주", "전남", "나주", "화순", "장성", "함평"],
+  전남: ["전남", "여수", "순천", "광양", "목포", "나주", "영광"],
+  전북: ["전북", "전주", "익산", "군산", "완주"],
+  호남: ["광주", "전남", "전북", "나주", "여수", "순천", "익산", "군산"],
+  대구: ["대구", "경북", "구미", "포항", "경산"],
+  부산: ["부산", "경남", "김해", "양산", "창원"],
+  울산: ["울산"],
+  대전: ["대전", "충남", "세종", "천안", "아산"],
+  충북: ["충북", "청주", "음성", "진천"],
+  충남: ["충남", "천안", "아산", "당진", "서산"],
+  경기: ["경기", "평택", "화성", "이천", "용인", "안성"],
+  강원: ["강원", "원주", "강릉", "동해"],
+  제주: ["제주"],
+};
+
+/** 검색어에서 지역을 알아낸다. 없으면 빈 배열 — 지역 검색이 아니다. */
+export function detectRegions(text: string): string[] {
+  const s = String(text ?? "");
+  for (const [key, group] of Object.entries(REGION_MAP)) {
+    if (s.includes(key)) return group;
+  }
+  // 광역이 아니라 시·군만 친 경우(예: "여수")도 잡는다
+  for (const group of Object.values(REGION_MAP)) {
+    const hit = group.find(g => s.includes(g));
+    if (hit) return [hit];
+  }
+  return [];
 }
 
 /**
@@ -70,14 +114,21 @@ export async function expandThemeKeywords(theme: string): Promise<string[]> {
   const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) return [theme];
 
-  const prompt = `한국 상장사의 **사업보고서(사업의 내용)**에서 아래 테마와 관련된 회사를 찾으려 합니다.
+  const prompt = `한국 상장사의 **사업보고서(사업의 내용)**에서 아래 테마의 **수혜 기업**을 찾으려 합니다.
 테마: "${theme}"
 
-기사에 쓰이는 말 말고, **회사가 사업보고서에 실제로 적는 표현**을 5~7개 뽑아주세요.
-- 예: "호남 반도체 클러스터" → 시스템반도체, 파운드리, 반도체 후공정, 반도체 장비, 웨이퍼
-- 예: "광주공항 이전" → 공항 건설, 활주로, 토목공사, 관급공사
-- 제품명·기술명·공정명처럼 **구체적인 명사**로. "성장", "확대" 같은 일반어는 금지.
-- 너무 흔해서 아무 회사나 걸리는 말(예: "제조", "사업")은 금지.
+이 일이 진행되면 **수주하거나 납품하게 될 회사들이 자기 사업을 설명할 때 쓰는 말**을 5~7개 뽑으세요.
+시설의 부품 이름이 아니라, **그 회사가 파는 제품·공사·서비스**여야 합니다.
+
+- "광주공항 이전" → 토목공사, 레미콘, 골재, 콘크리트파일, 아스팔트콘크리트, 관급공사
+  (✗ 활주로·계류장·관제탑 — 시설 부품이라 백화점·물류회사가 잘못 걸립니다)
+- "호남 반도체 클러스터" → 시스템반도체, 파운드리, 반도체 장비, 반도체 소재
+- "원전 수출" → 원자력발전소, 원전 기자재, 주기기, 밸브
+
+지켜야 할 것:
+- **한 가지 뜻으로만 읽히는 말**을 쓰세요. "터미널·플랫폼·솔루션"처럼 업종마다 뜻이
+  다른 말은 금지(엉뚱한 회사가 걸립니다).
+- "성장·확대·제조·사업" 같은 일반어 금지.
 
 쉼표로만 구분해 한 줄로 답하세요. 다른 말은 쓰지 마세요.`;
 
@@ -117,7 +168,9 @@ export function parseKeywords(raw: string): string[] {
  * 테마 구문으로 관련주를 찾는다. 여러 구문을 주면 **하나라도 나오면** 후보이고,
  * 여러 구문이 함께 나오면 더 위로 온다(합산 언급 횟수).
  */
-export async function searchThemeStocks(keywords: string[], limit = 20): Promise<ThemeHit[]> {
+export async function searchThemeStocks(
+  keywords: string[], limit = 20, regions: string[] = [],
+): Promise<ThemeHit[]> {
   // 유사어 확장이 붙으면서 구문이 8개까지 올 수 있다(원래 말 + AI가 넓힌 표현들).
   const kws = keywords.filter(k => k.length >= 2).slice(0, 8);
   if (kws.length === 0) return [];
@@ -129,25 +182,47 @@ export async function searchThemeStocks(keywords: string[], limit = 20): Promise
     .join(" + ");
   const whereExpr = kws.map((_, i) => `l.content ILIKE '%'||$${i + 1}||'%'`).join(" OR ");
 
+  // 지역이 있으면 "지역명이 공장·사업장·생산 근처에 있는가"를 함께 센다.
+  // 그냥 지역명만 찾으면 지점·매장 목록이 걸린다(NHN·쏘카·BGF리테일이 그랬다).
+  const params: any[] = [...kws];
+  let regionExpr = "FALSE";
+  if (regions.length > 0) {
+    const alt = regions.join("|");
+    params.push(`(${alt})[^.]{0,40}(공장|사업장|생산|공사|시설)`);
+    params.push(`(공장|사업장|생산|공사|시설)[^.]{0,40}(${alt})`);
+    regionExpr = `(l.content ~ $${params.length - 1} OR l.content ~ $${params.length})`;
+  }
+  params.push(limit);
+
   const { rows } = await pool.query(
     `WITH latest AS (
        SELECT DISTINCT ON (ticker) ticker, content, bsns_year
          FROM dart_biz_reports ORDER BY ticker, bsns_year DESC, quarter DESC)
      SELECT l.ticker, l.bsns_year, l.content, s.name, s.market_cap,
-            (${countExpr}) AS mentions
+            (${countExpr}) AS mentions,
+            (${regionExpr}) AS region_match
        FROM latest l LEFT JOIN stocks s ON s.ticker = l.ticker
       WHERE ${whereExpr}
-      ORDER BY mentions DESC NULLS LAST
-      LIMIT $${kws.length + 1}`,
-    [...kws, limit],
+      ORDER BY (${regionExpr}) DESC, mentions DESC NULLS LAST
+      LIMIT $${params.length}`,
+    params,
   );
 
-  return rows.map((r: any) => ({
-    ticker: r.ticker,
-    name: r.name ?? null,
-    marketCap: r.market_cap == null ? null : Number(r.market_cap),
-    mentions: Number(r.mentions) || 0,
-    evidence: kws.map(k => extractEvidence(r.content, k)).find(Boolean) ?? null,
-    bsnsYear: Number(r.bsns_year),
-  }));
+  return rows.map((r: any) => {
+    const hit: ThemeHit = {
+      ticker: r.ticker,
+      name: r.name ?? null,
+      marketCap: r.market_cap == null ? null : Number(r.market_cap),
+      mentions: Number(r.mentions) || 0,
+      evidence: kws.map(k => extractEvidence(r.content, k)).find(Boolean) ?? null,
+      bsnsYear: Number(r.bsns_year),
+    };
+    if (regions.length > 0) {
+      hit.regionMatch = !!r.region_match;
+      hit.regionEvidence = r.region_match
+        ? regions.map(g => extractEvidence(r.content, g)).find(Boolean) ?? null
+        : null;
+    }
+    return hit;
+  });
 }

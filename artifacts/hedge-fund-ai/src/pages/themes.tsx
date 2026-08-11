@@ -286,6 +286,8 @@ function UpcomingEvents({ onAnalyze }: { onAnalyze: (ticker: string, name: strin
 interface ThemeHit {
   ticker: string; name: string | null; marketCap: number | null;
   mentions: number; evidence: string | null; bsnsYear: number;
+  /** 지역 테마일 때 — 그 지역에 생산시설·공사 실적이 있다고 적어놓았나 */
+  regionMatch?: boolean; regionEvidence?: string | null;
 }
 
 const THEME_PRESETS = ["CDMO", "반도체 클러스터", "HBM", "휴머노이드", "원자력", "전력기기"];
@@ -374,6 +376,11 @@ function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: str
                 <div className="flex items-center gap-2">
                   <span className="text-[12.5px] font-bold text-foreground truncate">{h.name ?? h.ticker}</span>
                   <span className="text-[10px] text-foreground/40">{h.ticker}</span>
+                  {h.regionMatch && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-semibold shrink-0">
+                      📍 현지 시설
+                    </span>
+                  )}
                   <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/12 text-indigo-600 dark:text-indigo-300 font-semibold shrink-0">
                     {h.mentions}회 언급
                   </span>
@@ -386,6 +393,11 @@ function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: str
                 {h.evidence && (
                   <p className="text-[10.5px] text-foreground/50 leading-relaxed mt-1 line-clamp-2">
                     “{h.evidence}”
+                  </p>
+                )}
+                {h.regionEvidence && (
+                  <p className="text-[10.5px] text-emerald-700/80 dark:text-emerald-300/70 leading-relaxed mt-1 line-clamp-1">
+                    📍 “{h.regionEvidence}”
                   </p>
                 )}
               </button>

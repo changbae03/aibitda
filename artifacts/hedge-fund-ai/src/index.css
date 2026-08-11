@@ -1,6 +1,37 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   애빛다 디자인 철학
+   ───────────────────────────────────────────────────────────────────────────
+   이 앱은 **트레이딩 터미널이 아니라 리서치 도구**다. 초 단위로 호가를 보는 곳이
+   아니라, 몇 년치 공시를 읽고 "이 회사가 어디로 가는가"를 이해하는 곳이다.
+   그래서 화면은 시끄러운 대시보드가 아니라 **읽히는 문서**에 가까워야 한다.
+
+   1. 근거가 먼저다
+      숫자 옆에는 늘 출처가 붙는다. "매출 +47%"가 아니라 "매출 +47% — 2025 사업보고서".
+      이 제품의 값은 판정이 아니라 근거에 있다. 근거 없는 단정은 화면에 올리지 않는다.
+
+   2. 한 화면에 하나의 질문
+      블록마다 역할은 하나. 리스트 네 개를 나란히 놓으면 "그래서 뭘 보라는 거지"가 된다.
+      (실제로 그래서 내일 종목 탭을 6개 블록 → 2개로 줄였다.)
+
+   3. 조용한 인터페이스
+      데이터가 말하고 UI는 물러선다. 브랜드 코랄은 **행동(버튼·링크)에만** 쓴다.
+      상승/하락·국면 같은 의미 색은 따로 두고, 브랜드색이 데이터색과 경쟁하지 않게 한다.
+
+   4. 활자가 먼저다
+      경계선보다 여백과 굵기로 구분한다. 테두리를 겹겹이 두르는 대신 위계를 만든다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @theme inline {
+  /* 의미 색 — 데이터가 쓰는 색. 브랜드 코랄과 섞지 말 것 */
+  --color-up: hsl(var(--up));
+  --color-down: hsl(var(--down));
+  --color-stage-growth: hsl(var(--stage-growth));
+  --color-stage-watch: hsl(var(--stage-watch));
+  --color-stage-decline: hsl(var(--stage-decline));
+  --color-stage-turn: hsl(var(--stage-turn));
+
   --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-display: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
@@ -73,6 +104,16 @@
 
   --radius: 0.875rem; /* 14px */
 
+  /* 의미 색(라이트) — 한국 관례: 상승 빨강, 하락 파랑.
+     국면 색은 stage-classifier의 9단계를 네 갈래로 묶은 것이다:
+     성장(폭발·숫자싸움·실체확인) / 경계(증명대기·피크아웃) / 위축(기대선반영·쇠퇴) / 반등(턴어라운드) */
+  --up: 0 72% 51%;
+  --down: 217 79% 51%;
+  --stage-growth: 160 84% 30%;
+  --stage-watch: 32 90% 42%;
+  --stage-decline: 0 65% 48%;
+  --stage-turn: 217 79% 51%;
+
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
@@ -111,6 +152,14 @@
   --border: 220 15% 20%;
   --input: 220 15% 20%;
   --ring: 7 90% 70%;
+
+  /* 다크에서는 같은 색이 탁해 보인다 — 채도·명도를 올려 대비를 지킨다 */
+  --up: 0 84% 66%;
+  --down: 213 90% 66%;
+  --stage-growth: 158 64% 52%;
+  --stage-watch: 38 92% 60%;
+  --stage-decline: 0 84% 66%;
+  --stage-turn: 213 90% 66%;
 
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);

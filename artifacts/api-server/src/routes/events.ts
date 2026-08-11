@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
-import { searchThemeStocks, parseKeywords, expandThemeKeywords } from "../lib/theme-search.js";
+import { searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -41,9 +41,13 @@ router.get("/theme-stocks", async (req, res) => {
     if (kws.length === 0) { res.status(400).json({ error: "q_required" }); return; }
     const limit = Math.min(40, Math.max(5, Number(req.query["limit"]) || 20));
 
+    // 지역 인프라 테마("광주공항 이전")는 그 지역에 시설이 있는 회사가 수혜를 본다.
+    // 검색어에서 지역을 알아내 함께 넘긴다 — 지역이 없으면 빈 배열이라 동작이 그대로다.
+    const regions = detectRegions(String(req.query["q"] ?? ""));
+
     // 먼저 사용자가 친 말 그대로 찾는다(빠르고, 대개 이걸로 충분하다).
     let used = kws;
-    let hits = await searchThemeStocks(used, limit);
+    let hits = await searchThemeStocks(used, limit, regions);
     let expanded = false;
 
     // 결과가 빈약하면 그때만 AI로 넓힌다. 뉴스 말("호남 반도체 클러스터")을 회사가
@@ -52,11 +56,11 @@ router.get("/theme-stocks", async (req, res) => {
     if (hits.length < 5 && kws.length === 1) {
       used = await expandThemeKeywords(kws[0]);
       if (used.length > 1) {
-        hits = await searchThemeStocks(used, limit);
+        hits = await searchThemeStocks(used, limit, regions);
         expanded = true;
       }
     }
-    res.json({ keywords: used, expanded, count: hits.length, hits });
+    res.json({ keywords: used, expanded, regions, count: hits.length, hits });
   } catch (e) {
     console.warn("[theme-search] 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "theme_search_failed" });

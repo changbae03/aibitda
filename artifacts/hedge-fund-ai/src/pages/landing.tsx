@@ -4,7 +4,7 @@ import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
+import { FileSearch, Compass, Quote } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,38 +20,87 @@ function KakaoIcon() {
   );
 }
 
-
-const STEPS_KO = [
-  { num: 1, name: "브리핑",                icon: FileText,    desc: "종목 개요 & 분석 방향 설정" },
-  { num: 2, name: "매크로·산업 분석",       icon: Globe2,      desc: "산업 구조, 성장률, 경쟁 구도" },
-  { num: 3, name: "투자 촉매·수급 분석",    icon: Zap,         desc: "주가 촉매, 세력 움직임" },
-  { num: 4, name: "실적 전망",              icon: PieChart,    desc: "재무 분석 + Base 실적 추정" },
-  { num: 5, name: "적정주가 산출",          icon: Scale,       desc: "DCF·rNPV·EV/EBITDA 등 종목별 최적 방법론 자동 선정" },
-  { num: 6, name: "기술적 분석",            icon: BarChart2,   desc: "차트, 진입 구간, 손절 전략" },
-  { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
-];
-
-const STEPS_EN = [
-  { num: 1, name: "Briefing",               icon: FileText,    desc: "Company overview & research scope setting" },
-  { num: 2, name: "Macro & Industry",       icon: Globe2,      desc: "Industry structure, growth rate, competitive landscape" },
-  { num: 3, name: "Catalysts & Flow",       icon: Zap,         desc: "Price catalysts, institutional activity" },
-  { num: 4, name: "Earnings Outlook",       icon: PieChart,    desc: "Financial analysis + earnings estimate" },
-  { num: 5, name: "Valuation",              icon: Scale,       desc: "DCF, rNPV, EV/EBITDA — best method auto-selected" },
-  { num: 6, name: "Technical Analysis",     icon: BarChart2,   desc: "Chart patterns, entry zones, stop-loss strategy" },
-  { num: 7, name: "Final Conclusion",       icon: ShieldCheck, desc: "Integrated review → final investment strategy" },
-];
-
+/**
+ * 랜딩의 일은 하나다 — **"이 앱이 나에게 무엇을 해주는가"를 5초 안에 알리는 것.**
+ *
+ * 예전 랜딩은 "7단계 파이프라인 · DCF·rNPV로 적정주가 산출"을 팔았다. 목표주가를 접은
+ * 지금은 파는 물건이 달라졌는데 간판만 남아 있던 셈이다. 그리고 파이프라인 단계 수는
+ * 만든 사람의 사정이지 사용자의 이득이 아니다.
+ *
+ * 지금 파는 것: **아무도 안 읽는 사업보고서를 대신 읽고, 이 회사가 어디로 가는지 말해준다.**
+ */
+const COPY = {
+  ko: {
+    badge: "공시 기반 AI 리서치",
+    h1a: "뉴스 말고,",
+    h1b: "공시로.",
+    sub: "몇 년치 사업보고서를 AI가 나란히 읽고, 이 기업이 성장하는지 꺾이는지 돌아서는지 알려드립니다.",
+    values: [
+      {
+        icon: FileSearch,
+        title: "5년치 공시를 3분에",
+        desc: "300쪽짜리 사업보고서를 해마다 나란히 놓고 무엇이 달라졌는지 짚어줍니다. 설비투자·연구개발·인력·재고 회전까지.",
+      },
+      {
+        icon: Compass,
+        title: "지금 어느 단계인가",
+        desc: "폭발 성장 · 턴어라운드 · 피크아웃 전조… 9단계 중 어디인지 판정하고, 왜 그렇게 봤는지 근거를 함께 보여줍니다.",
+      },
+      {
+        icon: Quote,
+        title: "테마 관련주, 회사 말로 찾기",
+        desc: "뉴스가 짚어준 종목 말고 회사가 사업보고서에 직접 적어놓은 것으로 찾습니다. 근거 문장까지 함께요.",
+      },
+    ],
+    proof: ["상장사 2,700여 곳 공시 수집", "모든 수치에 출처 문장", "한국 · 미국 주식"],
+    cta: "카카오로 시작하기",
+    ctaLoading: "연결 중…",
+    ctaNote: "3분이면 첫 리포트가 나옵니다",
+    devOnly: "개발 환경 전용",
+    devLogin: "관리자 계정으로 로그인",
+    checking: "로그인 확인 중...",
+  },
+  en: {
+    badge: "AI research, grounded in filings",
+    h1a: "Skip the news.",
+    h1b: "Read the filings.",
+    sub: "AI reads years of regulatory filings side by side and tells you whether a business is growing, stalling, or turning around.",
+    values: [
+      {
+        icon: FileSearch,
+        title: "Five years of filings in three minutes",
+        desc: "We line up 300-page annual reports year by year and point out what changed — capex, R&D, headcount, inventory turns.",
+      },
+      {
+        icon: Compass,
+        title: "Which stage is it in?",
+        desc: "Hypergrowth, turnaround, peaking out — we place the company in one of nine stages and show the evidence behind it.",
+      },
+      {
+        icon: Quote,
+        title: "Find theme stocks in the company's own words",
+        desc: "Not the tickers the news happened to name — the companies that wrote about that business themselves, quoted line by line.",
+      },
+    ],
+    proof: ["Filings from 2,700+ listed companies", "Every figure carries its source", "Korea · US markets"],
+    cta: "Continue with Kakao",
+    ctaLoading: "Connecting…",
+    ctaNote: "Your first report takes about 3 minutes",
+    devOnly: "Dev only",
+    devLogin: "Admin account login",
+    checking: "Checking sign-in...",
+  },
+} as const;
 
 export default function Landing() {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const [fromKakao] = useState(() => new URLSearchParams(window.location.search).get("from") === "kakao");
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
-  const [activeStep, setActiveStep] = useState(0);
   const [kakaoButtonLoading, setKakaoButtonLoading] = useState(false);
   const { isEn, language, setLanguage } = useLanguage();
 
-  const STEPS = isEn ? STEPS_EN : STEPS_KO;
+  const t = isEn ? COPY.en : COPY.ko;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -65,13 +114,6 @@ export default function Landing() {
   useEffect(() => {
     if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
   }, [kakaoLoading, kakaoAuth, setLocation]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveStep(prev => (prev + 1) % 6);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleKakaoLogin = () => {
     if (kakaoButtonLoading) return;
@@ -90,23 +132,25 @@ export default function Landing() {
     }
   };
 
-
   // 카카오 OAuth 완료 후 auth 체크 중 — 로딩 스피너 표시
   if (fromKakao && kakaoLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-        <div className="w-8 h-8 rounded-full border-2 border-[#FF8A7A] border-t-transparent animate-spin" />
-        <p className="text-[13px] text-muted-foreground">로그인 확인 중...</p>
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <p className="text-[13px] text-muted-foreground">{t.checking}</p>
       </div>
     );
   }
 
+  const fade = (delay: number) => ({
+    initial: { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] as const },
+  });
+
   return (
-    <>
-    <div
-      className="min-h-screen flex flex-col items-center justify-center bg-background px-6 py-12 relative overflow-hidden"
-      style={{ fontFamily: "'Pretendard', sans-serif" }}
-    >
+    <div className="min-h-screen bg-background px-6 py-10 sm:py-16 relative overflow-hidden"
+         style={{ fontFamily: "'Pretendard', sans-serif" }}>
       {/* 언어 토글 */}
       <div className="absolute top-5 right-5 z-20 flex items-center gap-1 bg-muted/60 border border-border rounded-full p-1">
         <button
@@ -123,221 +167,117 @@ export default function Landing() {
         </button>
       </div>
 
-      {/* 배경 그라디언트 */}
+      {/* 배경 — 아주 옅게. 조용한 인터페이스 원칙 */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-slate-400/5 blur-[140px]" />
-        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-slate-500/4 blur-[100px]" />
-        <div
-          className="absolute inset-0 opacity-[0.018] dark:opacity-[0.045]"
-          style={{
-            backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
-            backgroundSize: "48px 48px",
-          }}
-        />
+        <div className="absolute -top-40 left-1/4 w-[520px] h-[520px] rounded-full bg-primary/[0.06] blur-[150px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-4xl flex flex-col gap-10">
+      <div className="relative z-10 w-full max-w-5xl mx-auto">
+        {/* ── 히어로 ─────────────────────────────────────────────── */}
+        <motion.div {...fade(0)} className="text-center pt-8 sm:pt-12">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-[11px] font-bold text-primary tracking-wide mb-6">
+            {t.badge}
+          </span>
 
-        {/* ── 메인 콘텐츠 ── */}
-        <div className="flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-16">
+          <h1 className="text-[38px] sm:text-[56px] font-black tracking-[-0.03em] leading-[1.08] text-foreground">
+            {t.h1a}<br className="sm:hidden" />
+            <span className="sm:ml-3 text-primary">{t.h1b}</span>
+          </h1>
 
-          {/* ── 왼쪽: 로그인 카드 ── */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            className="w-full max-w-sm flex-shrink-0"
+          <p className="mt-5 text-[15px] sm:text-[17px] text-foreground/60 leading-relaxed max-w-[540px] mx-auto">
+            {t.sub}
+          </p>
+        </motion.div>
+
+        {/* ── CTA — 위로 올린다. 읽기 전에 시작할 수 있어야 한다 ── */}
+        <motion.div {...fade(0.1)} className="mt-9 max-w-sm mx-auto">
+          <button
+            onClick={handleKakaoLogin}
+            disabled={kakaoButtonLoading}
+            className="w-full flex items-center justify-center gap-3 py-4 px-5 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
           >
-            {/* 로고 */}
-            <div className="mb-8 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11px] font-bold text-[#FF8A7A] mb-4 tracking-widest uppercase">
-                <Activity className="w-3 h-3" />
-                {isEn ? "AI Stock Research" : "AI 주식 리서치"}
-              </div>
+            {kakaoButtonLoading ? (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.7s linear infinite" }}>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  <circle cx="12" cy="12" r="10" stroke="#3C1E1E" strokeOpacity="0.25" strokeWidth="3" />
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="#3C1E1E" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                {t.ctaLoading}
+              </>
+            ) : (
+              <><KakaoIcon />{t.cta}</>
+            )}
+          </button>
+          <p className="text-center text-[12px] text-foreground/40 mt-2.5">{t.ctaNote}</p>
+        </motion.div>
 
-              <p className="text-[14px] text-muted-foreground font-medium tracking-wide">
-                {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다"}
-              </p>
-            </div>
-
-            {/* 설명 */}
-            <div className="mb-6 text-center lg:text-left">
-              <p className="text-[15px] text-foreground/75 leading-relaxed font-medium mb-4">
-                {isEn ? (
-                  <>Korean KOSPI·KOSDAQ &amp; US stocks,<br />deeply analyzed in a 7-step AI pipeline.</>
-                ) : (
-                  <>코스피·코스닥·미국 주식을<br />7단계 AI 파이프라인으로 깊이 분석합니다.</>
-                )}
-              </p>
-              <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]">
-                  <Clock className="w-3 h-3" />
-                  {isEn ? "~3 min per report" : "평균 3분 완성"}
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 border border-border text-[11.5px] font-medium text-muted-foreground">
-                  <Globe className="w-3 h-3" />
-                  {isEn ? "KR & US stocks" : "한국·미국 주식"}
-                </span>
-              </div>
-            </div>
-
-            {/* 로그인 버튼 */}
-            <div className="space-y-3 mb-6">
-              <button
-                onClick={handleKakaoLogin}
-                disabled={kakaoButtonLoading}
-                className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
-              >
-                {kakaoButtonLoading ? (
-                  <>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.7s linear infinite" }}>
-                      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                      <circle cx="12" cy="12" r="10" stroke="#3C1E1E" strokeOpacity="0.25" strokeWidth="3" />
-                      <path d="M12 2a10 10 0 0 1 10 10" stroke="#3C1E1E" strokeWidth="3" strokeLinecap="round" />
-                    </svg>
-                    {isEn ? "Connecting…" : "연결 중…"}
-                  </>
-                ) : (
-                  <>
-                    <KakaoIcon />
-                    {isEn ? "Continue with Kakao" : "카카오로 시작하기"}
-                  </>
-                )}
-              </button>
-
-              {import.meta.env.DEV && (
-                <div className="pt-3 border-t border-dashed border-border/50">
-                  <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">
-                    {isEn ? "Dev only" : "개발 환경 전용"}
-                  </p>
-                  <button
-                    onClick={handleDevLogin}
-                    disabled={kakaoButtonLoading}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all disabled:opacity-50"
-                  >
-                    <span>🛠</span>
-                    {isEn ? "Admin account login" : "관리자 계정으로 로그인"}
-                  </button>
+        {/* ── 무엇을 해주는가 — 기능이 아니라 이득으로 ── */}
+        <div className="mt-16 sm:mt-20 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          {t.values.map((v, i) => {
+            const Icon = v.icon;
+            return (
+              <motion.div key={v.title} {...fade(0.2 + i * 0.08)}
+                          className="rounded-2xl bg-card border border-border/50 p-5">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-3.5">
+                  <Icon className="w-[18px] h-[18px] text-primary" />
                 </div>
-              )}
-            </div>
-
-            <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
-              {isEn ? (
-                <>
-                  By signing in, you agree to our{" "}
-                  <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Terms of Service</Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Privacy Policy</Link>.
-                </>
-              ) : (
-                <>
-                  로그인 시{" "}
-                  <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
-                  및{" "}
-                  <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
-                  에 동의하는 것으로 간주됩니다.
-                </>
-              )}
-            </p>
-          </motion.div>
-
-          {/* ── 오른쪽: 7단계 파이프라인 ── */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="w-full lg:pt-2"
-          >
-            <div className="mb-5">
-              <p className="text-[12px] font-bold text-[#FF8A7A] tracking-widest uppercase mb-1">
-                {isEn ? "AI Analysis Pipeline" : "AI 분석 파이프라인"}
-              </p>
-              <h2 className="text-[20px] font-black text-foreground tracking-tight">
-                {isEn ? "7-Step Deep Research" : "7단계 심층 리서치"}
-              </h2>
-            </div>
-
-            <div className="relative">
-
-              <div className="space-y-1">
-                {STEPS.map((step, idx) => {
-                  const Icon = step.icon;
-                  const isLast = idx === STEPS.length - 1;
-                  const isActive = !isLast && activeStep === idx;
-                  const isDone = !isLast && idx < activeStep;
-
-                  return (
-                    <div
-                      key={step.num}
-                      className="flex items-start gap-4"
-                    >
-                      {/* 아이콘 원형 */}
-                      <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
-                        <motion.div
-                          animate={{
-                            backgroundColor: isLast
-                              ? "#FF8A7A"
-                              : isActive
-                              ? "#FF8A7A"
-                              : isDone
-                              ? "rgba(255,138,122,0.15)"
-                              : "transparent",
-                            borderColor: isLast || isActive
-                              ? "#FF8A7A"
-                              : isDone
-                              ? "rgba(255,138,122,0.5)"
-                              : "rgba(255,138,122,0.25)",
-                          }}
-                          transition={{ duration: 0.5, ease: "easeInOut" }}
-                          className="w-10 h-10 rounded-full flex items-center justify-center border-2"
-                        >
-                          <span style={{ color: isLast || isActive ? "#ffffff" : "#FF8A7A" }}>
-                            {isLast ? (
-                              <Icon className="w-4 h-4" />
-                            ) : isDone ? (
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <span className="text-[12px] font-black">{step.num}</span>
-                            )}
-                          </span>
-                        </motion.div>
-                      </div>
-
-                      {/* 텍스트 */}
-                      <div className="pt-1.5 pb-2 min-w-0">
-                        <span
-                          className="text-[13.5px] font-bold leading-tight block transition-colors duration-500"
-                          style={{
-                            color: isLast || isActive
-                              ? "#FF8A7A"
-                              : isDone
-                              ? "rgba(255,138,122,0.65)"
-                              : undefined,
-                          }}
-                        >
-                          {step.name}
-                          {isActive && (
-                            <span className="ml-2 text-[10px] font-bold text-[#FF8A7A] bg-[#FF8A7A]/10 px-1.5 py-0.5 rounded-full border border-[#FF8A7A]/20 tracking-wide">
-                              {isEn ? "Analyzing" : "분석 중"}
-                            </span>
-                          )}
-                        </span>
-                        <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug line-clamp-1">{step.desc}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </motion.div>
+                <h3 className="text-[15px] font-bold text-foreground leading-snug mb-1.5">{v.title}</h3>
+                <p className="text-[13px] text-foreground/55 leading-relaxed">{v.desc}</p>
+              </motion.div>
+            );
+          })}
         </div>
 
+        {/* ── 신뢰 근거 ── */}
+        <motion.div {...fade(0.5)}
+                    className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+          {t.proof.map(p => (
+            <span key={p} className="text-[12px] text-foreground/40 flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-foreground/25" />
+              {p}
+            </span>
+          ))}
+        </motion.div>
+
+        {/* ── 개발 로그인 · 약관 ── */}
+        <div className="mt-12 max-w-sm mx-auto">
+          {import.meta.env.DEV && (
+            <div className="pt-4 border-t border-dashed border-border/50 mb-5">
+              <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">
+                {t.devOnly}
+              </p>
+              <button
+                onClick={handleDevLogin}
+                disabled={kakaoButtonLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all disabled:opacity-50"
+              >
+                <span>🛠</span>{t.devLogin}
+              </button>
+            </div>
+          )}
+
+          <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
+            {isEn ? (
+              <>
+                By signing in, you agree to our{" "}
+                <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Terms of Service</Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Privacy Policy</Link>.
+              </>
+            ) : (
+              <>
+                로그인 시{" "}
+                <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
+                및{" "}
+                <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
+                에 동의하는 것으로 간주됩니다.
+              </>
+            )}
+          </p>
+        </div>
       </div>
     </div>
-    </>
   );
 }
