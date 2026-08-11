@@ -940,6 +940,22 @@ function HeroPhase({ ticker, isEn = false }: { ticker: string; isEn?: boolean })
         {ui.ko}
       </p>
       {ui.tag && <p className="text-[12px] text-muted-foreground mt-1.5">{ui.tag}</p>}
+
+      {/* 판정만 있고 근거가 없으면 믿을 수 없다(철학 ①: 근거가 먼저다).
+          서버가 남긴 판정 사유 중 사람이 읽을 수 있는 것 둘만 보여준다. */}
+      {latest.reasons?.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2.5">
+          {latest.reasons
+            .filter(r => /[가-힣]/.test(r) && !/^실체|^기대/.test(r))
+            .slice(0, 2)
+            .map((r, i) => (
+              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/70 text-muted-foreground">
+                {r.replace(/^[+\-]\d+\s*/, "")}
+              </span>
+            ))}
+        </div>
+      )}
+
       <span className="inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full"
         style={{ background: ui.color + "1f", color: ui.color }}>
         {isEn ? "confidence " : "신뢰도 "}{conf}
