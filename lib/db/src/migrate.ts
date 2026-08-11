@@ -567,6 +567,33 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_dart_biz_reports_period
         ON dart_biz_reports (ticker, bsns_year DESC, quarter DESC);
 
+      -- 테마 검색 전용 축약본 — "이 사업을 한다고 적어놓은 회사"를 빨리 찾기 위한 것.
+      --
+      -- dart_biz_reports는 분기·반기까지 다 쌓여 427MB·39,650행이다. 테마 검색은
+      -- 종목당 **최신 1건**만 보면 되는데, 매번 전체를 훑고 DISTINCT ON으로 정렬하느라
+      -- 2~3초가 걸렸고 운영에서는 문장 타임아웃으로 500이 났다.
+      -- 최신본만 모으면 2,762행·22MB(전체의 5%)라 훨씬 싸다. pg_trgm 인덱스까지 얹어
+      -- ILIKE '%...%'가 인덱스를 타게 한다.
+      CREATE TABLE IF NOT EXISTS theme_search_docs (
+        ticker     TEXT PRIMARY KEY,
+        bsns_year  INTEGER NOT NULL,
+        quarter    INTEGER NOT NULL,
+        doc        TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // pg_trgm은 없는 환경도 있으니 실패해도 넘어간다 — 인덱스가 없으면 느릴 뿐, 동작은 한다.
+    await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`).catch(() => {});
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_theme_search_docs_trgm
+         ON theme_search_docs USING gin (doc gin_trgm_ops)`,
+    ).catch((e: unknown) => {
+      console.warn("[migrate] theme_search_docs trgm 인덱스 생략:", (e as Error)?.message?.slice(0, 80));
+    });
+
+    await client.query(`
+
       -- 사업 국면 판정 이력 — 실체·기대 2축으로 라이프사이클(①~⑤·쇠퇴·턴어라운드)을 찍는다.
       -- 저장하는 이유: (1) UI가 궤적을 그리고 (2) 다음 분석이 직전 실체 점수로 턴어라운드를 감지한다.
       CREATE TABLE IF NOT EXISTS stock_stage_verdict (

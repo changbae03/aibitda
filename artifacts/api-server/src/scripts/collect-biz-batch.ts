@@ -16,6 +16,7 @@
 
 import { pool } from "@workspace/db";
 import { collectBizTimeline } from "../lib/biz-timeline.js";
+import { refreshThemeSearchDocs } from "../lib/theme-search.js";
 import { lookupCorpCode } from "../lib/dart-store.js";
 
 const DART_API = "https://opendart.fss.or.kr/api";
@@ -90,6 +91,11 @@ async function main() {
     }
     await sleep(DELAY);
   }
+
+  // 새로 받은 보고서를 테마 검색 축약본에도 반영한다. 안 하면 검색이 옛 보고서를 본다.
+  const synced = await refreshThemeSearchDocs()
+    .catch(e => { console.warn("[batch] 테마 검색 축약본 갱신 실패:", e?.message?.slice(0, 60)); return 0; });
+  if (synced > 0) console.log(`테마 검색 축약본 갱신: ${synced}건`);
 
   const mins = ((Date.now() - t0) / 60000).toFixed(1);
   const done = await pool.query(`SELECT count(DISTINCT ticker)::int n FROM dart_biz_reports`);

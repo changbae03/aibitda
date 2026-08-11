@@ -165,6 +165,28 @@ export function parseKeywords(raw: string): string[] {
 }
 
 /**
+ * 검색용 축약본을 최신 상태로 맞춘다 — 종목당 최신 보고서 1건.
+ *
+ * dart_biz_reports는 분기까지 쌓여 427MB지만 검색에 필요한 건 최신본(22MB)뿐이다.
+ * 수집 배치가 끝난 뒤 한 번 부르면 된다. 새로 들어온 것만 갱신하므로 반복 호출이 싸다.
+ */
+export async function refreshThemeSearchDocs(): Promise<number> {
+  const { rowCount } = await pool.query(`
+    INSERT INTO theme_search_docs (ticker, bsns_year, quarter, doc, updated_at)
+    SELECT DISTINCT ON (ticker) ticker, bsns_year, quarter, content, NOW()
+      FROM dart_biz_reports
+     ORDER BY ticker, bsns_year DESC, quarter DESC
+    ON CONFLICT (ticker) DO UPDATE
+      SET bsns_year = EXCLUDED.bsns_year, quarter = EXCLUDED.quarter,
+          doc = EXCLUDED.doc, updated_at = NOW()
+      WHERE theme_search_docs.bsns_year < EXCLUDED.bsns_year
+         OR (theme_search_docs.bsns_year = EXCLUDED.bsns_year
+             AND theme_search_docs.quarter < EXCLUDED.quarter)
+  `);
+  return rowCount ?? 0;
+}
+
+/**
  * 테마 구문으로 관련주를 찾는다. 여러 구문을 주면 **하나라도 나오면** 후보이고,
  * 여러 구문이 함께 나오면 더 위로 온다(합산 언급 횟수).
  */
@@ -175,38 +197,56 @@ export async function searchThemeStocks(
   const kws = keywords.filter(k => k.length >= 2).slice(0, 8);
   if (kws.length === 0) return [];
 
-  // 종목별 최신 보고서 1건만 본다(같은 회사의 여러 해가 중복으로 잡히지 않게).
-  // 언급 횟수는 replace로 센다 — 별도 확장 없이 되는 방법이다.
-  const countExpr = kws
-    .map((_, i) => `(length(l.content) - length(replace(lower(l.content), lower($${i + 1}), ''))) / NULLIF(length($${i + 1}), 0)`)
-    .join(" + ");
-  const whereExpr = kws.map((_, i) => `l.content ILIKE '%'||$${i + 1}||'%'`).join(" OR ");
+  // ⚠️ 언급 횟수를 SQL에서 세면 안 된다. `lower(content)`·`replace(...)`가 매칭된
+  // 본문(수만~수십만 자)을 통째로 복사해 만들기 때문이다. 실측 2.9초 — 운영에서는
+  // 문장 타임아웃에 걸려 500 오류가 났다("찾지 못했습니다"로 보였다). 두 단계로 나눈다.
+  //
+  //  ① SQL은 **후보만** 싸게 고른다. 세지도 정렬하지도 않아 LIMIT에서 조기 종료된다.
+  //  ② 세는 것과 지역 판정은 **JS**가 한다 — 후보만 다루므로 양이 정해져 있다.
+  const whereExpr = kws.map((_, i) => `d.doc ILIKE '%'||$${i + 1}||'%'`).join(" OR ");
+  // 순위를 매기려면 화면에 뿌릴 개수보다 넉넉히 봐야 한다.
+  const candidateLimit = Math.max(60, limit * 4);
 
-  // 지역이 있으면 "지역명이 공장·사업장·생산 근처에 있는가"를 함께 센다.
-  // 그냥 지역명만 찾으면 지점·매장 목록이 걸린다(NHN·쏘카·BGF리테일이 그랬다).
-  const params: any[] = [...kws];
-  let regionExpr = "FALSE";
+  // 본문(종목당 8~30KB)을 통째로 받으면 60건에 6MB — 네트워크가 병목이 된다.
+  // 세는 것과 근거 문장 뽑기는 DB 안에서 끝내고 짧은 조각만 가져온다.
+  const countExpr = kws
+    .map((_, i) => `(length(d.doc) - length(replace(lower(d.doc), lower($${i + 1}), ''))) / NULLIF(length($${i + 1}), 0)`)
+    .join(" + ");
+  const params: any[] = [...kws, candidateLimit];
+  let regionSel = "";
+  let regionOrder = "";
   if (regions.length > 0) {
     const alt = regions.join("|");
     params.push(`(${alt})[^.]{0,40}(공장|사업장|생산|공사|시설)`);
     params.push(`(공장|사업장|생산|공사|시설)[^.]{0,40}(${alt})`);
-    regionExpr = `(l.content ~ $${params.length - 1} OR l.content ~ $${params.length})`;
+    params.push(regions[0]);
+    const a = params.length - 2, b = params.length - 1, c = params.length;
+    regionSel = `, (d.doc ~ $${a} OR d.doc ~ $${b}) AS region_match,
+              substring(d.doc from greatest(1, position($${c} in d.doc) - 60) for 220) AS region_snippet`;
+    regionOrder = "c.region_match DESC NULLS LAST, ";
   }
-  params.push(limit);
 
   const { rows } = await pool.query(
-    `WITH latest AS (
-       SELECT DISTINCT ON (ticker) ticker, content, bsns_year
-         FROM dart_biz_reports ORDER BY ticker, bsns_year DESC, quarter DESC)
-     SELECT l.ticker, l.bsns_year, l.content, s.name, s.market_cap,
-            (${countExpr}) AS mentions,
-            (${regionExpr}) AS region_match
-       FROM latest l LEFT JOIN stocks s ON s.ticker = l.ticker
-      WHERE ${whereExpr}
-      ORDER BY (${regionExpr}) DESC, mentions DESC NULLS LAST
-      LIMIT $${params.length}`,
+    `WITH cand AS (
+       SELECT d.ticker, d.bsns_year,
+              (${countExpr}) AS mentions,
+              substring(d.doc from greatest(1, position(lower($1) in lower(d.doc)) - 60) for 220) AS snippet
+              ${regionSel}
+         FROM theme_search_docs d
+        WHERE ${whereExpr}
+        LIMIT $${kws.length + 1})
+     SELECT c.*, s.name, s.market_cap
+       FROM cand c LEFT JOIN stocks s ON s.ticker = c.ticker
+      ORDER BY ${regionOrder}c.mentions DESC NULLS LAST
+      LIMIT ${Math.min(40, Math.max(1, limit))}`,
     params,
   );
+
+  // 이제 SQL이 세고 조각까지 뽑아 왔다 — 여기서는 다듬기만 한다.
+  const tidy = (v: unknown): string | null => {
+    const t = String(v ?? "").replace(/\s+/g, " ").trim();
+    return t.length >= 12 ? t : null;
+  };
 
   return rows.map((r: any) => {
     const hit: ThemeHit = {
@@ -214,14 +254,12 @@ export async function searchThemeStocks(
       name: r.name ?? null,
       marketCap: r.market_cap == null ? null : Number(r.market_cap),
       mentions: Number(r.mentions) || 0,
-      evidence: kws.map(k => extractEvidence(r.content, k)).find(Boolean) ?? null,
+      evidence: tidy(r.snippet),
       bsnsYear: Number(r.bsns_year),
     };
     if (regions.length > 0) {
       hit.regionMatch = !!r.region_match;
-      hit.regionEvidence = r.region_match
-        ? regions.map(g => extractEvidence(r.content, g)).find(Boolean) ?? null
-        : null;
+      hit.regionEvidence = hit.regionMatch ? tidy(r.region_snippet) : null;
     }
     return hit;
   });
