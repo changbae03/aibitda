@@ -5,7 +5,6 @@ import {
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
   Target, BarChart2, AlertCircle, Calendar,
 } from "lucide-react";
-import { FlowContent, SurgeWidget } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -277,6 +276,107 @@ function UpcomingEvents({ onAnalyze }: { onAnalyze: (ticker: string, name: strin
   );
 }
 
+// ── 테마 관련주 찾기 (사업보고서 원문 기반) ────────────────────────────────
+//
+// 테마주를 찾을 때 보통은 뉴스가 짚어준 한두 종목이 전부다. 우리는 2,700여 종목의
+// 사업보고서 본문을 갖고 있으니 **회사가 스스로 그 사업을 한다고 적어놓은 것**을 찾는다.
+// "CDMO"로 찾으면 이엔셀(39회)·프레스티지바이오(32회)가 위로 온다 — 언급 횟수가
+// 곧 "그 사업이 이 회사에서 얼마나 중심인가"다.
+
+interface ThemeHit {
+  ticker: string; name: string | null; marketCap: number | null;
+  mentions: number; evidence: string | null; bsnsYear: number;
+}
+
+const THEME_PRESETS = ["CDMO", "반도체 클러스터", "HBM", "휴머노이드", "원자력", "전력기기"];
+
+function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<ThemeHit[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const run = async (keyword: string) => {
+    const kw = keyword.trim();
+    if (kw.length < 2) return;
+    setQ(kw); setLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`api/events/theme-stocks?q=${encodeURIComponent(kw)}&limit=15`),
+                            { credentials: "include" });
+      const d = r.ok ? await r.json() : null;
+      setHits(Array.isArray(d?.hits) ? d.hits : []);
+    } catch { setHits([]); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-indigo-500" />
+        <h2 className="text-[14px] font-bold text-foreground">테마 관련주 찾기</h2>
+        <span className="text-[10.5px] text-foreground/40">사업보고서 원문 검색</span>
+      </div>
+      <p className="text-[11.5px] text-foreground/50 leading-relaxed">
+        뉴스가 짚어준 종목 말고, <b className="text-foreground/70">회사가 사업보고서에 직접 적어놓은</b> 것으로 찾습니다.
+        많이 언급할수록 그 사업이 중심입니다.
+      </p>
+
+      <form onSubmit={e => { e.preventDefault(); run(q); }} className="flex gap-2">
+        <input
+          value={q} onChange={e => setQ(e.target.value)}
+          placeholder="예: CDMO, 반도체 클러스터, 광주공항"
+          className="flex-1 rounded-xl bg-background/60 border border-border/50 px-3 py-2 text-[12.5px] outline-none focus:border-border"
+        />
+        <button type="submit" disabled={loading}
+                className="px-3.5 py-2 rounded-xl bg-foreground text-background text-[12px] font-semibold disabled:opacity-50">
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "찾기"}
+        </button>
+      </form>
+
+      <div className="flex flex-wrap gap-1.5">
+        {THEME_PRESETS.map(p => (
+          <button key={p} onClick={() => run(p)}
+                  className="text-[10.5px] px-2 py-1 rounded-lg bg-muted/60 text-foreground/60 hover:bg-muted hover:text-foreground/80 transition">
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {hits !== null && (
+        hits.length === 0 ? (
+          <p className="text-[11.5px] text-foreground/40 py-3 text-center">
+            사업보고서에서 이 표현을 쓴 회사를 찾지 못했습니다. 다른 표현으로 시도해보세요.
+          </p>
+        ) : (
+          <div className="space-y-1.5 pt-1">
+            {hits.map(h => (
+              <button key={h.ticker} onClick={() => onAnalyze(h.ticker, h.name ?? h.ticker)}
+                      className="w-full text-left rounded-xl bg-background/60 border border-border/40 px-3 py-2.5 hover:border-border transition">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12.5px] font-bold text-foreground truncate">{h.name ?? h.ticker}</span>
+                  <span className="text-[10px] text-foreground/40">{h.ticker}</span>
+                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/12 text-indigo-600 dark:text-indigo-300 font-semibold shrink-0">
+                    {h.mentions}회 언급
+                  </span>
+                  {h.marketCap != null && (
+                    <span className="text-[10px] text-foreground/40 shrink-0">
+                      {Math.round(h.marketCap / 1e8).toLocaleString()}억
+                    </span>
+                  )}
+                </div>
+                {h.evidence && (
+                  <p className="text-[10.5px] text-foreground/50 leading-relaxed mt-1 line-clamp-2">
+                    “{h.evidence}”
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 // ── 내일 오를 것 같은 종목 (통합) ──────────────────────────────────────────
 //
 // 예전에는 수급·기술·테마 리스트가 **따로따로 3개** 떠서 "그래서 뭘 보라는 거지"가 됐다.
@@ -528,7 +628,7 @@ export default function ThemesPage() {
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
 
   // 섹션 탭
-  const [activeSection, setActiveSection] = useState<"themes" | "flow" | "picks">("themes");
+  const [activeSection, setActiveSection] = useState<"themes" | "picks">("themes");
 
   // 분석 모달
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
@@ -664,24 +764,12 @@ export default function ThemesPage() {
           <Target className="w-3.5 h-3.5" />
           내일 종목
         </button>
-        <button
-          onClick={() => setActiveSection("flow")}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold transition-all",
-            activeSection === "flow"
-              ? "bg-foreground text-background shadow-sm"
-              : "bg-muted/60 text-muted-foreground/70 hover:bg-muted hover:text-foreground/80",
-          )}
-        >
-          <Activity className="w-3.5 h-3.5" />
-          수급 레이더
-        </button>
       </div>
 
       {/* ── 내일 종목 탭 ──────────────────────────────────────────
           블록은 딱 둘. ① 다가오는 일정 = 왜 오를까(재료)  ② 내일 오를 것 같은 종목 = 결론.
           예전엔 수급·기술·테마 리스트가 따로 3개 떠서 "그래서 뭘 보라는 거지"가 됐다.
-          '오늘 수급 폭발'은 이미 오른 종목이라 '내일'과 안 맞아 수급 레이더 탭으로 옮겼다. */}
+          '오늘 수급 폭발'·'수급 레이더'는 이미 오른 종목 이야기라 화면에서 뺐다. */}
       {activeSection === "picks" && (
         <div className="space-y-4">
           <UpcomingEvents onAnalyze={goAnalyze} />
@@ -689,17 +777,13 @@ export default function ThemesPage() {
         </div>
       )}
 
-      {/* ── 수급 레이더 탭 ─────────────────────────────────────── */}
-      {/* '오늘 수급 폭발'은 오늘의 수급 이야기라 여기가 제자리다(내일 종목 탭에서 이동). */}
-      {activeSection === "flow" && (
-        <div className="space-y-4">
-          <SurgeWidget />
-          <FlowContent />
-        </div>
-      )}
-
       {/* ── 테마 분석 탭 ───────────────────────────────────────── */}
       {activeSection === "themes" && <>
+
+      {/* 테마 관련주 찾기 — 뉴스가 아니라 사업보고서 원문에서 찾는다. 이 탭의 주인공. */}
+      <div className="mb-4">
+        <ThemeStockFinder onAnalyze={goAnalyze} />
+      </div>
 
       {/* 헤더 */}
       <div>

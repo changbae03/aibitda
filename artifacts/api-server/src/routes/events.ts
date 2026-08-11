@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
+import { searchThemeStocks, parseKeywords } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -27,6 +28,23 @@ router.post("/refresh", async (req, res) => {
   } catch (e) {
     console.warn("[events] 갱신 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "events_refresh_failed" });
+  }
+});
+
+/**
+ * 테마 관련주 찾기 — 사업보고서 원문에서 그 사업을 한다고 적어놓은 회사를 찾는다.
+ * 뉴스가 짚어준 한두 종목이 아니라, 회사 스스로 쓴 근거로 찾는 것이 이 기능의 값이다.
+ */
+router.get("/theme-stocks", async (req, res) => {
+  try {
+    const kws = parseKeywords(String(req.query["q"] ?? ""));
+    if (kws.length === 0) { res.status(400).json({ error: "q_required" }); return; }
+    const limit = Math.min(40, Math.max(5, Number(req.query["limit"]) || 20));
+    const hits = await searchThemeStocks(kws, limit);
+    res.json({ keywords: kws, count: hits.length, hits });
+  } catch (e) {
+    console.warn("[theme-search] 실패:", (e as Error)?.message?.slice(0, 80));
+    res.status(500).json({ error: "theme_search_failed" });
   }
 });
 

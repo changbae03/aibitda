@@ -66,6 +66,10 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
   const topicQueries = [
     "임상 결과 발표 예정", "식약처 허가 심사 예정", "정부 정책 발표 예정",
     "대통령 회의 예정 산업", "대규모 수주 계약 체결 예정", "국회 법안 처리 예정 산업",
+    // 정부 정책은 언론 기사보다 **정책브리핑(korea.kr) 원문**이 앞선다. 광주공항 이전처럼
+    // 지역·인프라 계획이 여기서 먼저 나오고, 며칠 뒤 관련주가 움직인다.
+    "site:korea.kr 정책브리핑 계획", "정부 국가산업단지 조성 계획 발표",
+    "지역 인프라 투자 계획 발표", "메가프로젝트 점검회의",
   ];
   const all = await Promise.all(
     [...dateQueries, ...topicQueries].map(q => searchNews(q, 12)),
