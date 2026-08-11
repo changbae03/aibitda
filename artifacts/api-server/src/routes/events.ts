@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
-import { searchThemeStocks, parseKeywords } from "../lib/theme-search.js";
+import { searchThemeStocks, parseKeywords, expandThemeKeywords } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -40,8 +40,23 @@ router.get("/theme-stocks", async (req, res) => {
     const kws = parseKeywords(String(req.query["q"] ?? ""));
     if (kws.length === 0) { res.status(400).json({ error: "q_required" }); return; }
     const limit = Math.min(40, Math.max(5, Number(req.query["limit"]) || 20));
-    const hits = await searchThemeStocks(kws, limit);
-    res.json({ keywords: kws, count: hits.length, hits });
+
+    // 먼저 사용자가 친 말 그대로 찾는다(빠르고, 대개 이걸로 충분하다).
+    let used = kws;
+    let hits = await searchThemeStocks(used, limit);
+    let expanded = false;
+
+    // 결과가 빈약하면 그때만 AI로 넓힌다. 뉴스 말("호남 반도체 클러스터")을 회사가
+    // 쓰는 말("시스템반도체·파운드리·후공정")로 옮기는 단계다. Gemini 호출이 붙으므로
+    // 항상 하지 않고, 잘 안 걸릴 때만 — 흔한 테마(CDMO)는 확장 없이 즉시 답한다.
+    if (hits.length < 5 && kws.length === 1) {
+      used = await expandThemeKeywords(kws[0]);
+      if (used.length > 1) {
+        hits = await searchThemeStocks(used, limit);
+        expanded = true;
+      }
+    }
+    res.json({ keywords: used, expanded, count: hits.length, hits });
   } catch (e) {
     console.warn("[theme-search] 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "theme_search_failed" });

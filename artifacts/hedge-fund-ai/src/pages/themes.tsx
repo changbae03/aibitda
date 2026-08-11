@@ -294,6 +294,10 @@ function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: str
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<ThemeHit[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // 뉴스 말로 검색했는데 결과가 적으면 서버가 회사 말로 번역해 다시 찾는다.
+  // 무엇으로 찾았는지 보여줘야 결과를 믿을 수 있다.
+  const [used, setUsed] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   const run = async (keyword: string) => {
     const kw = keyword.trim();
@@ -304,7 +308,9 @@ function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: str
                             { credentials: "include" });
       const d = r.ok ? await r.json() : null;
       setHits(Array.isArray(d?.hits) ? d.hits : []);
-    } catch { setHits([]); }
+      setUsed(Array.isArray(d?.keywords) ? d.keywords : []);
+      setExpanded(!!d?.expanded);
+    } catch { setHits([]); setUsed([]); setExpanded(false); }
     finally { setLoading(false); }
   };
 
@@ -340,6 +346,20 @@ function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: str
           </button>
         ))}
       </div>
+
+      {expanded && used.length > 1 && (
+        <div className="rounded-xl bg-indigo-500/8 border border-indigo-500/20 px-3 py-2">
+          <p className="text-[10.5px] text-foreground/60 leading-relaxed">
+            <b className="text-indigo-600 dark:text-indigo-300">회사가 쓰는 말로 바꿔 찾았습니다.</b>{" "}
+            기사에 쓰는 표현은 사업보고서에 잘 안 나와서요.
+          </p>
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {used.slice(1).map(w => (
+              <span key={w} className="text-[10px] px-1.5 py-0.5 rounded-md bg-background/70 text-foreground/60">{w}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hits !== null && (
         hits.length === 0 ? (
