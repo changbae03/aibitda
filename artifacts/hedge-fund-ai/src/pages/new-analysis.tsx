@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn, Check, Lock } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn, Check, Lock, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl, cn } from "@/lib/utils";
@@ -527,14 +527,16 @@ export default function NewAnalysis() {
       >
         {/* Headline */}
         <div className="space-y-4">
+          {/* 브랜드가 아니라 **질문**을 건다. 바로 아래 검색창이 답을 받는 자리라
+              "무엇을 하는 화면인가"가 한 줄로 읽힌다. (브랜드는 상단 헤더에 이미 있다) */}
           <h1
-            className="text-[2.75rem] md:text-[3.5rem] font-bold tracking-tight text-foreground leading-[1.15]"
+            className="text-[2.5rem] md:text-[3.25rem] font-bold tracking-tight text-foreground leading-[1.15]"
             style={{ wordBreak: 'keep-all' }}
           >
             {isEn ? (
-              <>Aibitda<br />Stock Study</>
+              <>Which company<br />are you curious about?</>
             ) : (
-              <>애빛다<br />종목스터디</>
+              <>어떤 기업이<br />궁금하세요?</>
             )}
           </h1>
           <p className="text-[15px] text-muted-foreground/80 leading-relaxed break-keep font-medium">
@@ -751,6 +753,41 @@ export default function NewAnalysis() {
             </motion.p>
           )}
         </form>
+
+        {/* ── 종목명을 모를 때 가는 길 ────────────────────────────────────
+            홈에 검색창만 있으면 "찾을 종목을 이미 아는 사람"만 쓸 수 있다.
+            테마로 훑거나(광주공항·CDMO) 날짜로 훑는(내일 뭐 있나) 입구를 같이 준다. */}
+        <div className="-mt-4">
+          <p className="text-[12px] text-muted-foreground/50 mb-2">
+            {isEn ? "Don't have a ticker in mind?" : "찾을 종목이 딱히 없다면"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setLocation("/themes")}
+              className="group flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-card border border-border/50 hover:border-border transition text-left"
+            >
+              <Search className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-[12.5px] font-semibold text-foreground/85">
+                {isEn ? "Find theme stocks" : "테마 관련주 찾기"}
+              </span>
+              <span className="text-[11px] text-muted-foreground/50 hidden sm:inline">
+                {isEn ? "from filings" : "공시 원문에서"}
+              </span>
+            </button>
+            <button
+              onClick={() => setLocation("/themes")}
+              className="group flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-card border border-border/50 hover:border-border transition text-left"
+            >
+              <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-[12.5px] font-semibold text-foreground/85">
+                {isEn ? "What's coming up" : "다가오는 일정"}
+              </span>
+              <span className="text-[11px] text-muted-foreground/50 hidden sm:inline">
+                {isEn ? "and who it moves" : "어느 종목이 움직이나"}
+              </span>
+            </button>
+          </div>
+        </div>
 
         {/* ── 최근 조회 종목 — localStorage 기반, 비로그인도 표시 ── */}
         {(() => {
