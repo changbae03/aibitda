@@ -622,13 +622,15 @@ function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
                   <span className="text-[9px] text-violet-500 font-medium">스마트머니 +{sm.toFixed(0)}억 유입</span>
                 )}
               </div>
-              <div className="w-20 shrink-0 h-2 bg-muted/50 rounded-full overflow-hidden">
+              {/* 모바일에서 막대·라벨이 고정 폭을 크게 먹어 테마 이름이 잘렸다
+                  ("로봇 및 스마트 팩토..."). 좁은 화면에서는 둘 다 줄여 이름에 자리를 준다. */}
+              <div className="w-12 sm:w-20 shrink-0 h-2 bg-muted/50 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${barPct}%`, backgroundColor: meta.barColor }}
                 />
               </div>
-              <span className={cn("text-[10px] font-semibold shrink-0 w-16 text-right", meta.color)}>
+              <span className={cn("text-[10px] font-semibold shrink-0 w-14 sm:w-16 text-right", meta.color)}>
                 {meta.emoji} {meta.label}
               </span>
             </div>
@@ -823,23 +825,44 @@ export default function ThemesPage() {
         <ThemeStockFinder onAnalyze={goAnalyze} />
       </div>
 
-      {/* 헤더 */}
+      {/* 헤더 — 시장이 조용한 날 "핫"이라고 우기지 않는다.
+          쏠림이 있는 테마(hot/momentum/emerging)가 있을 때만 그 수를 배지로 알린다. */}
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Flame className="w-5 h-5 text-[#FF8A7A]" />
-          <h1 className="text-lg font-semibold text-foreground">핫 테마 피드</h1>
-        </div>
-        <p className="text-sm text-foreground/55">
-          최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
-          {feedCachedAt && (
-            <span className="text-foreground/35 ml-1">
-              · {new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨
-            </span>
-          )}
-        </p>
+        {(() => {
+          const live = feed.filter(f => f.phase && f.phase !== "quiet").length;
+          const early = feed.filter(f => f.phase === "emerging").length;
+          return (
+            <>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Flame className="w-5 h-5 text-[#FF8A7A]" />
+                <h1 className="text-lg font-semibold text-foreground">테마 흐름</h1>
+                {live > 0 && (
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FF8A7A]/15 text-[#FF8A7A]">
+                    쏠림 {live}
+                  </span>
+                )}
+                {early > 0 && (
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-500">
+                    조기 포착 {early}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-foreground/55">
+                {live > 0
+                  ? "기관·외국인 순매수가 쏠린 테마와 관련주입니다 · 3시간마다 갱신"
+                  : "오늘은 뚜렷한 쏠림이 없습니다. 아래는 수급 강도 순서예요 · 3시간마다 갱신"}
+                {feedCachedAt && (
+                  <span className="text-foreground/35 ml-1">
+                    · {new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨
+                  </span>
+                )}
+              </p>
+            </>
+          );
+        })()}
       </div>
 
-      {/* ── 핫 테마 피드 ─────────────────────────────────────────── */}
+      {/* ── 테마 흐름 피드 ─────────────────────────────────────────── */}
       {feedLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
