@@ -28,6 +28,7 @@ import { invalidateBriefCache, refreshBriefInBackground, fetchMarketNews, refres
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
 import { refreshSectorBands } from "./valuation/sector-bands.js";
 import { backfillKisIndustry } from "./kis-industry-backfill.js";
+import { refreshUpcomingEvents } from "./upcoming-events.js";
 import { pool } from "@workspace/db";
 import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
 import { triggerSignalsRefresh } from "../routes/themes.js";
@@ -41,6 +42,7 @@ let middayBriefToday      = "";   // 11:00 KST 장중 1차 브리핑
 let afternoonBriefToday   = "";   // 14:00 KST 장중 2차 브리핑
 let eveningBriefToday     = "";   // 22:00 KST 야간 브리핑
 let closingBriefToday     = "";   // 16:30 KST 장마감 브리핑
+let eventsRefreshedToday  = "";   // 17:10 KST 다가오는 일정 갱신
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
 // 미국 브리핑 (KST 기준 날짜 사용 — 자정 넘어도 같은 날로 취급)
@@ -225,6 +227,18 @@ function checkAndRun() {
       .catch(e => console.error("[scheduler] 급등 종목 수집 실패:", e?.message));
   }
 
+  // ── 다가오는 일정 갱신: 평일 17:10 KST = 08:10 UTC ────────────────────────
+  //
+  // 장이 끝나고 그날 뉴스가 다 쌓인 뒤에 돌린다. 사용자는 장 끝나고 "내일 뭐 있나"를
+  // 보므로 그 전에 채워져 있어야 한다. 실패해도 다른 스케줄을 막지 않는다(어제 것이 남는다).
+  if (utcH === 8 && utcM === 10 && dow >= 1 && dow <= 5 && eventsRefreshedToday !== dateStr) {
+    eventsRefreshedToday = dateStr;
+    console.log("[scheduler] 다가오는 일정 갱신 시작 (17:10 KST)");
+    refreshUpcomingEvents(7)
+      .then(n => console.log(`[scheduler] 다가오는 일정 ${n}건 저장`))
+      .catch(e => console.error("[scheduler] 다가오는 일정 갱신 실패:", e?.message));
+  }
+
   // ── 장중 30분 동기 갱신: 09:00~15:30 KST = 00:00~06:30 UTC (평일) ──────────
   // 수급 폭발·급등 예비군·내일 상승 후보를 동일 시각에 일괄 갱신
   // 09:00 KST = 00:00 UTC, 09:30 = 00:30, ..., 15:00 = 06:00, 15:30 = 06:30
@@ -290,6 +304,7 @@ export function startMarketScheduler() {
   console.log("  [KR] 장중 1차 브리핑: 평일 11:00 KST (= 02:00 UTC)");
   console.log("  [KR] 장중 2차 브리핑: 평일 14:00 KST (= 05:00 UTC)");
   console.log("  [KR] 장마감 브리핑:   평일 16:30 KST (= 07:30 UTC)");
+  console.log("  [KR] 다가오는 일정:   평일 17:10 KST (= 08:10 UTC)");
   console.log("  [KR] 야간 브리핑:     평일 22:00 KST (= 13:00 UTC)");
   console.log("  [US] 개장 전 브리핑: 평일 17:00 KST");
   console.log("  [US] 장중 1차 브리핑: 평일 23:30 KST");
