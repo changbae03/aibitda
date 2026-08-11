@@ -532,9 +532,9 @@ export default function NewAnalysis() {
             style={{ wordBreak: 'keep-all' }}
           >
             {isEn ? (
-              <>What stage is<br />this company<br />actually in?</>
+              <>Aibitda<br />Stock Study</>
             ) : (
-              <>이 기업은 지금,<br />어느 단계인가</>
+              <>애빛다<br />종목스터디</>
             )}
           </h1>
           <p className="text-[15px] text-muted-foreground/80 leading-relaxed break-keep font-medium">

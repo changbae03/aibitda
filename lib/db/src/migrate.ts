@@ -610,6 +610,25 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_us_financials_ticker
         ON us_financials (ticker, fy DESC);
 
+      -- 다가오는 일정 — "며칠에 무슨 일이 예정돼 있고, 어느 종목이 움직이나".
+      -- 뉴스에서 날짜가 박힌 예정 이벤트(임상 발표·정부 일정·정책·계약·실적)를 뽑아 쌓는다.
+      -- 같은 이벤트가 여러 기사에 나오므로 (날짜+제목)으로 중복을 막는다.
+      CREATE TABLE IF NOT EXISTS upcoming_events (
+        id          SERIAL PRIMARY KEY,
+        event_date  DATE NOT NULL,
+        title       TEXT NOT NULL,
+        category    TEXT NOT NULL,           -- 임상·허가 / 정부·정책 / 계약·수주 / 실적 / 지수·수급 / 기타
+        summary     TEXT,
+        tickers     JSONB,                   -- [{ticker, name, why}]
+        sectors     JSONB,                   -- ["건설","인프라"]
+        importance  INTEGER NOT NULL DEFAULT 2, -- 1 낮음 · 2 보통 · 3 높음
+        source      TEXT,
+        created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        CONSTRAINT upcoming_events_uniq UNIQUE (event_date, title)
+      );
+      CREATE INDEX IF NOT EXISTS idx_upcoming_events_date
+        ON upcoming_events (event_date, importance DESC);
+
       -- 미국 연차보고서(10-K/20-F) "Item 1. Business" 본문 — 한국 dart_biz_reports의 미국판.
       -- 다년치를 쌓아 연도별 서술 변화(행간)를 비교한다. 회계연도(fy)별 한 행.
       CREATE TABLE IF NOT EXISTS us_biz_reports (

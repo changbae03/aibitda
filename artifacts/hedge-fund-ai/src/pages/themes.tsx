@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb, Search, Loader2, TrendingUp, ArrowRight,
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
-  Target, BarChart2, AlertCircle,
+  Target, BarChart2, AlertCircle, Calendar,
 } from "lucide-react";
 import { FlowContent, SurgeWidget, PreSurgeWidget, CrossSignalBanner } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
@@ -173,6 +173,124 @@ function LegendStep({ n, color, title, desc }: { n: number; color: "rose" | "eme
       <div className="min-w-0">
         <p className={cn("text-[11.5px] font-bold leading-tight", c.title)}>{title}</p>
         <p className="text-[10px] text-foreground/45 leading-snug mt-0.5">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── 다가오는 일정 ──────────────────────────────────────────────────────────
+//
+// 개인 투자자는 네이버에 "12일"을 쳐서 그날 예정된 일을 미리 챙긴다. 실제로 8/10
+// 대통령 메가프로젝트 점검회의가 예고돼 있었고 다음 날 관련주가 상한가였다.
+// 수급·기술 지표만으로는 이 축이 통째로 비어 있어서, 서버가 뉴스에서 뽑아 여기 붙인다.
+
+interface EventTicker { ticker?: string; name: string; why?: string }
+interface UpcomingEvent {
+  eventDate: string; title: string; category: string; summary: string | null;
+  tickers: EventTicker[]; sectors: string[]; importance: number;
+}
+
+const EVENT_CAT_UI: Record<string, { icon: string; cls: string }> = {
+  "임상·허가": { icon: "🧬", cls: "bg-violet-500/12 text-violet-600 dark:text-violet-300" },
+  "정부·정책": { icon: "🏛️", cls: "bg-blue-500/12 text-blue-600 dark:text-blue-300" },
+  "계약·수주": { icon: "📝", cls: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300" },
+  "실적":      { icon: "📊", cls: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
+  "지수·수급": { icon: "🔄", cls: "bg-cyan-500/12 text-cyan-600 dark:text-cyan-300" },
+  "기타":      { icon: "📌", cls: "bg-muted text-foreground/60" },
+};
+
+/** "8/12 (수)" — 오늘·내일은 말로 */
+function eventDayLabel(iso: string, today: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  const diff = Math.round((d.getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const md = `${d.getMonth() + 1}/${d.getDate()}`;
+  if (diff === 0) return `오늘 ${md}`;
+  if (diff === 1) return `내일 ${md}`;
+  return `${md} (${dow})`;
+}
+
+function UpcomingEvents({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
+  const [events, setEvents] = useState<UpcomingEvent[] | null>(null);
+
+  useEffect(() => {
+    fetch(getApiUrl("api/events/upcoming?days=7"), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setEvents(Array.isArray(d?.events) ? d.events : []))
+      .catch(() => setEvents([]));
+  }, []);
+
+  if (!events || events.length === 0) return null;
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  // 날짜별로 묶는다 — 사용자가 "며칠에 뭐가 있나"로 읽기 때문
+  const byDate = new Map<string, UpcomingEvent[]>();
+  for (const e of events) {
+    if (!byDate.has(e.eventDate)) byDate.set(e.eventDate, []);
+    byDate.get(e.eventDate)!.push(e);
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Calendar className="w-4 h-4 text-blue-500" />
+        <h2 className="text-[14px] font-bold text-foreground">다가오는 일정</h2>
+        <span className="text-[10.5px] text-foreground/40">앞으로 7일 · 뉴스에서 수집</span>
+      </div>
+      <p className="text-[11.5px] text-foreground/50 leading-relaxed">
+        임상 발표·정부 일정·정책·계약처럼 <b className="text-foreground/70">날짜가 정해진 재료</b>입니다.
+        미리 알면 당일에 쫓아가지 않아도 됩니다.
+      </p>
+
+      <div className="space-y-3">
+        {[...byDate.entries()].map(([date, list]) => (
+          <div key={date}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[11.5px] font-bold text-foreground/80">{eventDayLabel(date, today)}</span>
+              <span className="h-px flex-1 bg-border/50" />
+            </div>
+            <div className="space-y-1.5">
+              {list.map((e, i) => {
+                const ui = EVENT_CAT_UI[e.category] ?? EVENT_CAT_UI["기타"];
+                return (
+                  <div key={i} className="rounded-xl bg-background/60 border border-border/40 px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <span className={cn("shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-semibold", ui.cls)}>
+                        {ui.icon} {e.category}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12.5px] font-semibold text-foreground leading-snug">
+                          {e.title}
+                          {e.importance >= 3 && <span className="ml-1 text-[10px] text-rose-500 font-bold">주목</span>}
+                        </p>
+                        {e.summary && (
+                          <p className="text-[11px] text-foreground/55 leading-relaxed mt-0.5">{e.summary}</p>
+                        )}
+                        {e.tickers.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {e.tickers.map((t, j) => (
+                              t.ticker ? (
+                                <button key={j} onClick={() => onAnalyze(t.ticker!, t.name)}
+                                        title={t.why}
+                                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-medium hover:bg-primary/20 transition">
+                                  {t.name}
+                                </button>
+                              ) : (
+                                <span key={j} title={t.why}
+                                      className="text-[10.5px] px-2 py-0.5 rounded-md bg-muted text-foreground/60">
+                                  {t.name}
+                                </span>
+                              )
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -461,6 +579,8 @@ export default function ThemesPage() {
               <LegendStep n={3} color="indigo"  title="내일 상승 후보"     desc="테마·검색 트렌드 · 순환매 지연·화제성 포착" />
             </div>
           </div>
+
+          <UpcomingEvents onAnalyze={goAnalyze} />
 
           <CrossSignalBanner />
 
