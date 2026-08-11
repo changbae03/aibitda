@@ -541,9 +541,17 @@ export default function NewAnalysis() {
           </h1>
           <p className="text-[15px] text-muted-foreground/80 leading-relaxed break-keep font-medium">
             {isEn ? (
-              <>We compare years of filings to place a company on its curve.<br className="hidden sm:block" />Enter a ticker or company name to start.</>
+              // ⚠️ `<br className="hidden sm:block">`을 쓰면 모바일에서 br이 사라지면서
+              // 두 문장이 그대로 붙는다("…짚어드립니다종목코드나"). 항상 별도 줄로 둔다.
+              <>
+                <span className="block">We compare years of filings to place a company on its curve.</span>
+                <span className="block">Enter a ticker or company name to start.</span>
+              </>
             ) : (
-              <>몇 년치 사업보고서를 나란히 놓고 대조해, 지금의 단계를 짚어드립니다<br className="hidden sm:block" />종목코드나 회사명으로 검색해보세요</>
+              <>
+                <span className="block">몇 년치 사업보고서를 나란히 놓고 대조해, 지금의 단계를 짚어드립니다</span>
+                <span className="block">종목코드나 회사명으로 검색해보세요</span>
+              </>
             )}
           </p>
           <CreditsBadge credits={credits} />
