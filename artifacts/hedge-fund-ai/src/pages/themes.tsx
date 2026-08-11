@@ -5,7 +5,7 @@ import {
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
   Target, BarChart2, AlertCircle, Calendar,
 } from "lucide-react";
-import { FlowContent, SurgeWidget, PreSurgeWidget, CrossSignalBanner } from "@/pages/flow";
+import { FlowContent, SurgeWidget } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -157,26 +157,7 @@ function stockSignalBadge(s: FeedStock): { text: string; cls: string; title: str
 
 // ── 내일 종목 탭 상단 컨셉 안내 카드 ─────────────────────────────────────────
 
-const LEGEND_STEP_COLORS: Record<string, { badge: string; title: string }> = {
-  rose:    { badge: "bg-rose-500 text-white",    title: "text-rose-600 dark:text-rose-400" },
-  emerald: { badge: "bg-emerald-500 text-white", title: "text-emerald-600 dark:text-emerald-400" },
-  indigo:  { badge: "bg-indigo-500 text-white",  title: "text-indigo-600 dark:text-indigo-400" },
-};
 
-function LegendStep({ n, color, title, desc }: { n: number; color: "rose" | "emerald" | "indigo"; title: string; desc: string }) {
-  const c = LEGEND_STEP_COLORS[color];
-  return (
-    <div className="rounded-xl bg-background/60 border border-border/40 px-3 py-2.5 flex gap-2.5">
-      <span className={cn("shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black", c.badge)}>
-        {n}
-      </span>
-      <div className="min-w-0">
-        <p className={cn("text-[11.5px] font-bold leading-tight", c.title)}>{title}</p>
-        <p className="text-[10px] text-foreground/45 leading-snug mt-0.5">{desc}</p>
-      </div>
-    </div>
-  );
-}
 
 // ── 다가오는 일정 ──────────────────────────────────────────────────────────
 //
@@ -292,6 +273,143 @@ function UpcomingEvents({ onAnalyze }: { onAnalyze: (ticker: string, name: strin
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── 내일 오를 것 같은 종목 (통합) ──────────────────────────────────────────
+//
+// 예전에는 수급·기술·테마 리스트가 **따로따로 3개** 떠서 "그래서 뭘 보라는 거지"가 됐다.
+// 세 신호를 한 목록으로 합치고, **다가오는 일정에 걸린 종목에 가산점**을 준다 —
+// 재료가 있는 종목이 신호까지 겹치면 그게 가장 앞에 와야 한다.
+
+interface Candidate {
+  ticker: string; name: string; market: string;
+  score: number;
+  reasons: Array<{ label: string; tone: "rose" | "emerald" | "indigo" | "amber" }>;
+}
+
+function TomorrowCandidates({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
+  const [list, setList] = useState<Candidate[] | null>(null);
+
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const [surge, presurge, tomorrow, events] = await Promise.allSettled([
+        fetch(getApiUrl("/api/market/surge"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+        fetch(getApiUrl("/api/market/presurge"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+        fetch(getApiUrl("/api/market/tomorrow-picks"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+        fetch(getApiUrl("api/events/upcoming?days=3"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+      ]);
+      if (dead) return;
+
+      const map = new Map<string, Candidate>();
+      const add = (
+        ticker: string, name: string, market: string,
+        pts: number, reason: Candidate["reasons"][number],
+      ) => {
+        if (!ticker || !name) return;
+        const cur = map.get(ticker) ?? { ticker, name, market: market ?? "", score: 0, reasons: [] };
+        cur.score += pts;
+        if (!cur.reasons.some(r => r.label === reason.label)) cur.reasons.push(reason);
+        map.set(ticker, cur);
+      };
+
+      // 수급: 기관·외인이 실제로 사고 있다는 신호가 가장 무겁다
+      if (surge.status === "fulfilled" && Array.isArray(surge.value?.data)) {
+        for (const s of surge.value.data as any[]) {
+          const heavy = (s.institution ?? 0) > 0 || (s.foreign ?? 0) > 0;
+          add(s.ticker, s.name, s.market, heavy ? 34 : 22,
+              { label: heavy ? "기관·외인 매집" : "거래량 급증", tone: "rose" });
+        }
+      }
+      // 기술: 아직 안 올랐지만 형태가 갖춰진 것
+      if (presurge.status === "fulfilled" && Array.isArray(presurge.value?.data)) {
+        for (const s of presurge.value.data as any[]) {
+          add(s.ticker, s.name, s.market, 30, { label: "눌림목·거래량 수축", tone: "emerald" });
+        }
+      }
+      // 테마: 화제성·순환매
+      if (tomorrow.status === "fulfilled" && Array.isArray(tomorrow.value?.picks)) {
+        for (const p of tomorrow.value.picks as any[]) {
+          add(p.ticker, p.name, p.market, 26, { label: "테마·화제성", tone: "indigo" });
+        }
+      }
+      // 일정(재료): 날짜가 정해진 이벤트가 있으면 크게 얹는다 — 오를 '이유'가 있는 것
+      if (events.status === "fulfilled" && Array.isArray(events.value?.events)) {
+        for (const e of events.value.events as any[]) {
+          for (const t of e.tickers ?? []) {
+            if (!t?.ticker) continue;
+            add(t.ticker, t.name, "", 40, { label: `일정: ${String(e.title).slice(0, 14)}`, tone: "amber" });
+          }
+        }
+      }
+
+      // 신호가 겹칠수록 위로. 같은 점수면 근거가 많은 쪽.
+      const ranked = [...map.values()]
+        .filter(c => c.reasons.length >= 2 || c.score >= 40)
+        .sort((a, b) => b.score - a.score || b.reasons.length - a.reasons.length)
+        .slice(0, 12);
+      setList(ranked);
+    })().catch(() => { if (!dead) setList([]); });
+    return () => { dead = true; };
+  }, []);
+
+  const TONE: Record<string, string> = {
+    rose: "bg-rose-500/12 text-rose-600 dark:text-rose-300",
+    emerald: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300",
+    indigo: "bg-indigo-500/12 text-indigo-600 dark:text-indigo-300",
+    amber: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  };
+
+  if (list === null) return <div className="h-40 rounded-2xl bg-muted/30 animate-pulse" />;
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Target className="w-4 h-4 text-rose-500" />
+        <h2 className="text-[14px] font-bold text-foreground">내일 오를 것 같은 종목</h2>
+        {list.length > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/12 text-rose-600 dark:text-rose-300">
+            {list.length}개
+          </span>
+        )}
+      </div>
+      <p className="text-[11.5px] text-foreground/50 leading-relaxed">
+        수급·기술·테마 신호에 <b className="text-foreground/70">다가오는 일정</b>을 얹어 한 줄로 세웠습니다.
+        근거가 여러 개 겹칠수록 위에 옵니다.
+      </p>
+
+      {list.length === 0 ? (
+        <p className="text-[11.5px] text-foreground/40 py-4 text-center">
+          아직 신호가 겹치는 종목이 없습니다. 장중·장마감 후 갱신됩니다.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {list.map((c, i) => (
+            <button key={c.ticker} onClick={() => onAnalyze(c.ticker, c.name)}
+                    className="w-full text-left rounded-xl bg-background/60 border border-border/40 px-3 py-2.5 hover:border-border transition">
+              <div className="flex items-center gap-2.5">
+                <span className="shrink-0 w-5 text-[11px] font-black text-foreground/30 tabular-nums">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[13px] font-bold text-foreground truncate">{c.name}</span>
+                    <span className="text-[10px] text-foreground/40 shrink-0">{c.ticker}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {c.reasons.map((r, j) => (
+                      <span key={j} className={cn("text-[10px] px-1.5 py-0.5 rounded-md font-medium", TONE[r.tone])}>
+                        {r.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-foreground/25 shrink-0" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -560,38 +678,25 @@ export default function ThemesPage() {
         </button>
       </div>
 
-      {/* ── 내일 종목 탭 ────────────────────────────────────────── */}
+      {/* ── 내일 종목 탭 ──────────────────────────────────────────
+          블록은 딱 둘. ① 다가오는 일정 = 왜 오를까(재료)  ② 내일 오를 것 같은 종목 = 결론.
+          예전엔 수급·기술·테마 리스트가 따로 3개 떠서 "그래서 뭘 보라는 거지"가 됐다.
+          '오늘 수급 폭발'은 이미 오른 종목이라 '내일'과 안 맞아 수급 레이더 탭으로 옮겼다. */}
       {activeSection === "picks" && (
         <div className="space-y-4">
-          {/* 컨셉 안내: 서로 다른 3가지 렌즈로 내일 상승 종목을 교차 검증 */}
-          <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/10 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <h2 className="text-[14px] font-bold text-foreground">3가지 렌즈로 내일 상승 종목을 찾습니다</h2>
-            </div>
-            <p className="text-[11.5px] text-foreground/50 leading-relaxed">
-              시간축과 데이터 성격이 서로 다른 지표를 함께 보면 한 지표만으론 놓치는 신호를 줄일 수 있습니다.
-              여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <LegendStep n={1} color="rose"    title="오늘 수급 폭발 포착" desc="실시간 · 거래량 급증 + 기관·외인 매집 · 장중 30분마다 갱신" />
-              <LegendStep n={2} color="emerald" title="내일 급등 예비군"   desc="기술적 패턴 · 최근 15일 눌림목·거래량 수축→팽창 스캔" />
-              <LegendStep n={3} color="indigo"  title="내일 상승 후보"     desc="테마·검색 트렌드 · 순환매 지연·화제성 포착" />
-            </div>
-          </div>
-
           <UpcomingEvents onAnalyze={goAnalyze} />
-
-          <CrossSignalBanner />
-
-          <SurgeWidget />
-          <PreSurgeWidget onAnalyze={goAnalyze} />
-          <TomorrowPicksContent onAnalyze={goAnalyze} />
+          <TomorrowCandidates onAnalyze={goAnalyze} />
         </div>
       )}
 
       {/* ── 수급 레이더 탭 ─────────────────────────────────────── */}
-      {activeSection === "flow" && <FlowContent />}
+      {/* '오늘 수급 폭발'은 오늘의 수급 이야기라 여기가 제자리다(내일 종목 탭에서 이동). */}
+      {activeSection === "flow" && (
+        <div className="space-y-4">
+          <SurgeWidget />
+          <FlowContent />
+        </div>
+      )}
 
       {/* ── 테마 분석 탭 ───────────────────────────────────────── */}
       {activeSection === "themes" && <>
@@ -1043,283 +1148,6 @@ const SIGNAL_STYLE: Record<string, string> = {
   "모멘텀":      "text-orange-500",
 };
 
-function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
-  const [picks, setPicks] = useState<TomorrowPick[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [cachedAt, setCachedAt] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [stale, setStale] = useState(false);
-
-  async function load(forceRefresh = false) {
-    if (forceRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const url = getApiUrl(`/api/market/tomorrow-picks${forceRefresh ? "?refresh=1" : ""}`);
-      const r = await fetch(url, { credentials: "include" });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "오류가 발생했습니다");
-      setPicks(data.picks ?? []);
-      setCachedAt(data.cachedAt ?? null);
-      setStale(!!data.stale);
-    } catch (e: any) {
-      // 갱신 실패 시 기존 picks 유지 (에러만 표시)
-      if (forceRefresh && picks.length > 0) {
-        setError(null); // 기존 데이터 계속 표시
-      } else {
-        setError(e.message ?? "데이터를 불러오지 못했습니다");
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-
-  useEffect(() => { load(); }, []);
-
-  if (loading) {
-    return (
-      <div className="space-y-2.5">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-[88px] rounded-2xl bg-muted/40 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-2">
-        <AlertCircle className="w-6 h-6 text-muted-foreground/40 mx-auto" />
-        <p className="text-sm text-foreground/50">{error}</p>
-        <button onClick={() => load()} className="text-xs text-[#FF8A7A] hover:underline mt-1">다시 시도</button>
-      </div>
-    );
-  }
-
-  if (picks.length === 0) {
-    return (
-      <div className="rounded-2xl border border-border bg-card p-10 text-center">
-        <BarChart2 className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2.5" />
-        <p className="text-sm text-foreground/40">현재 유효한 후보 종목이 없습니다.<br/>테마 피드가 로드된 후 다시 시도해 주세요.</p>
-      </div>
-    );
-  }
-
-  const cachedTime = cachedAt
-    ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
-    : null;
-
-  const laggardCount  = picks.filter(p => p.category === "laggard").length;
-  const volumeCount   = picks.filter(p => p.category === "volume").length;
-  const momentumCount = picks.filter(p => p.category === "momentum").length;
-
-  return (
-    <div className="space-y-4">
-      {/* ── 헤더 ─────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <Target className="w-4.5 h-4.5 text-indigo-500" />
-            <h2 className="text-[15px] font-semibold text-foreground">내일 상승 후보</h2>
-            <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-full">{picks.length}종목</span>
-            <span className="text-[10px] text-muted-foreground/40">테마·검색 트렌드 기반</span>
-          </div>
-          <p className="text-[12px] text-foreground/45 leading-relaxed">
-            테마 미반영 {laggardCount}  ·  거래량 집중 {volumeCount}  ·  모멘텀 {momentumCount}
-            {cachedTime && (
-              <span className={cn("ml-2", stale ? "text-amber-500/70" : "text-foreground/25")}>
-                · {cachedTime} 기준{stale ? " (구 데이터)" : ""}
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-foreground/45 bg-muted/50 hover:bg-muted hover:text-foreground/70 transition-all disabled:opacity-40 shrink-0"
-        >
-          <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
-          {refreshing ? "갱신 중…" : "갱신"}
-        </button>
-      </div>
-
-      {/* ── 카테고리 해설 ─────────────────────────────────── */}
-      <div className="rounded-xl bg-muted/30 border border-border/50 px-3.5 py-3 space-y-2.5">
-        <p className="text-[10.5px] font-semibold text-foreground/40 uppercase tracking-wide">선별 기준 · 신뢰도</p>
-        <div className="space-y-2">
-          <div className="flex gap-2.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11.5px] font-semibold text-foreground/70">복합 신호</span>
-                <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-900/20 text-rose-500">고신뢰</span>
-              </div>
-              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
-                네이버 인기 검색 + 거래량 폭발 등 <strong className="text-foreground/55">2개 이상 독립 신호가 같은 종목을 동시에 가리키는 경우.</strong> 단일 신호보다 훨씬 높은 신뢰도. 리스트 최상단에 배치됩니다.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
-            <div>
-              <span className="text-[11.5px] font-semibold text-foreground/70">테마 미반영</span>
-              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
-                같은 테마 종목들이 이미 올랐는데 이 종목만 아직 오르지 않은 경우. 테마 평균 대비 갭이 1.5%p 이상 벌어진 종목만 선별합니다. 뒤늦게 수급이 몰릴 가능성이 높습니다.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0 mt-1.5" />
-            <div>
-              <span className="text-[11.5px] font-semibold text-foreground/70">거래량 집중</span>
-              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
-                평소 대비 거래량이 800만 주 이상 급증한 종목. 주가가 크게 오르지 않았는데도 거래가 몰리면 기관·세력의 매집 신호일 수 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-1.5" />
-            <div>
-              <span className="text-[11.5px] font-semibold text-foreground/70">상승 모멘텀</span>
-              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
-                당일 5~22% 구간 상승 종목. 급등 초반 추세가 다음날까지 이어지는 경향을 포착합니다. 하단의 컬러 바가 길수록 종합 점수가 높습니다.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 후보 리스트 ───────────────────────────────────── */}
-      <div className="space-y-2">
-        {picks.map((pick, i) => {
-          const changeUp = pick.priceChange >= 0;
-          const pct = Math.round(pick.finalScore * 100);
-          const cat = pick.category ?? "laggard";
-          const catMeta = CATEGORY_META[cat] ?? CATEGORY_META.laggard;
-          const barColor =
-            cat === "volume"     ? "from-violet-400 to-violet-500" :
-            cat === "momentum"   ? "from-orange-400 to-orange-500" :
-            cat === "confluence" ? "from-rose-400 to-rose-500"     :
-                                   "from-emerald-400 to-emerald-500";
-          const conf = pick.confidence ?? "low";
-          const confMeta = CONFIDENCE_META[conf];
-
-          return (
-            <motion.div
-              key={pick.ticker}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.22 }}
-              className="group rounded-2xl border border-border/70 bg-card hover:border-border hover:shadow-sm transition-all duration-150 overflow-hidden"
-            >
-              {/* 본문 */}
-              <div className="px-4 pt-3 pb-2.5">
-                {/* 상단 행 */}
-                <div className="flex items-center gap-2.5">
-                  {/* 순위 */}
-                  <span className={cn(
-                    "text-[11px] font-black tabular-nums shrink-0 w-4 text-right",
-                    i < 3 ? "text-foreground/60" : "text-foreground/25"
-                  )}>
-                    {i + 1}
-                  </span>
-
-                  {/* 로고 */}
-                  <StockLogo ticker={pick.ticker} companyName={pick.name} size="sm" className="shrink-0" />
-
-                  {/* 이름·정보 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="text-[13.5px] font-semibold text-foreground truncate leading-tight">{pick.name}</span>
-                      <span className="font-mono text-[10px] text-foreground/30 shrink-0">{pick.ticker}</span>
-                    </div>
-                    {/* 카테고리 + 신뢰도 + 테마 */}
-                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0 flex-wrap">
-                      <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", catMeta.dot)} />
-                      <span className="text-[10px] text-foreground/40 font-medium shrink-0">{catMeta.label}</span>
-                      {conf !== "low" && (
-                        <span className={cn("text-[9.5px] font-bold px-1 py-0.5 rounded shrink-0", confMeta.cls)}>
-                          {confMeta.label}
-                        </span>
-                      )}
-                      <span className="text-foreground/20 text-[10px] shrink-0">·</span>
-                      <span className="text-[10px] leading-none shrink-0">{pick.themeEmoji}</span>
-                      <span className="text-[10px] text-foreground/40 truncate">{pick.theme}</span>
-                    </div>
-                  </div>
-
-                  {/* 우측: 등락 + 분석 */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={cn(
-                      "text-[12px] font-bold tabular-nums",
-                      changeUp ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"
-                    )}>
-                      {changeUp ? "+" : ""}{pick.priceChange.toFixed(1)}%
-                    </span>
-                    <button
-                      onClick={() => onAnalyze(pick.ticker, pick.name)}
-                      className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-muted/70 hover:bg-muted text-foreground/55 hover:text-foreground/80 transition-all whitespace-nowrap"
-                    >
-                      분석
-                    </button>
-                  </div>
-                </div>
-
-                {/* 신호 + 갭 정보 */}
-                <div className="flex items-center gap-0 mt-2 min-w-0 pl-[26px]">
-                  {pick.laggardGap > 0.5 && (
-                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mr-2 shrink-0">
-                      갭 {pick.laggardGap.toFixed(1)}%p
-                    </span>
-                  )}
-                  {pick.themeHeat > 0 && (
-                    <span className="text-[10px] text-foreground/35 mr-2 shrink-0">
-                      테마 +{pick.themeHeat.toFixed(1)}%
-                    </span>
-                  )}
-                  {pick.signals.length > 0 && (
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {pick.signals.map((sig, si) => (
-                        <span key={sig}>
-                          {si > 0 && <span className="text-foreground/15 text-[9px] mx-0.5">·</span>}
-                          <span className={cn("text-[10px] font-medium", SIGNAL_STYLE[sig] ?? "text-foreground/40")}>
-                            {sig}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 근거 */}
-                {pick.rationale && (
-                  <p className="text-[10.5px] text-foreground/50 leading-snug mt-1.5 pl-[26px]">
-                    {pick.rationale}
-                  </p>
-                )}
-              </div>
-
-              {/* 점수 바 — 카드 하단 얇은 선 */}
-              <div className="h-[3px] bg-muted/30">
-                <div
-                  className={cn("h-full bg-gradient-to-r transition-all duration-500", barColor)}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* ── 면책 ─────────────────────────────────────────── */}
-      <p className="text-[10px] text-foreground/25 text-center leading-relaxed px-4 pb-1">
-        본 자료는 테마·수급 데이터 분석 결과이며 투자 권유가 아닙니다. 모든 투자 결정의 책임은 투자자 본인에게 있습니다.
-      </p>
-    </div>
-  );
-}
 
 // ── 피드 카드 컴포넌트 ──────────────────────────────────────────────────────
 
