@@ -191,3 +191,47 @@ describe("조용한 판정을 만들지 않는다", () => {
     expect(v.phase).toBe("proving");
   });
 });
+
+describe("중앙값 언저리는 프리미엄이 아니다 — 메디포스트 회귀", () => {
+  /**
+   * 예전엔 문턱이 55 하나여서, 분위 55.6이 0.6 넘었다는 이유로 "기대 선반영(거품)"이
+   * 되고 54.9면 "쇠퇴"가 됐다. 실제 사례가 메디포스트다 — PBR 1.55는 바이오 섹터
+   * 중앙값 1.18을 조금 넘은 **평범한 밸류**이지 프리미엄이 아니다.
+   * 거품·피크아웃은 시장이 진짜 비싸게 볼 때만 붙어야 하는 이름이다.
+   */
+  it("분위 55.6은 중립이라 거품이 아니라 쇠퇴로 본다", () => {
+    // 실제 저장된 신호 그대로(실체 점수 -24 재현)
+    const v = classifyStage({
+      revGrowthPct: 4.2, opmDeltaPp: -23.7, cccDeltaDays: 41.5,
+      headcountGrowthPct: 5.6, capexTrend: "flat",
+      recentQuarterOpmDeltaPp: -15.5, recentQuarterRevGrowthPct: 1.2,
+      recentQuarterSwungToProfit: false,
+      valuationPercentile: 55.6,
+    });
+    expect(v.substance.score).toBe(-24);
+    expect(v.expectation).toBe("neutral");
+    expect(v.phase).toBe("decline");
+  });
+
+  it("소수점 하나로 판정이 뒤집히지 않는다", () => {
+    const at = (p: number) => classifyStage({ revGrowthPct: -20, opmDeltaPp: -5, valuationPercentile: p }).phase;
+    expect(at(54.9)).toBe(at(55.6));   // 옛 문턱 양옆이 같은 판정
+    expect(at(58)).toBe(at(45));       // 중립 구간 안은 전부 같다
+  });
+
+  it("진짜 프리미엄(60+)이라야 거품 판정이 붙는다", () => {
+    expect(classifyStage({ revGrowthPct: -20, opmDeltaPp: -5, valuationPercentile: 72 }).phase).toBe("hype");
+  });
+
+  it("진짜 저평가(40-)라야 저평가로 부른다", () => {
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 28 });
+    expect(v.expectation).toBe("discount");
+    expect(v.phase).toBe("proving");
+  });
+
+  it("중립에서 실적이 강하면 실체 확인 — 숫자 싸움이 아니다", () => {
+    const v = classifyStage({ revGrowthPct: 25, opmDeltaPp: 4, capexTrend: "expanding", valuationPercentile: 52 });
+    expect(v.expectation).toBe("neutral");
+    expect(v.phase).toBe("proving");
+  });
+});

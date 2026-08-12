@@ -1137,8 +1137,10 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
     : latest.phase === "numbers" || latest.phase === "proving" ? "strong"
     : latest.phase === "peakout" || latest.phase === "value" ? "slowing" : "contracting";
   const subState = { t: STATE_UI[stateFromPhase].ko, c: STATE_UI[stateFromPhase].c };
+  // 중앙값 언저리는 프리미엄도 저평가도 아니다 — "보통"이라고 말해야 오해가 없다.
   const expState = latest.expectation === "premium" ? "프리미엄(고평가)"
-    : latest.expectation === "discount" ? "저평가" : "미상";
+    : latest.expectation === "discount" ? "저평가"
+    : latest.expectation === "neutral" ? "보통(업종 평균 수준)" : "미상";
   // 점수 칩에서 내부 점수(+35 등)를 떼어 사람이 읽기 좋게
   const cleanReason = (r: string) => r.replace(/^[+\-]\d+\s*/, "").replace(/^(실체|기대)\s/, "");
 

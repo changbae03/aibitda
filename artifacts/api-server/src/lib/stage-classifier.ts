@@ -137,7 +137,12 @@ const W = {
   strong: 30,      // 실체 "강함" 문턱
   contracting: -15, // 실체 "역성장" 문턱
   rebound: 20,      // 직전 대비 이만큼 개선되면 반등으로 본다
-  premium: 55,      // 밴드 분위 이상이면 프리미엄
+  // 기대(밸류) 축은 **셋으로** 나눈다. 예전엔 55 하나로 갈라서, 분위 55.6이 문턱을
+  // 0.6 넘었다는 이유로 "거품(hype)"이 되고 54.9면 "쇠퇴(decline)"가 됐다 —
+  // 판정이 소수점에 뒤집히는 칼날이었다(메디포스트: PBR 1.55, 섹터 중앙값 1.18).
+  // 중앙값 언저리는 "평범한 밸류"이지 프리미엄이 아니다.
+  premium: 60,      // 이 이상이라야 진짜 프리미엄
+  discount: 40,     // 이 이하라야 진짜 저평가. 사이는 중립
   hyper: 40,        // 매출 성장률이 이 이상이면 '폭발 성장'(밸류에이션보다 속도)
 } as const;
 
@@ -246,8 +251,8 @@ export interface StageVerdict {
   phase: Phase;
   meta: PhaseMeta;
   substance: SubstanceResult;
-  /** 기대 상태 */
-  expectation: "premium" | "discount" | "unknown";
+  /** 기대 상태. 중앙값 언저리는 "중립" — 프리미엄도 저평가도 아니다 */
+  expectation: "premium" | "neutral" | "discount" | "unknown";
   /** 판정의 신뢰도 — 채워진 신호 비율 기반 */
   confidence: "high" | "medium" | "low";
   reasons: string[];
@@ -264,8 +269,13 @@ export function classifyStage(s: StageSignals): StageVerdict {
 
   const pct = s.valuationPercentile;
   const expectation: StageVerdict["expectation"] =
-    pct == null ? "unknown" : pct >= W.premium ? "premium" : "discount";
-  // 기대를 모르면 실체만으로 근사한다(강함=프리미엄 취급하지 않고 보수적으로 할인 취급)
+    pct == null ? "unknown"
+      : pct >= W.premium ? "premium"
+      : pct <= W.discount ? "discount"
+      : "neutral";
+  // 국면을 가를 때 중립은 **저평가 쪽**으로 둔다. "기대 선반영(거품)"·"피크아웃"은
+  // 시장이 실제로 비싸게 볼 때만 붙어야 하는 이름이고, 평범한 밸류에 그 딱지를 붙이면
+  // 판정이 과해진다. 기대를 모를 때(unknown)도 같은 이유로 보수적으로 본다.
   const premium = expectation === "premium";
 
   // 폭발 성장: 매출이 연간이든 최신 분기든 40% 이상 뛰는 구간. 투자자는 이때
@@ -287,7 +297,7 @@ export function classifyStage(s: StageSignals): StageVerdict {
 
   const reasons = [
     `실체 ${substance.state} (점수 ${substance.score})`,
-    `기대 ${expectation === "unknown" ? "미상(밴드 없음)" : expectation}${pct != null ? ` (밴드 ${pct}분위)` : ""}`,
+    `기대 ${({ premium: "프리미엄", neutral: "중립", discount: "저평가", unknown: "미상(밴드 없음)" } as const)[expectation]}${pct != null ? ` (밴드 ${pct.toFixed(0)}분위)` : ""}`,
     ...substance.reasons,
   ];
 
