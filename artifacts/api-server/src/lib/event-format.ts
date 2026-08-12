@@ -79,9 +79,34 @@ export interface UpcomingEvent {
 }
 
 /** 같은 날 같은 일을 여러 기사가 다르게 쓴다. 날짜+제목 앞부분으로 하나만 남긴다. */
+/**
+ * 주가와 무관한 지역·생활 행사를 걸러낸다.
+ *
+ * 프롬프트로 "지자체 행사는 빼라"고 해도 샌다 — "속초 대포항 야간공연 '대포야 사랑해'"에
+ * 강원랜드를 붙여 내보냈다. 지시는 확률이고 규칙은 확정이라, **코드로 막는다.**
+ *
+ * 판정은 제목만 본다. 상장사 실적·수주를 움직이지 않는 종류의 말들이다.
+ */
+const CIVIC_NOISE = [
+  /공연|콘서트|축제|영화제|페스티벌|불꽃놀이|야시장|플리마켓/,
+  /기념식|경축식|추모|예배|미사|법회/,
+  /공청회|주민설명회|간담회 개최|위원회 구성/,
+  /예약\s*판매|직거래|장터|할인\s*행사|반값/,
+  /등교|개학|입학|졸업식|학사일정/,
+  /주차장|쓰레기|재활용|민원|복지관|도서관|체육대회/,
+  /관광\s*(활성화|주간)|둘레길|트레킹/,
+];
+
+/** 이 일정이 상장사 주가와 이어질 만한가. 아니면 담지 않는다. */
+export function isMarketRelevant(title: string): boolean {
+  const t = String(title ?? "");
+  return !CIVIC_NOISE.some(re => re.test(t));
+}
+
 export function dedupeEvents(events: UpcomingEvent[]): UpcomingEvent[] {
   const seen = new Map<string, UpcomingEvent>();
   for (const e of events) {
+    if (!isMarketRelevant(e.title)) continue;   // 지역·생활 행사는 여기서 끊는다
     // 공백만 지우면 "인제니아 코스닥 상장"과 "인제니아, 코스닥 상장"이 다른 것으로 남는다.
     // 쉼표·따옴표·괄호 같은 문장부호까지 걷어내야 같은 일정이 하나로 모인다.
     const key = `${e.eventDate}|${e.title.replace(/[\s,·'"“”‘’()\[\]-]/g, "").slice(0, 16)}`;
