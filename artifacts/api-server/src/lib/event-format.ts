@@ -82,7 +82,9 @@ export interface UpcomingEvent {
 export function dedupeEvents(events: UpcomingEvent[]): UpcomingEvent[] {
   const seen = new Map<string, UpcomingEvent>();
   for (const e of events) {
-    const key = `${e.eventDate}|${e.title.replace(/\s/g, "").slice(0, 18)}`;
+    // 공백만 지우면 "인제니아 코스닥 상장"과 "인제니아, 코스닥 상장"이 다른 것으로 남는다.
+    // 쉼표·따옴표·괄호 같은 문장부호까지 걷어내야 같은 일정이 하나로 모인다.
+    const key = `${e.eventDate}|${e.title.replace(/[\s,·'"“”‘’()\[\]-]/g, "").slice(0, 16)}`;
     const prev = seen.get(key);
     // 같은 이벤트면 종목이 더 많이 붙은 쪽을 남긴다(정보량이 많은 것)
     if (!prev || e.tickers.length > prev.tickers.length) seen.set(key, e);

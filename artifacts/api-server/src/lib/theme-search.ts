@@ -155,6 +155,23 @@ export async function expandThemeKeywords(theme: string): Promise<string[]> {
   }
 }
 
+/**
+ * 자연어 질문에서 **검색할 말만** 남긴다.
+ *
+ * 사용자는 "유리기판 관련 기업을 찾아줘"처럼 문장으로 친다. 그대로 찾으면 사업보고서에
+ * 그런 문장이 있을 리 없어 0건이 되고, 그제서야 AI 확장이 도는 탓에 느려진다.
+ * 군더더기를 먼저 걷어내면 "유리기판"으로 바로 찾아 대부분 즉시 답이 나온다.
+ */
+export function stripQuestionWords(raw: string): string {
+  return String(raw ?? "")
+    .replace(/(와|과|랑|이랑)?\s*(관련(이|되는|된|있는)?|연관(된|있는)?)\s*(있는)?\s*/g, " ")
+    .replace(/(기업|회사|종목|주식|테마|관련주|수혜주)\s*(들)?\s*(을|를|은|는|이|가)?\s*/g, " ")
+    .replace(/(찾아\s*줘|찾아줘|찾아|알려\s*줘|알려줘|보여\s*줘|보여줘|추천해\s*줘|추천)\s*/g, " ")
+    .replace(/[?!.]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** 쉼표·공백으로 나뉜 입력을 구문 목록으로. 너무 짧은 것은 노이즈라 뺀다. */
 export function parseKeywords(raw: string): string[] {
   return String(raw ?? "")

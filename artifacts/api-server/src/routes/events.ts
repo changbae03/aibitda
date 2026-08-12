@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
-import { searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions } from "../lib/theme-search.js";
+import { searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -37,13 +37,16 @@ router.post("/refresh", async (req, res) => {
  */
 router.get("/theme-stocks", async (req, res) => {
   try {
-    const kws = parseKeywords(String(req.query["q"] ?? ""));
+    const rawQ = String(req.query["q"] ?? "");
+    // "유리기판 관련 기업을 찾아줘" → "유리기판". 문장 그대로 찾으면 0건이 되고
+    // 그제서야 AI 확장이 돌아 느려진다. 군더더기를 먼저 걷어낸다.
+    const kws = parseKeywords(stripQuestionWords(rawQ));
     if (kws.length === 0) { res.status(400).json({ error: "q_required" }); return; }
     const limit = Math.min(40, Math.max(5, Number(req.query["limit"]) || 20));
 
     // 지역 인프라 테마("광주공항 이전")는 그 지역에 시설이 있는 회사가 수혜를 본다.
-    // 검색어에서 지역을 알아내 함께 넘긴다 — 지역이 없으면 빈 배열이라 동작이 그대로다.
-    const regions = detectRegions(String(req.query["q"] ?? ""));
+    // 지역은 원문에서 찾는다(군더더기 제거로 지명이 날아갈 수 있다).
+    const regions = detectRegions(rawQ);
 
     // 먼저 사용자가 친 말 그대로 찾는다(빠르고, 대개 이걸로 충분하다).
     let used = kws;

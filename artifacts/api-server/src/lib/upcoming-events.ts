@@ -63,16 +63,27 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
     const d = new Date(base.getTime() + i * 86400000);
     dateQueries.push(`"${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일" 예정`);
   }
+  // 주가를 움직이는 일정은 임상·정책만이 아니다. 기업의 신제품·수주, 정상급 인사의
+  // 발표·순방, 산업 행사까지 넓게 훑는다 — 날짜가 정해진 재료는 미리 알 수 있어야 한다.
   const topicQueries = [
-    "임상 결과 발표 예정", "식약처 허가 심사 예정", "정부 정책 발표 예정",
-    "대통령 회의 예정 산업", "대규모 수주 계약 체결 예정", "국회 법안 처리 예정 산업",
-    // 정부 정책은 언론 기사보다 **정책브리핑(korea.kr) 원문**이 앞선다. 광주공항 이전처럼
-    // 지역·인프라 계획이 여기서 먼저 나오고, 며칠 뒤 관련주가 움직인다.
+    // 기업 이벤트
+    "임상 결과 발표 예정", "식약처 허가 심사 예정", "대규모 수주 계약 체결 예정",
+    "신제품 공개 예정", "신차 출시 예정", "양산 시작 예정", "공장 착공 예정",
+    "실적 발표 예정 상장사", "주주총회 예정", "기업설명회 IR 예정",
+    "상장 예정 공모주", "인수합병 발표 예정",
+    // 정부·정치 (기사보다 정책브리핑 원문이 앞선다 — 광주공항 이전이 그랬다)
     "site:korea.kr 정책브리핑 계획", "정부 국가산업단지 조성 계획 발표",
     "지역 인프라 투자 계획 발표", "메가프로젝트 점검회의",
+    "대통령 회의 예정 산업", "장관 발표 예정", "국회 법안 처리 예정 산업",
+    "규제 완화 시행 예정", "보조금 지원 발표 예정",
+    // 해외·정상외교 (한국 증시에 즉시 반영된다)
+    "트럼프 발표 예정", "미국 관세 발효 예정", "한미 정상회담 예정",
+    "정상 방한 예정", "국빈 방문 일정", "수출 계약 서명식 예정",
+    // 산업 행사·전시 (신기술 공개가 몰린다)
+    "국제 전시회 개막 예정 반도체", "기술 컨퍼런스 개최 예정", "수주 입찰 결과 발표 예정",
   ];
   const all = await Promise.all(
-    [...dateQueries, ...topicQueries].map(q => searchNews(q, 12)),
+    [...dateQueries, ...topicQueries].map(q => searchNews(q, 10)),
   );
   const headlines = [...new Set(all.flat())];
   console.log(`[events] 뉴스 ${headlines.length}건 수집 (날짜 질의 ${dateQueries.length} + 주제 ${topicQueries.length})`);
@@ -87,12 +98,15 @@ function buildPrompt(headlines: string[], today: string, daysAhead: number): str
 여기서 **앞으로 ${daysAhead}일 안에 예정된 일정**만 골라 구조화하세요.
 개인 투자자가 "며칠에 무슨 일이 있고, 어느 종목이 움직일까"를 미리 챙기려는 목적입니다.
 
-[고를 것]
-- 임상 결과 발표·허가 심사·학회 발표 (바이오)
-- 정부 일정·정책 발표·국회 처리 (관련 산업이 있는 것만)
-- 대형 계약·수주 체결 예정
-- 주요 실적 발표
-- 지수 편입·리밸런싱·공모주 상장
+[고를 것] — 주가와 이을 수 있으면 넓게 담으세요. 하루에 5~15건은 나와야 정상입니다.
+- 기업: 신제품·신차 공개, 양산·가동 시작, 공장 착공·준공, 대형 계약·수주, 실적 발표,
+  주주총회·IR, 상장(IPO)·보호예수 해제, 인수합병·분할
+- 바이오: 임상 결과 발표, 허가 심사·승인, 학회 발표, 기술수출 계약
+- 정부·정치: 대통령·장관 발표와 회의, 정책·법안 시행, 규제 완화, 보조금·예산 집행,
+  국가산단·인프라 계획
+- 해외·외교: 트럼프 등 정상급 발표, 관세 발효, 정상회담, 국빈 방한, 수출 계약 서명식
+- 산업 행사: 국제 전시회·컨퍼런스 개막, 입찰 결과 발표
+- 시장: 지수 편입·리밸런싱, 금리 결정, 주요 경제지표 발표
 
 [제외할 것]
 - 이미 지난 일 (과거형 서술)
@@ -101,6 +115,11 @@ function buildPrompt(headlines: string[], today: string, daysAhead: number): str
 - 사고·소송 등 부정적 이벤트만 있는 것 (투자자가 챙기려는 건 '재료'입니다)
 - **한국 증시와 무관한 것** — 해외 소비재 신제품 출시, 지역 행사, 한국에 상장되지
   않았고 한국 종목과도 연결이 없는 해외 소형주 일정. 이 서비스 사용자는 한국 투자자입니다.
+- ⛔ **지자체 생활 행정·지역 행사** — 공청회, 주민설명회, 축제·영화제·기념식, 공영주차장·
+  할인 정책, 농산물 예약판매, 학사일정, 지역 공연. 상장사 매출을 움직이지 않습니다.
+  이런 데에 농심·CJ ENM·강원랜드처럼 **억지로 종목을 붙이면 안 됩니다.**
+- 판단 기준 하나: "이 일정 때문에 특정 상장사의 실적이나 수주가 달라지는가?"
+  아니라면 담지 마세요. **적게 담는 편이 낫습니다.**
 
 [date 필드 — 가장 중요]
 헤드라인 앞의 [MM-DD]는 **기사가 나온 날**이지 일정 날짜가 아닙니다. 혼동하지 마세요.
@@ -130,7 +149,7 @@ JSON 배열만 출력하세요(다른 텍스트 없이):
 importance: 3=시장 전체가 주목, 2=해당 섹터 주목, 1=참고
 
 [뉴스 헤드라인]
-${headlines.slice(0, 160).join("\n")}`;
+${headlines.slice(0, 320).join("\n")}`;
 }
 
 /** 헤드라인 묶음 → 구조화된 예정 이벤트. 실패하면 빈 배열(분석을 막지 않는다) */
@@ -268,7 +287,7 @@ export async function getUpcomingEvents(daysAhead = 7): Promise<UpcomingEvent[]>
   // 하루가 깎인다(8/11 00:00 KST → 8/10T15:00Z → "2026-08-10"). 로컬 연·월·일로 찍는다.
   const isoLocal = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return rows.map((r: any) => ({
+  const list = rows.map((r: any) => ({
     eventDate: r.event_date instanceof Date ? isoLocal(r.event_date) : String(r.event_date).slice(0, 10),
     title: r.title,
     category: normalizeCategory(r.category),
@@ -278,6 +297,11 @@ export async function getUpcomingEvents(daysAhead = 7): Promise<UpcomingEvent[]>
     importance: Number(r.importance),
     source: r.source,
   }));
+
+  // 조회할 때도 한 번 더 걸러낸다. DB 유니크는 (날짜, 제목 그대로)라서 "인제니아 코스닥
+  // 상장"과 "인제니아, 코스닥 상장"이 각각 저장돼 있다 — 이미 쌓인 행은 지울 수 없으니
+  // 읽을 때 합친다.
+  return dedupeEvents(list);
 }
 
 /** 수집 → 추출 → 저장 한 번에. 스케줄러·수동 실행 공통 진입점. */
@@ -286,6 +310,15 @@ export async function refreshUpcomingEvents(daysAhead = 7): Promise<number> {
   const headlines = await collectEventNews(today, daysAhead);
   const events = await extractEvents(headlines, today, daysAhead);
   if (events.length === 0) { console.warn("[events] 추출된 일정이 없다 — 저장 생략"); return 0; }
+
+  // 이 기간은 **매번 새로 쓴다**. 안 그러면 예전 실행에서 들어온 잡음이 계속 남는다 —
+  // 걸러내는 규칙을 고쳐도 이미 저장된 "고흥군 햅쌀 예약판매" 같은 행이 그대로 보였다.
+  // 새로 뽑은 것이 있을 때만 지우므로, 수집이 실패한 날 화면이 비지는 않는다.
+  await pool.query(
+    `DELETE FROM upcoming_events WHERE event_date >= $1::date AND event_date <= $1::date + $2::int`,
+    [today, daysAhead],
+  ).catch(e => console.warn("[events] 기존 기간 정리 실패:", (e as Error)?.message?.slice(0, 60)));
+
   const saved = await saveEvents(events);
   console.log(`[events] ${saved}건 저장 완료 (${today} ~ +${daysAhead}일)`);
   return saved;
