@@ -104,6 +104,7 @@ const NAV_GROUPS = [
     labelEn: "Stocks",
     items: [
       { href: "/analysis/new", label: "기업 분석", labelEn: "Company Analysis", Icon: Sparkles },
+      { href: "/related-stocks", label: "관련주 찾기", labelEn: "Find Related", Icon: Search },
     ],
   },
   {

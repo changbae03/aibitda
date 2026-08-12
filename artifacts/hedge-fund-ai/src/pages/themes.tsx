@@ -292,122 +292,6 @@ interface ThemeHit {
 
 const THEME_PRESETS = ["CDMO", "반도체 클러스터", "HBM", "휴머노이드", "원자력", "전력기기"];
 
-function ThemeStockFinder({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
-  const [q, setQ] = useState("");
-  const [hits, setHits] = useState<ThemeHit[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  // 뉴스 말로 검색했는데 결과가 적으면 서버가 회사 말로 번역해 다시 찾는다.
-  // 무엇으로 찾았는지 보여줘야 결과를 믿을 수 있다.
-  const [used, setUsed] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState(false);
-
-  const run = async (keyword: string) => {
-    const kw = keyword.trim();
-    if (kw.length < 2) return;
-    setQ(kw); setLoading(true);
-    try {
-      const r = await fetch(getApiUrl(`api/events/theme-stocks?q=${encodeURIComponent(kw)}&limit=15`),
-                            { credentials: "include" });
-      const d = r.ok ? await r.json() : null;
-      setHits(Array.isArray(d?.hits) ? d.hits : []);
-      setUsed(Array.isArray(d?.keywords) ? d.keywords : []);
-      setExpanded(!!d?.expanded);
-    } catch { setHits([]); setUsed([]); setExpanded(false); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Search className="w-4 h-4 text-indigo-500" />
-        <h2 className="text-[14px] font-bold text-foreground">테마 관련주 찾기</h2>
-        <span className="text-[10.5px] text-foreground/40">사업보고서 원문 검색</span>
-      </div>
-      <p className="text-[11.5px] text-foreground/50 leading-relaxed">
-        뉴스가 짚어준 종목 말고, <b className="text-foreground/70">회사가 사업보고서에 직접 적어놓은</b> 것으로 찾습니다.
-        많이 언급할수록 그 사업이 중심입니다.
-      </p>
-
-      <form onSubmit={e => { e.preventDefault(); run(q); }} className="flex gap-2">
-        <input
-          value={q} onChange={e => setQ(e.target.value)}
-          placeholder="예: CDMO, 반도체 클러스터, 광주공항"
-          className="flex-1 rounded-xl bg-background/60 border border-border/50 px-3 py-2 text-[12.5px] outline-none focus:border-border"
-        />
-        <button type="submit" disabled={loading}
-                className="px-3.5 py-2 rounded-xl bg-foreground text-background text-[12px] font-semibold disabled:opacity-50">
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "찾기"}
-        </button>
-      </form>
-
-      <div className="flex flex-wrap gap-1.5">
-        {THEME_PRESETS.map(p => (
-          <button key={p} onClick={() => run(p)}
-                  className="text-[10.5px] px-2 py-1 rounded-lg bg-muted/60 text-foreground/60 hover:bg-muted hover:text-foreground/80 transition">
-            {p}
-          </button>
-        ))}
-      </div>
-
-      {expanded && used.length > 1 && (
-        <div className="rounded-xl bg-indigo-500/8 border border-indigo-500/20 px-3 py-2">
-          <p className="text-[10.5px] text-foreground/60 leading-relaxed">
-            <b className="text-indigo-600 dark:text-indigo-300">회사가 쓰는 말로 바꿔 찾았습니다.</b>{" "}
-            기사에 쓰는 표현은 사업보고서에 잘 안 나와서요.
-          </p>
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {used.slice(1).map(w => (
-              <span key={w} className="text-[10px] px-1.5 py-0.5 rounded-md bg-background/70 text-foreground/60">{w}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {hits !== null && (
-        hits.length === 0 ? (
-          <p className="text-[11.5px] text-foreground/40 py-3 text-center">
-            사업보고서에서 이 표현을 쓴 회사를 찾지 못했습니다. 다른 표현으로 시도해보세요.
-          </p>
-        ) : (
-          <div className="space-y-1.5 pt-1">
-            {hits.map(h => (
-              <button key={h.ticker} onClick={() => onAnalyze(h.ticker, h.name ?? h.ticker)}
-                      className="w-full text-left rounded-xl bg-background/60 border border-border/40 px-3 py-2.5 hover:border-border transition">
-                <div className="flex items-center gap-2">
-                  <span className="text-[12.5px] font-bold text-foreground truncate">{h.name ?? h.ticker}</span>
-                  <span className="text-[10px] text-foreground/40">{h.ticker}</span>
-                  {h.regionMatch && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-semibold shrink-0">
-                      📍 현지 시설
-                    </span>
-                  )}
-                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/12 text-indigo-600 dark:text-indigo-300 font-semibold shrink-0">
-                    {h.mentions}회 언급
-                  </span>
-                  {h.marketCap != null && (
-                    <span className="text-[10px] text-foreground/40 shrink-0">
-                      {Math.round(h.marketCap / 1e8).toLocaleString()}억
-                    </span>
-                  )}
-                </div>
-                {h.evidence && (
-                  <p className="text-[10.5px] text-foreground/50 leading-relaxed mt-1 line-clamp-2">
-                    “{h.evidence}”
-                  </p>
-                )}
-                {h.regionEvidence && (
-                  <p className="text-[10.5px] text-emerald-700/80 dark:text-emerald-300/70 leading-relaxed mt-1 line-clamp-1">
-                    📍 “{h.regionEvidence}”
-                  </p>
-                )}
-              </button>
-            ))}
-          </div>
-        )
-      )}
-    </div>
-  );
-}
 
 // ── 내일 오를 것 같은 종목 (통합) ──────────────────────────────────────────
 //
@@ -819,11 +703,6 @@ export default function ThemesPage() {
 
       {/* ── 테마 분석 탭 ───────────────────────────────────────── */}
       {activeSection === "themes" && <>
-
-      {/* 테마 관련주 찾기 — 뉴스가 아니라 사업보고서 원문에서 찾는다. 이 탭의 주인공. */}
-      <div className="mb-4">
-        <ThemeStockFinder onAnalyze={goAnalyze} />
-      </div>
 
       {/* 헤더 — 시장이 조용한 날 "핫"이라고 우기지 않는다.
           쏠림이 있는 테마(hot/momentum/emerging)가 있을 때만 그 수를 배지로 알린다. */}

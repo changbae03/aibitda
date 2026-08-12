@@ -165,6 +165,7 @@ export async function expandThemeKeywords(theme: string): Promise<string[]> {
 export function stripQuestionWords(raw: string): string {
   return String(raw ?? "")
     .replace(/(와|과|랑|이랑)?\s*(관련(이|되는|된|있는)?|연관(된|있는)?)\s*(있는)?\s*/g, " ")
+    .replace(/(만드는|생산하는|제조하는|납품하는|공급하는|영위하는|하는)\s*/g, " ")
     .replace(/(기업|회사|종목|주식|테마|관련주|수혜주)\s*(들)?\s*(을|를|은|는|이|가)?\s*/g, " ")
     .replace(/(찾아\s*줘|찾아줘|찾아|알려\s*줘|알려줘|보여\s*줘|보여줘|추천해\s*줘|추천)\s*/g, " ")
     .replace(/[?!.]/g, " ")
@@ -247,7 +248,9 @@ export async function searchThemeStocks(
     `WITH cand AS (
        SELECT d.ticker, d.bsns_year,
               (${countExpr}) AS mentions,
-              substring(d.doc from greatest(1, position(lower($1) in lower(d.doc)) - 60) for 220) AS snippet
+              substring(d.doc from greatest(1, (${kws.map((_, i) => `NULLIF(position(lower($${i + 1}) in lower(d.doc)), 0)`).join(", ")
+                ? `COALESCE(${kws.map((_, i) => `NULLIF(position(lower($${i + 1}) in lower(d.doc)), 0)`).join(", ")}, 1)`
+                : "1"}) - 60) for 220) AS snippet
               ${regionSel}
          FROM theme_search_docs d
         WHERE ${whereExpr}

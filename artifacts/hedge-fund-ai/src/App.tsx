@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 const Landing          = lazy(() => import("@/pages/landing"));
 const Login            = lazy(() => import("@/pages/login"));
 const NewAnalysis      = lazy(() => import("@/pages/new-analysis"));
+const RelatedStocks    = lazy(() => import("@/pages/related-stocks"));
 const AnalysisDetail   = lazy(() => import("@/pages/analysis-detail"));
 const History          = lazy(() => import("@/pages/history"));
 const ModelInsights    = lazy(() => import("@/pages/model-insights"));
@@ -275,6 +276,7 @@ function Router() {
             <Suspense fallback={<PageLoader />}>
               <Switch>
                 <Route path="/analysis/new" component={NewAnalysis} />
+                <Route path="/related-stocks" component={RelatedStocks} />
                 <Route path="/analysis/:id" component={AnalysisDetail} />
                 <Route path="/browse" component={Browse} />
                 <Route path="/history" component={History} />
