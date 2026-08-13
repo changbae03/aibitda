@@ -1273,7 +1273,6 @@ function FeedCard({
                   const vr  = stock.volumeRatio;
                   const hasChg = chg != null;
                   const chgUp  = (chg ?? 0) >= 0;
-                  const volBurst = vr != null && vr >= 1.5; // 거래량 1.5배 이상
                   return (
                     <motion.div
                       key={stock.ticker}
@@ -1295,14 +1294,6 @@ function FeedCard({
                             </span>
                           )}
                           <span className="text-sm font-semibold text-foreground leading-tight truncate">{stock.name}</span>
-                          <span className={cn(
-                            "text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
-                            stock.market === "KR"
-                              ? "bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400"
-                              : "bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400"
-                          )}>
-                            {stock.market}
-                          </span>
                         </div>
                         {/* 티커·섹터 행 */}
                         <div className="flex items-center gap-1 mt-0.5 min-w-0">
@@ -1315,7 +1306,7 @@ function FeedCard({
                           )}
                         </div>
                         {/* 수급 힘 지표 행 */}
-                        {(hasChg || volBurst || stock.smartMoneyAek != null) && (
+                        {(hasChg || stock.smartMoneyAek != null || stockSignalBadge(stock)) && (
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {hasChg && (
                               <span className={cn(
@@ -1325,11 +1316,6 @@ function FeedCard({
                                   : "text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400"
                               )}>
                                 {chgUp ? "+" : ""}{chg!.toFixed(2)}%
-                              </span>
-                            )}
-                            {volBurst && (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
-                                <Zap className="w-2.5 h-2.5" />거래량 {vr!.toFixed(1)}배
                               </span>
                             )}
                             {/* 스마트머니 우선 → 없으면 가격/거래량 신호 */}
