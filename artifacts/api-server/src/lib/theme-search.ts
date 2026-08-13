@@ -234,13 +234,21 @@ export async function searchThemeStocks(
   let regionSel = "";
   let regionOrder = "";
   if (regions.length > 0) {
-    const alt = regions.join("|");
-    params.push(`(${alt})[^.]{0,40}(공장|사업장|생산|공사|시설)`);
-    params.push(`(공장|사업장|생산|공사|시설)[^.]{0,40}(${alt})`);
-    params.push(regions[0]);
-    const a = params.length - 2, b = params.length - 1, c = params.length;
+    // ⚠️ 지역명을 그냥 붙이면 **다른 낱말 안에서** 걸린다. "성장성"에 "장성"이 들어 있어
+    // 대원강업·남선알미늄이 광주 지역주로 잡혔다. 앞뒤가 한글이면 지역명이 아니다.
+    const alt = `(?<![가-힣])(?:${regions.join("|")})(?![가-힣]{2,})`;
+    params.push(`${alt}[^.]{0,40}(?:공장|사업장|생산|공사|시설)`);
+    params.push(`(?:공장|사업장|생산|공사|시설)[^.]{0,40}${alt}`);
+    // ⚠️ 지역 근거를 regions[0]("광주")의 위치로 잡으면 안 된다. 실제로는 "전남 순천공장"
+    // 처럼 다른 지명으로 걸린 회사가 많고, 그때 position()이 0이 되어 문서 첫머리가
+    // 근거로 나온다("### [사업개요]…"). 그래서 **시설 문장 자체**를 정규식으로 뽑는다.
+    // substring(text from pattern)은 캡처 그룹이 있으면 그 그룹만 주므로 (?:…)를 쓴다.
+    params.push(`[^\\n.]{0,70}${alt}[^.]{0,40}(?:공장|사업장|생산|공사|시설)[^\\n.]{0,70}`);
+    params.push(`[^\\n.]{0,70}(?:공장|사업장|생산|공사|시설)[^.]{0,40}${alt}[^\\n.]{0,70}`);
+    const a = params.length - 3, b = params.length - 2;
+    const ca = params.length - 1, cb = params.length;
     regionSel = `, (d.doc ~ $${a} OR d.doc ~ $${b}) AS region_match,
-              substring(d.doc from greatest(1, position($${c} in d.doc) - 60) for 220) AS region_snippet`;
+              COALESCE(substring(d.doc from $${ca}), substring(d.doc from $${cb})) AS region_snippet`;
     regionOrder = "c.region_match DESC NULLS LAST, ";
   }
 
@@ -283,4 +291,60 @@ export async function searchThemeStocks(
     }
     return hit;
   });
+}
+
+/** 팝업에 보여줄 근거 구절 하나 */
+export interface Passage {
+  keyword: string;
+  text: string;
+}
+
+/**
+ * 한 종목의 사업보고서에서 **검색어가 나온 대목들**을 뽑는다.
+ *
+ * 목록에서는 근거를 한 줄만 보여준다. 하지만 "왜 이 회사가 나왔지"를 확인하려면
+ * 그 대목들을 더 봐야 한다 — 그게 이 화면의 값이다(목록이 아니라 근거).
+ * 종목 하나만 읽으므로 본문을 그대로 가져와 JS에서 자른다.
+ */
+export async function getThemePassages(
+  ticker: string, keywords: string[], perKeyword = 2,
+): Promise<{ bsnsYear: number; passages: Passage[] } | null> {
+  const kws = keywords.filter(k => k.length >= 2).slice(0, 8);
+  if (!ticker || kws.length === 0) return null;
+
+  const { rows } = await pool.query(
+    `SELECT bsns_year, doc FROM theme_search_docs WHERE ticker = $1`, [ticker],
+  );
+  if (rows.length === 0) return null;
+  const doc = String(rows[0].doc ?? "");
+  const lower = doc.toLowerCase();
+
+  const passages: Passage[] = [];
+  const seen = new Set<string>();
+  for (const k of kws) {
+    const needle = k.toLowerCase();
+    let at = lower.indexOf(needle);
+    let taken = 0;
+    while (at >= 0 && taken < perKeyword) {
+      // 문장 경계로 자른다 — 잘린 조각은 읽히지 않는다.
+      const from = Math.max(
+        doc.lastIndexOf("\n", at), doc.lastIndexOf(". ", at), at - 160, 0,
+      );
+      const dot = doc.indexOf(". ", at), nl = doc.indexOf("\n", at);
+      const to = Math.min(
+        dot < 0 ? doc.length : dot + 1,
+        nl < 0 ? doc.length : nl,
+        at + 220,
+      );
+      const text = doc.slice(from, to).replace(/\s+/g, " ").trim();
+      const key = text.slice(0, 40);
+      if (text.length >= 20 && !seen.has(key)) {
+        seen.add(key);
+        passages.push({ keyword: k, text });
+        taken++;
+      }
+      at = lower.indexOf(needle, at + needle.length);
+    }
+  }
+  return { bsnsYear: Number(rows[0].bsns_year), passages: passages.slice(0, 12) };
 }

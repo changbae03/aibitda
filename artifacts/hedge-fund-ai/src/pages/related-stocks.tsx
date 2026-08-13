@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Search, Loader2, Sparkles, MapPin } from "lucide-react";
+import { Search, Loader2, Sparkles, MapPin, X, FileText, ArrowRight } from "lucide-react";
 import { getApiUrl, cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 
@@ -48,6 +48,23 @@ export default function RelatedStocksPage() {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  // 목록의 값은 종목 이름이 아니라 **근거**다. 눌렀을 때 바로 분석으로 보내면
+  // "왜 이 회사가 나왔지"를 확인할 자리가 없어진다 — 근거를 먼저 펼쳐 보여준다.
+  const [detail, setDetail] = useState<Hit | null>(null);
+  const [passages, setPassages] = useState<{ keyword: string; text: string }[] | null>(null);
+
+  const openDetail = async (h: Hit) => {
+    setDetail(h); setPassages(null);
+    try {
+      const kw = (result?.keywords ?? []).join(",");
+      const r = await fetch(
+        getApiUrl(`api/events/theme-passages?ticker=${encodeURIComponent(h.ticker)}&q=${encodeURIComponent(kw)}`),
+        { credentials: "include" },
+      );
+      const d = r.ok ? await r.json() : null;
+      setPassages(Array.isArray(d?.passages) ? d.passages : []);
+    } catch { setPassages([]); }
+  };
 
   const run = async (raw: string) => {
     const text = raw.trim();
@@ -163,7 +180,7 @@ export default function RelatedStocksPage() {
           ) : (
             <div className="space-y-1.5">
               {result.hits.map((h, i) => (
-                <button key={h.ticker} onClick={() => goAnalyze(h.ticker, h.name ?? h.ticker)}
+                <button key={h.ticker} onClick={() => openDetail(h)}
                         className="w-full text-left rounded-2xl bg-card border border-border/50 px-4 py-3
                                    hover:border-border transition">
                   <div className="flex items-center gap-2">
@@ -197,6 +214,89 @@ export default function RelatedStocksPage() {
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── 근거 팝업 ────────────────────────────────────────────────────
+          "왜 이 회사가 나왔지"에 답하는 자리. 사업보고서에서 검색어가 나온
+          대목을 그대로 보여준다 — 요약하지 않는다(요약하면 근거가 아니다). */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+             onClick={() => setDetail(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+          <div className="relative w-full sm:max-w-lg max-h-[85dvh] bg-card rounded-t-3xl sm:rounded-3xl
+                          border border-border/60 shadow-xl flex flex-col animate-in slide-in-from-bottom-4 duration-200"
+               onClick={e => e.stopPropagation()}>
+            {/* 머리 */}
+            <div className="px-5 pt-5 pb-3 border-b border-border/40">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[19px] font-bold text-foreground truncate">
+                      {detail.name ?? detail.ticker}
+                    </h2>
+                    {detail.regionMatch && <MapPin className="w-4 h-4 text-emerald-500 shrink-0" />}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 text-[12px] text-muted-foreground/60">
+                    <span>{detail.ticker}</span>
+                    {detail.marketCap != null && (
+                      <><span>·</span><span>시총 {Math.round(detail.marketCap / 1e8).toLocaleString()}억</span></>
+                    )}
+                    <span>·</span>
+                    <span>{detail.bsnsYear}년 보고서</span>
+                  </div>
+                </div>
+                <button onClick={() => setDetail(null)}
+                        className="shrink-0 p-1.5 rounded-lg hover:bg-muted/60 transition"
+                        aria-label={isEn ? "Close" : "닫기"}>
+                  <X className="w-4 h-4 text-muted-foreground/60" />
+                </button>
+              </div>
+            </div>
+
+            {/* 근거 대목들 */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/60">
+                <FileText className="w-3.5 h-3.5" />
+                <span>{isEn ? "What the filing says" : "사업보고서에 이렇게 적혀 있어요"}</span>
+                <span className="ml-auto px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-semibold">
+                  {detail.mentions}{isEn ? "×" : "회 언급"}
+                </span>
+              </div>
+
+              {passages === null ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground/50">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-[12.5px]">{isEn ? "Loading…" : "불러오는 중…"}</span>
+                </div>
+              ) : passages.length === 0 ? (
+                <p className="text-[12.5px] text-muted-foreground/60 py-6 text-center">
+                  {isEn ? "No passage found." : "해당 대목을 찾지 못했어요."}
+                </p>
+              ) : (
+                passages.map((pg, i) => (
+                  <div key={i} className="rounded-xl bg-muted/30 border-l-2 border-primary/40 px-3.5 py-2.5">
+                    <span className="text-[10.5px] font-semibold text-primary/80">{pg.keyword}</span>
+                    <p className="text-[12.5px] text-foreground/80 leading-relaxed mt-1 break-keep">
+                      {pg.text}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 다음 걸음 — 근거를 봤으면 깊게 볼 수 있어야 한다 */}
+            <div className="px-5 py-3 border-t border-border/40">
+              <button
+                onClick={() => goAnalyze(detail.ticker, detail.name ?? detail.ticker)}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl
+                           bg-primary text-primary-foreground text-[13.5px] font-semibold transition hover:opacity-90"
+              >
+                {isEn ? "Analyze this company" : "이 기업 분석하기"}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

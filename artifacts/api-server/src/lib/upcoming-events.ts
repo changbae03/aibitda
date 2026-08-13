@@ -14,6 +14,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
+import { detectRegions, expandThemeKeywords, searchThemeStocks } from "./theme-search.js";
 
 import {
   normalizeCategory, parseEventDate, todayKst, dedupeEvents,
@@ -305,11 +306,57 @@ export async function getUpcomingEvents(daysAhead = 7): Promise<UpcomingEvent[]>
 }
 
 /** 수집 → 추출 → 저장 한 번에. 스케줄러·수동 실행 공통 진입점. */
+/**
+ * 지역이 걸린 일정에 **사업보고서 기반 관련주**를 더 붙인다.
+ *
+ * Gemini는 기사에 이름이 나온 종목만 안다. "광주 반도체 클러스터" 같은 계획에서
+ * 정작 움직이는 건 그 지역에 공장이 있는 건설·건자재 회사들인데, 기사에는 안 나온다.
+ * 그건 공시가 알고 있다 — theme-search가 지역 근접 매칭으로 찾아준다.
+ *
+ * Gemini 호출이 붙으므로 **지역이 잡힌 일정에만**, 한 번에 3건까지만 한다.
+ */
+async function enrichRegionalEvents(events: UpcomingEvent[]): Promise<void> {
+  const targets = events
+    .filter(e => detectRegions(`${e.title} ${e.summary ?? ""}`).length > 0)
+    .slice(0, 3);
+  if (targets.length === 0) return;
+
+  for (const e of targets) {
+    try {
+      const text = `${e.title} ${e.summary ?? ""}`;
+      const regions = detectRegions(text);
+      const kws = await expandThemeKeywords(e.title);
+      const hits = await searchThemeStocks(kws, 8, regions);
+      // 그 지역에 시설이 있다고 적어놓은 회사만 — 단순히 말이 겹친 건 재료가 아니다.
+      const picked = hits.filter(h => h.regionMatch && h.name).slice(0, 4);
+      if (picked.length === 0) continue;
+
+      const known = new Set(e.tickers.map(t => t.ticker ?? t.name));
+      for (const h of picked) {
+        if (known.has(h.ticker) || known.has(h.name!)) continue;
+        e.tickers.push({
+          ticker: h.ticker, name: h.name!,
+          why: `${regions[0]} 인근 생산시설 (사업보고서)`,
+        });
+      }
+      console.log(`[events] "${e.title.slice(0, 20)}" 지역 관련주 ${picked.length}개 추가`);
+    } catch (err) {
+      console.warn("[events] 지역 관련주 확장 실패:", (err as Error)?.message?.slice(0, 60));
+    }
+  }
+}
+
 export async function refreshUpcomingEvents(daysAhead = 7): Promise<number> {
   const today = todayKst();
   const headlines = await collectEventNews(today, daysAhead);
   const events = await extractEvents(headlines, today, daysAhead);
   if (events.length === 0) { console.warn("[events] 추출된 일정이 없다 — 저장 생략"); return 0; }
+
+  // 지역 산업 계획은 이 기능이 가장 잘 하는 일이다 — "8월 10일 광주 반도체 클러스터"
+  // 하나로 그 지역 건설·건자재 기업이 부각될 걸 미리 잡을 수 있다. 그런데 Gemini는
+  // 기사에 이름이 나온 한두 종목만 붙인다. **그 지역에 실제로 공장이 있는 회사**는
+  // 사업보고서가 알고 있으므로, 지역이 걸린 일정에는 공시로 관련주를 더 찾아 붙인다.
+  await enrichRegionalEvents(events);
 
   // 이 기간은 **매번 새로 쓴다**. 안 그러면 예전 실행에서 들어온 잡음이 계속 남는다 —
   // 걸러내는 규칙을 고쳐도 이미 저장된 "고흥군 햅쌀 예약판매" 같은 행이 그대로 보였다.

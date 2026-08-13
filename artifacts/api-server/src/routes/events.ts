@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
-import { searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords } from "../lib/theme-search.js";
+import { getThemePassages, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -67,6 +67,24 @@ router.get("/theme-stocks", async (req, res) => {
   } catch (e) {
     console.warn("[theme-search] 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "theme_search_failed" });
+  }
+});
+
+/**
+ * 한 종목의 사업보고서에서 검색어가 나온 대목들 — 목록에서 회사를 눌렀을 때 뜨는 팝업.
+ * 목록의 값은 종목 이름이 아니라 **근거**이므로, 그 근거를 더 볼 수 있어야 한다.
+ */
+router.get("/theme-passages", async (req, res) => {
+  try {
+    const ticker = String(req.query["ticker"] ?? "").trim();
+    const kws = parseKeywords(String(req.query["q"] ?? ""));
+    if (!ticker || kws.length === 0) { res.status(400).json({ error: "ticker_and_q_required" }); return; }
+    const found = await getThemePassages(ticker, kws);
+    if (!found) { res.json({ ticker, bsnsYear: null, passages: [] }); return; }
+    res.json({ ticker, ...found });
+  } catch (e) {
+    console.warn("[theme-passages] 실패:", (e as Error)?.message?.slice(0, 80));
+    res.status(500).json({ error: "theme_passages_failed" });
   }
 });
 
