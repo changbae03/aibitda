@@ -1206,9 +1206,12 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
       {/* ── 단계 지도 — 주식 관점의 단계들 중 이 기업이 어디에 있나 ── */}
       {!isEn && (
         <div className="mb-4">
-          <p className="text-[11px] font-semibold text-muted-foreground">기업이 놓이는 단계들</p>
+          {/* 이 지도의 정체를 그대로 적는다 — 판정 근거가 2축 매트릭스(실체 × 기대)이므로
+              "단계들"이라고만 하면 무엇을 나눈 것인지 알 수 없다. */}
+          <p className="text-[11px] font-semibold text-muted-foreground">사업 사이클 × 주가 사이클</p>
           <p className="text-[10.5px] text-muted-foreground/70 mt-0.5 mb-2 leading-relaxed">
-            좋고 나쁨의 순서가 아닙니다 — 성격이 다르고, 그래서 확인할 것이 다릅니다.
+            실적이 어디쯤 왔는지와, 주가에 기대가 얼마나 앞서 실렸는지를 겹쳐 아홉 자리로 나눈 것입니다.
+            좋고 나쁨의 순서가 아니라 자리마다 확인할 것이 다릅니다.
           </p>
           {/* 칩은 작게 유지한다 — 아홉 칸을 다 펼치면 정작 본문(사업보고서 분석)이 밀린다.
               대신 **누르면** 그 단계의 성격·위험·봐야 할 것을 아래에 펼친다. */}
