@@ -6862,13 +6862,13 @@ const MD_BODY_COMPONENTS = {
     const kinds = chartsForHeading(clean || text);
     return (
       <>
-        <div className="flex items-center gap-2 mt-7 mb-3 first:mt-0">
-          <span className="h-px flex-1 bg-border/50" />
-          <h2 className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-muted-foreground/60 shrink-0">
-            {clean || text}
-          </h2>
-          <span className="h-px flex-1 bg-border/50" />
-        </div>
+        {/* 소제목은 h2·h3가 **같은 언어**를 쓴다 — 왼쪽 액센트 막대.
+            예전에는 h2가 가운데 정렬 + 양쪽 선, h3는 왼쪽 막대라 한 문서 안에서
+            서로 다른 서식이 섞였다. 층은 크기·굵기로만 나눈다. */}
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">
+          <span className="w-[3px] h-4 rounded-full bg-primary/60 shrink-0" />
+          {clean || text}
+        </h2>
         {kinds.length > 0 && <InlineMetricChart kinds={kinds} />}
       </>
     );
@@ -6882,16 +6882,18 @@ const MD_BODY_COMPONENTS = {
     const kinds = chartsForHeading(clean || text);
     return (
       <>
-        <h3 className="flex items-center gap-2 text-[13px] font-semibold text-foreground/80 mt-5 mb-2">
-          <span className="w-[2px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
+        <h3 className="flex items-center gap-2 text-[13.5px] font-semibold text-foreground/80 mt-5 mb-2">
+          <span className="w-[3px] h-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
           {clean || text}
         </h3>
         {kinds.length > 0 && <InlineMetricChart kinds={kinds} />}
       </>
     );
   },
+  // h4 — 가장 깊은 층. 막대 없이 크기·색으로만 낮춘다.
+  // (예전엔 15px라 h2와 같은 크기여서 층이 무너져 있었다)
   h4: ({ children }: any) => (
-    <h4 className="text-[15px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
+    <h4 className="text-[12.5px] font-semibold text-foreground/70 mt-3.5 mb-1.5">{children}</h4>
   ),
   p: ({ children }: any) => {
     const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
