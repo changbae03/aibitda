@@ -42,7 +42,7 @@ let middayBriefToday      = "";   // 11:00 KST 장중 1차 브리핑
 let afternoonBriefToday   = "";   // 14:00 KST 장중 2차 브리핑
 let eveningBriefToday     = "";   // 22:00 KST 야간 브리핑
 let closingBriefToday     = "";   // 16:30 KST 장마감 브리핑
-let eventsRefreshedToday  = "";   // 17:10 KST 다가오는 일정 갱신
+let eventsRefreshedSlot   = "";   // 다가오는 일정 — 3시간마다 (슬롯 중복 방지)
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
 // 미국 브리핑 (KST 기준 날짜 사용 — 자정 넘어도 같은 날로 취급)
@@ -231,9 +231,13 @@ function checkAndRun() {
   //
   // 장이 끝나고 그날 뉴스가 다 쌓인 뒤에 돌린다. 사용자는 장 끝나고 "내일 뭐 있나"를
   // 보므로 그 전에 채워져 있어야 한다. 실패해도 다른 스케줄을 막지 않는다(어제 것이 남는다).
-  if (utcH === 8 && utcM === 10 && dow >= 1 && dow <= 5 && eventsRefreshedToday !== dateStr) {
-    eventsRefreshedToday = dateStr;
-    console.log("[scheduler] 다가오는 일정 갱신 시작 (17:10 KST)");
+  // 하루 한 번이면 아침에 뜬 일정이 저녁까지 안 붙는다 — 뉴스는 온종일 나온다.
+  // 3시간마다 돌린다(UTC 매 3시간 :10). 평일만 볼 이유도 없다 — 정부 발표·해외
+  // 이벤트는 주말에도 예고된다. 갱신은 지우고 다시 쓰는 방식이라 중복이 쌓이지 않는다.
+  const eventSlot = `${dateStr}-${utcH}`;
+  if (utcH % 3 === 0 && utcM === 10 && eventsRefreshedSlot !== eventSlot) {
+    eventsRefreshedSlot = eventSlot;
+    console.log(`[scheduler] 다가오는 일정 갱신 시작 (${(utcH + 9) % 24}시 KST)`);
     refreshUpcomingEvents(7)
       .then(n => console.log(`[scheduler] 다가오는 일정 ${n}건 저장`))
       .catch(e => console.error("[scheduler] 다가오는 일정 갱신 실패:", e?.message));
@@ -304,7 +308,7 @@ export function startMarketScheduler() {
   console.log("  [KR] 장중 1차 브리핑: 평일 11:00 KST (= 02:00 UTC)");
   console.log("  [KR] 장중 2차 브리핑: 평일 14:00 KST (= 05:00 UTC)");
   console.log("  [KR] 장마감 브리핑:   평일 16:30 KST (= 07:30 UTC)");
-  console.log("  [KR] 다가오는 일정:   평일 17:10 KST (= 08:10 UTC)");
+  console.log("  [KR] 다가오는 일정:   3시간마다 (UTC 매 3시간 :10)");
   console.log("  [KR] 야간 브리핑:     평일 22:00 KST (= 13:00 UTC)");
   console.log("  [US] 개장 전 브리핑: 평일 17:00 KST");
   console.log("  [US] 장중 1차 브리핑: 평일 23:30 KST");
