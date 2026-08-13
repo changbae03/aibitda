@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyStage, scoreSubstance, phaseMeta } from "./stage-classifier.js";
+import { classifyStage, scoreSubstance, phaseMeta, detectClinicalPipeline } from "./stage-classifier.js";
 
 /**
  * 국면 판정의 안전망. 실제 SK하이닉스 궤적(쇠퇴→턴어라운드→숫자싸움)을 픽스처로 고정한다.
@@ -265,5 +265,41 @@ describe("임상 바이오는 제조업 잣대로 재지 않는다 — 메디포
   it("왜 다르게 봤는지 근거에 남긴다", () => {
     const r = scoreSubstance({ ...메디포스트, isClinicalBio: true });
     expect(r.reasons.some(x => x.includes("임상단계 바이오"))).toBe(true);
+  });
+});
+
+describe("임상 파이프라인은 업종명이 아니라 사업보고서로 가른다", () => {
+  /**
+   * 업종명으로 가르면 위험하다 — 메디포스트는 industry가 null이었고, 바이오 업종이어도
+   * 임상을 안 하는 회사(진단·유통)가 섞인다. 실측한 언급 횟수가 깔끔하게 갈랐다:
+   *   메디포스트 7건 · 강스템 4건 (임상)  vs  셀트리온 1건 · 삼성바이오로직스 0건
+   * CDMO는 남의 약을 만들 뿐이라 **자기 임상이 없다.**
+   */
+  it("임상 단계를 여러 번 적은 회사는 파이프라인 보유", () => {
+    const doc = "당사는 카티스템의 미국 임상 3상을 진행 중이며, 임상 2상 결과를 바탕으로 전임상 단계의 후속 파이프라인도 개발하고 있습니다.";
+    const r = detectClinicalPipeline(doc);
+    expect(r.hasPipeline).toBe(true);
+    expect(r.mentions).toBeGreaterThanOrEqual(2);
+  });
+
+  it("한 번 스친 언급으로는 파이프라인이라 하지 않는다 — 셀트리온 사례", () => {
+    const doc = "당사는 바이오시밀러를 생산하며, 일부 제품은 임상 3상을 거쳐 허가받았습니다. 주력은 시밀러 판매입니다.";
+    expect(detectClinicalPipeline(doc).hasPipeline).toBe(false);
+  });
+
+  it("CDMO 서술에는 자기 임상이 없다 — 삼성바이오로직스 사례", () => {
+    const doc = "당사는 고객사의 바이오의약품을 위탁생산(CDMO)하며 공정개발과 품질관리를 제공합니다.";
+    const r = detectClinicalPipeline(doc);
+    expect(r.hasPipeline).toBe(false);
+    expect(r.mentions).toBe(0);
+  });
+
+  it("비바이오는 당연히 0건", () => {
+    expect(detectClinicalPipeline("반도체 장비를 생산하여 공급합니다.").mentions).toBe(0);
+  });
+
+  it("왜 그렇게 봤는지 근거 문장을 남긴다", () => {
+    const r = detectClinicalPipeline("당사의 주력 파이프라인은 임상 3상에 진입했으며 전임상 과제도 있습니다.");
+    expect(r.evidence).toBeTruthy();
   });
 });

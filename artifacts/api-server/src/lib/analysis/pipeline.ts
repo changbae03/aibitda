@@ -28,7 +28,7 @@ import { collectUSBizReports } from "../us-biz-reports.js";
 import { computeWorkingCapital, renderWorkingCapital, computeCapex, renderCapex, computeHealth, renderHealthTrend, computeQuarterWC } from "../working-capital.js";
 import { aggregateEmployees, renderHeadcount, extractCustomerConcentration, renderCustomerConcentration } from "../company-facts.js";
 import {
-  classifyStage, renderStageVerdict, pctChange, capexTrendOf,
+  classifyStage, renderStageVerdict, pctChange, capexTrendOf, detectClinicalPipeline,
   percentileAgainst, expectationPercentile, type StageSignals,
 } from "../stage-classifier.js";
 import { getSectorBand } from "../valuation/sector-bands.js";
@@ -843,8 +843,17 @@ async function executeStep(
               `SELECT industry, kis_industry, opm FROM stocks WHERE ticker = $1 LIMIT 1`,
               [analysis.ticker],
             ))[0];
+            // 업종명만 믿지 않는다 — 비어 있는 회사가 많고(메디포스트 industry=null),
+            // 바이오 업종이어도 임상을 안 하는 회사(진단·유통)가 섞인다.
+            // **사업보고서에 임상 단계가 실제로 적혀 있는가**를 먼저 본다.
+            const docRow = (await rawQuery(
+              `SELECT doc FROM theme_search_docs WHERE ticker = $1 LIMIT 1`, [analysis.ticker],
+            ))[0];
+            const pl = detectClinicalPipeline(String(docRow?.doc ?? ""));
             const ind = `${m?.industry ?? ""} ${m?.kis_industry ?? ""} ${analysis.industry ?? ""}`;
-            const isBioSector = /바이오|제약|생명공학|의약|Biotech|Pharmaceutical|Drug/i.test(ind);
+            // 파이프라인 근거가 있으면 그걸 쓰고, 본문이 없을 때만 업종명으로 넘어간다.
+            const isBioSector = pl.hasPipeline
+              || (pl.mentions === 0 && /바이오|제약|생명공학|의약|Biotech|Pharmaceutical|Drug/i.test(ind));
             // ⚠️ 종목 마스터의 opm은 자주 비어 있다(메디포스트가 그랬다). 그래서
             // **방금 조회한 실제 재무**로 먼저 계산하고, 없을 때만 마스터를 본다.
             const opmFromFin = annualRows.length > 0 ? opmOf(annualRows[0]) : null;
@@ -852,7 +861,7 @@ async function executeStep(
               : (m?.opm == null ? null : Number(m.opm));
             if (isBioSector && opm != null && opm < 5) {
               stageSig.isClinicalBio = true;
-              console.log(`[${stepKey}] 임상단계 바이오로 판정 (OPM ${opm}%) — 마진 감점 제외`);
+              console.log(`[${stepKey}] 임상단계 바이오로 판정 (임상 언급 ${pl.mentions}건, OPM ${opm.toFixed(1)}%) — 마진 감점 제외`);
             }
           } catch { /* 판정 실패는 기존 방식으로 진행 */ }
 

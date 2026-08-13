@@ -391,3 +391,60 @@ export function renderStageVerdict(v: StageVerdict): string {
     "   원문 근거가 다른 국면을 가리키면 다른 판정을 제시하되, **무엇을 보고 그렇게 봤는지** 밝히세요.",
   ].join("\n");
 }
+
+// ─── 임상 파이프라인 감지 ─────────────────────────────────────────────────────
+//
+// "바이오면 마진을 안 본다"를 **업종명**으로 판정하면 위험하다. 업종이 비어 있는
+// 회사가 많고(메디포스트는 industry가 null이었다), 바이오 업종이어도 임상을 안 하는
+// 회사(진단·유통)까지 묶인다.
+//
+// 그래서 **사업보고서에 임상 단계가 실제로 적혀 있는가**로 본다. 실측이 깔끔했다:
+//   메디포스트 7건 · 강스템 4건 (임상 바이오)
+//   셀트리온 1건 · 삼성바이오로직스 0건 (이미 버는 시밀러·CDMO)
+//   SK하이닉스 0건 (비바이오 — 자동 배제)
+// CDMO는 남의 약을 만들 뿐이라 자기 임상이 없다. 그 차이가 그대로 드러난다.
+
+export interface PipelineEvidence {
+  /** 임상 파이프라인을 굴리는 회사인가 */
+  hasPipeline: boolean;
+  /** 임상 단계 언급 횟수 — 많을수록 파이프라인이 사업의 중심 */
+  mentions: number;
+  /** 근거 문장(있으면) */
+  evidence: string | null;
+}
+
+/** 임상 단계 표현들. 자기 임상을 굴릴 때만 쓰는 말로 좁힌다. */
+const CLINICAL_PATTERNS: RegExp[] = [
+  /임상\s*[1-3]\s*상/g,
+  /전임상|비임상/g,
+  /\bIND\b|\bNDA\b|\bBLA\b/g,
+  /임상시험\s*(승인|계획|신청|진입)/g,
+];
+
+/**
+ * 사업보고서 본문에서 임상 파이프라인 근거를 센다.
+ * 문턱 2건 — 1건은 남의 임상을 언급했을 수 있다(셀트리온이 그런 경우였다).
+ */
+export function detectClinicalPipeline(doc: string): PipelineEvidence {
+  const text = String(doc ?? "");
+  if (!text) return { hasPipeline: false, mentions: 0, evidence: null };
+
+  let mentions = 0;
+  let evidence: string | null = null;
+  for (const re of CLINICAL_PATTERNS) {
+    const found = text.match(re);
+    if (!found) continue;
+    mentions += found.length;
+    if (!evidence) {
+      // 처음 걸린 자리의 문장을 근거로 남긴다 — 조용한 판정을 만들지 않는다.
+      const at = text.search(re);
+      if (at >= 0) {
+        const from = Math.max(0, text.lastIndexOf("\n", at), at - 120);
+        const to = Math.min(text.length, at + 140);
+        const s = text.slice(from, to).replace(/\s+/g, " ").trim();
+        if (s.length >= 15) evidence = s.slice(0, 200);
+      }
+    }
+  }
+  return { hasPipeline: mentions >= 2, mentions, evidence };
+}
