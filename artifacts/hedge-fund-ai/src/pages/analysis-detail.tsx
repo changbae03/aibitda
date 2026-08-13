@@ -3840,8 +3840,14 @@ export default function AnalysisDetail() {
             } else if (msg.qc === "revised") {
               setStreamingStep(prev => prev ? { ...prev, qcStatus: "revised", qcScore: msg.score } : null);
             }
-            // msg.t (text token) — StreamingCard가 content를 표시하지 않으므로
-            // state 업데이트 없이 무시. 서버가 DB에 저장 후 refetch로 표시됨.
+            // 글자가 도착하면 **바로 화면에 쌓는다.**
+            //
+            // 예전에는 여기서 토큰을 버리고 저장이 끝난 뒤 refetch로만 보여줬다.
+            // 그래서 사업보고서 단계(42초)는 그 시간 내내 스피너만 돌았다 — 서버는
+            // 글을 계속 보내고 있었는데도. 읽는 사람은 다 쓰이길 기다릴 필요가 없다.
+            if (typeof msg.t === "string" && msg.t.length > 0) {
+              setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : prev);
+            }
             if (msg.done) {
               queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
               completedSuccessfully = true;
@@ -4550,9 +4556,24 @@ export default function AnalysisDetail() {
                 </ReportMetricsProvider>
               </ErrorBoundary>
             ) : streamingDart ? (
-              <div className="flex items-center gap-3 py-6 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#10B981" }} />
-                <span className="text-sm text-muted-foreground">{isEn ? "Speed-reading filings… skipping the fluff 📄" : "사업보고서 정독 중… CEO 자랑은 건너뜀 📄"}</span>
+              /* 이 단계는 42초쯤 걸린다. 다 쓰일 때까지 스피너만 보여주면 그 시간이
+                 통째로 빈 화면이 된다 — 글은 이미 도착하고 있으니 **오는 대로 읽힌다.** */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" style={{ color: "#10B981" }} />
+                  <span className="text-[12px] text-muted-foreground">
+                    {isEn ? "Reading filings…" : "사업보고서 읽는 중…"}
+                  </span>
+                </div>
+                {streamingStep?.content ? (
+                  <div className="animate-in fade-in duration-300">
+                    <MdBlock src={streamingStep.content} isEn={isEn} />
+                  </div>
+                ) : (
+                  <p className="text-[12.5px] text-muted-foreground/60 py-3">
+                    {isEn ? "Skipping the CEO's bragging 📄" : "CEO 자랑은 건너뛰는 중 📄"}
+                  </p>
+                )}
               </div>
             ) : null}
           </NarrativeSectionBlock>
