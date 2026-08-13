@@ -3025,10 +3025,11 @@ function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
               }}
             />
           </div>
-          <div className="flex gap-3 mt-2 text-[11px] text-muted-foreground/60">
-            <span>✅ {passCount}</span>
-            <span>⚠️ {warnCount}</span>
-            <span>❌ {failCount}</span>
+          {/* 기호만 두면 무슨 뜻인지 묻게 된다 — 실제로 그런 질문을 받았다. 뜻을 같이 적는다. */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground/70">
+            <span>✅ {isEn ? "Positive" : "긍정"} {passCount}</span>
+            <span>⚠️ {isEn ? "Mixed" : "주의"} {warnCount}</span>
+            <span>❌ {isEn ? "Risk" : "부정"} {failCount}</span>
           </div>
         </div>
       </div>
@@ -4783,10 +4784,14 @@ export default function AnalysisDetail() {
         if (!showSection) return null;
         return (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
+          {/* 부제에 개수를 적어두면 어긋난다 — 실제 항목은 12개인데 "10가지"로 남아 있었다.
+              일반 기업과 바이오는 항목 구성도 다르다. 개수 대신 판정 기준만 적는다. */}
           <NarrativeSectionBlock
             num={6}
             title={isEn ? "Investment Checklist" : "투자 체크리스트"}
-            subtitle={isEn ? "10 must-check criteria · pass / warn / fail" : "주식 볼 때 반드시 점검해야 할 10가지"}
+            subtitle={isEn
+              ? "Must-check criteria · positive / mixed / risk"
+              : "주식 볼 때 반드시 점검해야 할 항목 · 긍정 / 주의 / 부정"}
             accent="#10b981"
             pending={!checklistStep && !streamingChecklist}
             isEn={isEn}
