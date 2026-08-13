@@ -66,12 +66,20 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
 //   2번 실적·재무(company_analysis) → 3번 사업보고서 행간(dart_report_analysis)
 // 숫자를 먼저 보여주고, 그 숫자가 "왜" 그렇게 됐는지를 사업보고서에서 읽는 흐름이다.
 // 그래서 행간 단계가 재무 결과를 받아야 한다(각 단계는 앞 단계 결과만 볼 수 있다).
+/**
+ * ⚠️ **화면에 보이는 번호 순서와 같아야 한다.**
+ *
+ * 사업보고서 단계(화면 3번)가 실행은 5번째라, 4번 카드가 다 나온 뒤에도 3번이
+ * "읽는 중"으로 남아 있었다. 단계 자체는 22초인데(자료 준비 4.6초 + 생성 18초)
+ * 앞 단계를 기다리는 시간이 붙어 훨씬 늦게 보였다.
+ * 촉매(4번)를 뒤로 보내 순서를 맞춘다 — 뉴스는 사업보고서 맥락을 받고 쓰는 편이 낫다.
+ */
 export const STEP_ORDER: AgentKey[] = [
   "company_intro",
   "industry_analysis",
-  "catalyst_analysis",
   "company_analysis",
   "dart_report_analysis",
+  "catalyst_analysis",
   "investment_strategy",
   "investment_thesis",
   "checklist",

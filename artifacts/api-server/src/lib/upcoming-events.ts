@@ -17,7 +17,7 @@ import { pool } from "@workspace/db";
 import { detectRegions, expandThemeKeywords, searchThemeStocks } from "./theme-search.js";
 
 import {
-  normalizeCategory, parseEventDate, todayKst, dedupeEvents, isMarketRelevant,
+  normalizeCategory, parseEventDate, todayKst, dedupeEvents, isMarketRelevant, dateEvidenceSupports,
   type UpcomingEvent, type EventCategory,
 } from "./event-format.js";
 
@@ -148,6 +148,13 @@ function buildPrompt(headlines: string[], today: string, daysAhead: number): str
 본문이 "8월 13일 발표"라고 하면 date는 반드시 "2026-08-13"입니다. 요약에 적은 날짜와
 date 필드가 **반드시 같아야** 합니다 — 다르면 사용자가 하루 전에 놓칩니다.
 
+[dateEvidence — 날짜의 근거를 **헤드라인에서 그대로** 옮겨 적으세요]
+날짜를 알아낸 부분을 원문 그대로 씁니다(예: "오는 19일 실적발표", "8월 20일 개막").
+서버가 이 문구와 date를 대조해, 맞지 않으면 그 일정을 버립니다.
+지어내지 마세요 — 근거를 못 적겠으면 그 일정은 담지 않는 것이 맞습니다.
+⚠️ **기사가 나온 날에 이미 열린 회의는 지난 일입니다.** 실제로 8월 10일에 열린
+민관합동 점검회의가 오늘(8월 13일) 일정으로 들어갔습니다.
+
 [importance — 반드시 구분해서 매기세요. 전부 2로 주면 쓸모가 없습니다]
 - 3: 시장 전체·대형주가 움직임 (정부 대형 정책, 대표기업 실적·수주, 금리 결정)
 - 2: 해당 섹터가 움직임 (업종 정책, 중형주 임상 결과, 지수 리밸런싱)
@@ -176,7 +183,8 @@ JSON 배열만 출력하세요(다른 텍스트 없이):
     "summary": "무슨 일인지 한 문장. 왜 주가에 영향을 주는지 포함",
     "sectors": ["건설", "인프라"],
     "tickers": [{ "name": "금호건설", "ticker": "002990", "why": "메가프로젝트 수혜 대표주" }],
-    "importance": 3
+    "importance": 3,
+    "dateEvidence": "오는 12일 메가프로젝트 점검회의를 열어"
   }
 ]
 importance: 3=시장 전체가 주목, 2=해당 섹터 주목, 1=참고
@@ -228,12 +236,14 @@ export async function extractEvents(
                 },
               },
               importance: { type: "integer" },
+              // 날짜의 **근거**를 그대로 옮겨 적게 한다. 서버가 이걸로 검산한다.
+              dateEvidence: { type: "string" },
             },
             // ⚠️ **필수로 적지 않으면 안 채운다.** sectors·importance·summary를 선택으로
             // 뒀더니 11건 전부 `sectors: []`, `importance: 2`로 왔다(전부 기본값).
             // 화면에서 "어느 산업이 부각되나"를 말해주는 것이 바로 sectors인데,
             // 그게 늘 비어 있으니 일정만 있고 인사이트가 없었다.
-            required: ["date", "title", "category", "summary", "sectors", "importance"],
+            required: ["date", "title", "category", "summary", "sectors", "importance", "dateEvidence"],
           },
         } as any,
       },
@@ -257,10 +267,17 @@ export async function extractEvents(
       }
     }
     const out: UpcomingEvent[] = [];
+    const dropped: string[] = [];
     for (const r of raw) {
       const date = parseEventDate(String(r?.date ?? ""), today, daysAhead + 3);
       const title = String(r?.title ?? "").trim();
       if (!date || title.length < 3) continue;   // 날짜·제목 없으면 쓸모없다
+      // 날짜는 **서버가 검산한다.** LLM은 근거 없이 오늘로 찍는다 —
+      // 8월 10일에 열린 점검회의가 8월 13일 일정으로 들어왔다.
+      if (!dateEvidenceSupports(date, String(r?.dateEvidence ?? ""))) {
+        dropped.push(`${date} ${title.slice(0, 20)} (근거 "${String(r?.dateEvidence ?? "").slice(0, 24)}")`);
+        continue;
+      }
       out.push({
         eventDate: date,
         title: title.slice(0, 80),
@@ -277,6 +294,9 @@ export async function extractEvents(
         importance: [1, 2, 3].includes(Number(r?.importance)) ? Number(r.importance) : 2,
         source: "news",
       });
+    }
+    if (dropped.length > 0) {
+      console.warn(`[events] 날짜 근거가 맞지 않아 ${dropped.length}건 제외: ${dropped.slice(0, 3).join(" / ")}`);
     }
     const deduped = dedupeEvents(out);
     console.log(`[events] 추출 ${raw.length}건 → 유효 ${out.length}건 → 중복제거 ${deduped.length}건`);
@@ -396,19 +416,27 @@ async function enrichRegionalEvents(events: UpcomingEvent[]): Promise<void> {
 async function enrichIndustryEvents(events: UpcomingEvent[]): Promise<void> {
   // "사람이 오거나, 정책이 움직이는" 일정 — 기사에 안 나오는 수혜주가 실제로 있는 자리다.
   const HINT = /방한|내한|순방|정상회담|협력\s*논의|업무협약|MOU|육성|활성화\s*방안|실증|클러스터|국가산단|착공|수주/;
+  // ⚠️ **거시·외교 섹터로는 관련주를 찾지 말 것.** "중국 왕이 외교부장 방한"에
+  // 섹터가 ['외교','반도체','배터리']로 붙자, 사업보고서에 그 말이 흔한 회사가
+  // 줄줄이 걸려 에이프로젠바이오로직스까지 붙었다. 만드는 물건이 정해진 일정만 한다.
+  const VAGUE = /외교|국제정세|무역|지역경제|사회적경제|금융시장|경기|정책$/;
   const targets = events
     .filter(e => e.importance >= 2 && HINT.test(`${e.title} ${e.summary ?? ""}`))
     .filter(e => detectRegions(`${e.title} ${e.summary ?? ""}`).length === 0) // 지역은 저쪽이 맡는다
+    .filter(e => (e.sectors ?? []).some(s => s.length >= 2 && !VAGUE.test(s)))
     .slice(0, 3);
   if (targets.length === 0) return;
 
   for (const e of targets) {
     try {
-      // 섹터가 잡혀 있으면 그게 더 정확한 검색어다 — 제목에는 사람 이름만 있을 때가 많다.
-      const theme = e.sectors?.length ? `${e.sectors.join(" ")} ${e.title}` : e.title;
+      // 검색어는 **섹터만** 쓴다. 제목을 넣으면 사람 이름·기관명이 확장돼 엉뚱한
+      // 말로 번진다("왕이 외교부장" → 외교·협력 같은 흔한 낱말).
+      const theme = (e.sectors ?? []).filter(s => !VAGUE.test(s)).join(" ");
+      if (!theme) continue;
       const kws = await expandThemeKeywords(theme);
       const hits = await searchThemeStocks(kws, 10);
-      const picked = hits.filter(h => h.name && h.mentions >= 2).slice(0, 4);
+      // 스치듯 언급한 회사는 재료가 아니다. 사업의 중심에 두고 쓴 회사만 받는다.
+      const picked = hits.filter(h => h.name && h.mentions >= 5).slice(0, 4);
       if (picked.length === 0) continue;
 
       const known = new Set(e.tickers.map(t => t.ticker ?? t.name));

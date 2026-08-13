@@ -126,3 +126,26 @@ export function dedupeEvents(events: UpcomingEvent[]): UpcomingEvent[] {
   );
 }
 
+
+/**
+ * 일정 날짜가 **근거 문구와 맞는가.** 안 맞으면 그 일정은 버린다.
+ *
+ * LLM은 날짜를 모를 때 오늘로 찍는다. 실제로 8월 10일에 **이미 열린** 민관합동
+ * 점검회의가 8월 13일 일정으로 들어왔고, 사용자가 "3일 전에 했던 이벤트"라고 알려줬다.
+ * 프롬프트로 "혼동하지 마세요"라고 이미 적어뒀지만 지시는 확률이다 — 서버가 센다.
+ * (이 저장소가 조율·SOTP를 서버에서 검산하는 것과 같은 이유다)
+ *
+ * 받아주는 것: 근거에 그 날의 **일(日)** 숫자가 있는 경우, 또는 오늘·내일처럼
+ * 상대 표현인 경우. 근거가 비었으면 통과시키지 않는다.
+ */
+export function dateEvidenceSupports(eventDate: string, evidence: string): boolean {
+  const ev = String(evidence ?? "").trim();
+  if (ev.length < 2) return false;
+  // "오는 19일", "이달 20일", "8/19", "8월 19일" — 숫자만 모아서 본다
+  const day = Number(eventDate.slice(8, 10));
+  if (!Number.isFinite(day)) return false;
+  const nums = (ev.match(/\d{1,2}/g) ?? []).map(Number);
+  if (nums.includes(day)) return true;
+  // 상대 표현은 숫자가 없다. 이건 근거로 인정한다.
+  return /오늘|내일|모레|금일|익일|이번\s*주|다음\s*주|주말|당일/.test(ev);
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseEventDate, normalizeCategory, dedupeEvents, type UpcomingEvent, isMarketRelevant } from "./event-format.js";
+import { parseEventDate, normalizeCategory, dedupeEvents, type UpcomingEvent, isMarketRelevant, dateEvidenceSupports } from "./event-format.js";
 
 /**
  * 일정 추출의 안전망. 날짜를 잘못 읽으면 지난 일이 "내일 일정"으로 뜬다 —
@@ -155,5 +155,28 @@ describe("생활행정·지역행사를 코드로 거른다 — 실측으로 새
 
   it("한글에는 단어 경계(\\b)가 없다 — '검은 개의 날'이 그대로 통과했었다", () => {
     expect(isMarketRelevant("경기도, '반려마루 검은 개의 날' 개최")).toBe(false);
+  });
+});
+
+/**
+ * 실제 사고: 8월 10일에 열린 "메가프로젝트 2차 민관합동 점검회의"가 8월 13일
+ * 일정으로 들어갔다. 사용자가 "3일 전에 했던 이벤트"라고 알려줘서 발견했다.
+ */
+describe("날짜는 근거와 대조한다", () => {
+  it("근거의 날짜가 다르면 버린다 — 메가프로젝트 회귀", () => {
+    expect(dateEvidenceSupports("2026-08-13", "지난 10일 메가프로젝트 점검회의를 주재했다")).toBe(false);
+  });
+
+  it("근거에 그 날이 있으면 받는다", () => {
+    expect(dateEvidenceSupports("2026-08-19", "오는 19일 실적 발표")).toBe(true);
+    expect(dateEvidenceSupports("2026-08-20", "8월 20일 개막")).toBe(true);
+  });
+
+  it("오늘·내일 같은 상대 표현도 근거로 인정한다", () => {
+    expect(dateEvidenceSupports("2026-08-14", "내일 총리·회장과 면담")).toBe(true);
+  });
+
+  it("근거가 비면 통과시키지 않는다 — 지어낸 날짜를 막는다", () => {
+    expect(dateEvidenceSupports("2026-08-13", "")).toBe(false);
   });
 });

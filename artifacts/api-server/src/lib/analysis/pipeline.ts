@@ -704,6 +704,10 @@ async function executeStep(
 
   // ── dart_report_analysis: 사업보고서 원문 + 다기간 재무 데이터 주입 ────────
   if (stepKey === "dart_report_analysis") {
+    // 이 단계가 "왜 늦는가"를 추측으로 답하지 않기 위해 구간을 잰다.
+    // 준비(수집·조회)와 생성(LLM)은 고치는 방법이 전혀 다르다.
+    const tPrep = Date.now();
+    let tCollect = 0;
     try {
       const dartBlocks: string[] = [];
       // 사업 국면 판정에 쓸 신호를 이 블록을 지나며 하나씩 채운다(끝에서 한 번에 판정).
@@ -717,8 +721,10 @@ async function executeStep(
       // dart_biz_reports에 분기·반기·연간을 (종목, 연도, 분기)로 쌓아두고 꺼내 쓴다.
       if (isKoreanTicker(analysis.ticker)) {
         // 아직 안 받은 기간이 있으면 이때 채운다(이미 있는 기간은 건너뛴다).
+        const tC = Date.now();
         await collectBizTimeline(analysis.ticker, 4).catch((e) =>
           console.warn(`[dart_report_analysis] 시계열 수집 실패:`, (e as Error)?.message?.slice(0, 80)));
+        tCollect = Date.now() - tC;
 
         const timeline = await getBizTimeline(analysis.ticker)
           .catch(() => [] as Awaited<ReturnType<typeof getBizTimeline>>);
@@ -1048,6 +1054,7 @@ async function executeStep(
       const injected = `\n\n${dartContext}`;
       enrichedContext = enrichedContext ? enrichedContext + injected : injected;
       console.log(`[dart_report_analysis] 컨텍스트 주입 완료 — ${dartContext.length}chars`);
+      console.log(`[dart_report_analysis] ⏱ 자료 준비 ${((Date.now() - tPrep) / 1000).toFixed(1)}초 (그중 DART 수집 ${(tCollect / 1000).toFixed(1)}초)`);
     } catch (err) {
       console.error("[dart_report_analysis] 컨텍스트 주입 실패:", (err as Error)?.message?.slice(0, 80));
     }
@@ -1579,12 +1586,23 @@ async function runPipelineBackground(id: number): Promise<void> {
       runningStepsLock.set(lockKey, true);
       // 백그라운드가 쓰는 글도 중계소로 흘린다 — 화면이 구경할 수 있게.
       openStepStream(lockKey);
+      // 화면이 체감하는 것은 **첫 글자까지의 시간**이다. 총 소요만 재면 어디를
+      // 고쳐야 하는지 알 수 없다 — 준비가 긴 건지 생성이 긴 건지 갈라서 남긴다.
+      const tStep = Date.now();
+      let firstAt = 0;
       try {
         await executeStep(
           id, nextStepKey, analysis, existingSteps,
-          (data) => emitStepEvent(lockKey, data as Record<string, unknown>),
+          (data) => {
+            if (!firstAt && typeof (data as { t?: unknown })?.t === "string") {
+              firstAt = Date.now();
+              console.log(`[${nextStepKey}] ⏱ 첫 글자까지 ${((firstAt - tStep) / 1000).toFixed(1)}초`);
+            }
+            emitStepEvent(lockKey, data as Record<string, unknown>);
+          },
           sharedCtx,
         );
+        console.log(`[${nextStepKey}] ⏱ 단계 총 ${((Date.now() - tStep) / 1000).toFixed(1)}초`);
       } finally {
         closeStepStream(lockKey);
         runningStepsLock.delete(lockKey);
