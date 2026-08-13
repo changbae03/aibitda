@@ -17,7 +17,7 @@ import { pool } from "@workspace/db";
 import { detectRegions, expandThemeKeywords, searchThemeStocks } from "./theme-search.js";
 
 import {
-  normalizeCategory, parseEventDate, todayKst, dedupeEvents,
+  normalizeCategory, parseEventDate, todayKst, dedupeEvents, isMarketRelevant,
   type UpcomingEvent, type EventCategory,
 } from "./event-format.js";
 
@@ -363,13 +363,22 @@ async function enrichRegionalEvents(events: UpcomingEvent[]): Promise<void> {
 export async function refreshUpcomingEvents(daysAhead = 7): Promise<number> {
   const today = todayKst();
   const headlines = await collectEventNews(today, daysAhead);
-  const events = await extractEvents(headlines, today, daysAhead);
+  let events = await extractEvents(headlines, today, daysAhead);
   if (events.length === 0) { console.warn("[events] 추출된 일정이 없다 — 저장 생략"); return 0; }
 
   // 지역 산업 계획은 이 기능이 가장 잘 하는 일이다 — "8월 10일 광주 반도체 클러스터"
   // 하나로 그 지역 건설·건자재 기업이 부각될 걸 미리 잡을 수 있다. 그런데 Gemini는
   // 기사에 이름이 나온 한두 종목만 붙인다. **그 지역에 실제로 공장이 있는 회사**는
   // 사업보고서가 알고 있으므로, 지역이 걸린 일정에는 공시로 관련주를 더 찾아 붙인다.
+  // ⚠️ 프롬프트로 "지자체 행사는 빼라"고 해도 샌다 — 실제로 하남시 '성년 축하금'
+  // 조례안, '반려마루 검은 개의 날'이 통과했고 거기에 대한제분·우성까지 붙었다.
+  // 지시는 확률이고 규칙은 확정이라 **코드로 막는다.** (필터는 있었는데 안 쓰고 있었다)
+  const before = events.length;
+  events = events.filter(e => isMarketRelevant(e.title));
+  if (before !== events.length) {
+    console.log(`[events] 생활행정·지역행사 ${before - events.length}건 제외`);
+  }
+
   await enrichRegionalEvents(events);
 
   // 이 기간은 **매번 새로 쓴다**. 안 그러면 예전 실행에서 들어온 잡음이 계속 남는다 —
