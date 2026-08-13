@@ -214,7 +214,9 @@ router.post("/", async (req, res) => {
           industry ?? "Unknown",
           null,           // additional_context: 백그라운드에서 채워짐
           "in_progress",
-          "company_intro",
+          // ⚠️ 첫 단계는 STEP_ORDER가 정한다. 여기에 이름을 박아두면
+          // 순서를 바꿔도 화면의 "현재 단계"만 옛것으로 남는다.
+          STEP_ORDER[0]!,
           "true",
           null,           // start_price: 백그라운드에서 채워짐
           userLanguage,

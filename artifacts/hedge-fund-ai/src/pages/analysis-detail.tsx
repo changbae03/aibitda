@@ -885,27 +885,27 @@ interface StageRow {
 const PHASE_UI: Record<string, { ko: string; tag: string; color: string; emoji: string; desc: string; watch: string; risk: string }> = {
   hypergrowth: { ko: "폭발 성장", tag: "속도가 전부", color: "#0F6E56", emoji: "🚀",
     desc: "매출이 폭발적으로 늘고 있어요. 이런 구간에선 밸류에이션(비싼지 싼지)보다 성장 속도 자체가 주가를 끌고 갑니다.",
-    watch: "성장률이 꺾이는 첫 신호. 속도가 멈추는 순간 평가 기준이 통째로 바뀝니다.",
+    watch: "분기 성장률이 계속 유지되는지. 꺾이는 첫 신호를 봅니다.",
     risk: "속도가 꺾이면 평가 기준이 통째로 바뀝니다" },
   numbers:     { ko: "숫자 싸움", tag: "실적도 기대도 높음", color: "#0F6E56", emoji: "📈",
     desc: "실적이 좋고 주가도 그만큼 높아요. 높은 눈높이를 실적이 매번 증명해야 유지되는 구간입니다.",
-    watch: "다음 실적이 시장 기대를 넘는지. 눈높이가 높아 '잘 나와도' 부족할 수 있습니다.",
+    watch: "다음 실적이 시장 기대를 넘는지.",
     risk: "눈높이가 높아 '잘 나와도' 부족할 수 있습니다" },
   proving:     { ko: "실체 확인", tag: "좋은데 아직 쌈", color: "#0F6E56", emoji: "🔍",
     desc: "실적은 좋아지는데 주가는 아직 싸요. 시장이 아직 덜 알아본 상태일 수 있습니다.",
-    watch: "저평가가 풀릴 계기(실적·수주·정책). 계기가 없으면 오래 방치되기도 합니다.",
+    watch: "저평가가 풀릴 계기 — 실적·수주·정책 중 무엇이 방아쇠인지.",
     risk: "풀릴 계기가 없으면 오래 방치되기도 합니다" },
   turnaround:  { ko: "턴어라운드", tag: "바닥 찍고 반등", color: "#185FA5", emoji: "🔄",
     desc: "바닥을 찍고 실적이 다시 살아나기 시작했어요. 분위기가 바뀌는 국면입니다.",
-    watch: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다.",
+    watch: "다음 분기에도 반등이 이어지는지.",
     risk: "한 분기 반짝일 수 있습니다" },
   waiting:     { ko: "증명 대기", tag: "숫자를 기다리는 중", color: "#BA7517", emoji: "⏳",
     desc: "기대는 이미 주가에 붙었는데 숫자는 아직 안 나왔어요. 다음 실적이 방향을 가릅니다.",
-    watch: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다.",
+    watch: "기대의 근거가 숫자로 나오는 시점.",
     risk: "증명되지 못하면 실망이 큽니다" },
   peakout:     { ko: "피크아웃 전조", tag: "기대가 실적을 앞섬", color: "#BA7517", emoji: "⚠️",
     desc: "정점을 지나 성장이 식는데 주가 기대는 아직 높아요. 기대가 실적을 앞서간 구간입니다.",
-    watch: "둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다.",
+    watch: "둔화가 일시적인지 추세인지.",
     risk: "기대가 먼저 빠지면 낙폭이 큽니다" },
   value:       { ko: "성숙·가치", tag: "빠른 성장은 끝", color: "#5F5E5A", emoji: "🏦",
     desc: "빠른 성장은 끝났고 기대도 낮아졌어요. 이제는 이익과 배당으로 보는 구간입니다.",
@@ -913,11 +913,11 @@ const PHASE_UI: Record<string, { ko: string; tag: string; color: string; emoji: 
     risk: "재점화 재료가 없으면 오래 눌려 있습니다" },
   hype:        { ko: "기대 선반영", tag: "기대만 앞섬", color: "#A32D2D", emoji: "🫧",
     desc: "실적은 뒷걸음치는데 주가엔 기대만 실렸어요. 실체 없이 기대만 큰 상태라 거품을 경계할 자리입니다.",
-    watch: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다.",
+    watch: "기대가 실체로 바뀌는 증거가 나오는지.",
     risk: "실체로 바뀌지 않으면 되돌림이 빠릅니다" },
   decline:     { ko: "쇠퇴", tag: "실적·기대 동반 하락", color: "#5F5E5A", emoji: "🔻",
     desc: "실적도 기대도 같이 내려가요. 사업이 힘을 잃어가는 국면입니다.",
-    watch: "바닥의 신호(구조조정·사업 재편·적자 축소). 싸다는 이유만으론 부족합니다.",
+    watch: "바닥의 신호 — 구조조정·사업 재편·적자 축소.",
     risk: "바닥 신호 없이는 더 내려갈 수 있습니다" },
 };
 
@@ -1135,6 +1135,8 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
     trajectory?: { years: TrajYear[]; changes: TrajChange[] };
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  /** 지도에서 눌러본 단계 — 성격·위험·봐야 할 것을 아래에 펼친다 */
+  const [openPhase, setOpenPhase] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ticker) return;
@@ -1208,44 +1210,54 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           <p className="text-[10.5px] text-muted-foreground/70 mt-0.5 mb-2 leading-relaxed">
             좋고 나쁨의 순서가 아닙니다 — 성격이 다르고, 그래서 확인할 것이 다릅니다.
           </p>
-          <div className="space-y-2.5">
+          {/* 칩은 작게 유지한다 — 아홉 칸을 다 펼치면 정작 본문(사업보고서 분석)이 밀린다.
+              대신 **누르면** 그 단계의 성격·위험·봐야 할 것을 아래에 펼친다. */}
+          <div className="space-y-1.5">
             {PHASE_GROUPS.map(g => (
-              <div key={g.key}>
-                <div className="flex items-baseline gap-1.5 mb-1">
-                  <span className="text-[10.5px] font-bold text-foreground/70">{g.label}</span>
-                  <span className="text-[10px] text-muted-foreground/70">{g.note}</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {g.phases.map(p => {
-                    const m = PHASE_UI[p];
-                    const on = p === latest.phase;
-                    return (
-                      <div key={p}
-                        className="rounded-lg px-2.5 py-2 border transition-colors"
-                        style={on
-                          ? { background: m.color + "14", borderColor: m.color + "59" }
-                          : { background: "hsl(var(--muted) / 0.4)", borderColor: "transparent" }}>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[12px] leading-none">{m.emoji}</span>
-                          <span className="text-[11.5px] font-semibold"
-                            style={{ color: on ? m.color : "hsl(var(--foreground) / 0.75)" }}>{m.ko}</span>
-                          {on && (
-                            <span className="text-[9.5px] font-bold px-1 py-px rounded"
-                              style={{ background: m.color, color: "#fff" }}>지금</span>
-                          )}
-                        </div>
-                        {/* 성격과 위험을 함께 둔다 — 성격만 보이면 '좋은 자리'로만 읽힌다 */}
-                        <p className="mt-1 text-[10.5px] leading-snug text-foreground/65">{m.tag}</p>
-                        <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground/80">
-                          <span className="text-[#BA7517]">위험</span> {m.risk}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div key={g.key} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-muted-foreground/70 w-[52px] shrink-0">{g.label}</span>
+                {g.phases.map(p => {
+                  const m = PHASE_UI[p];
+                  const on = p === latest.phase;
+                  const open = openPhase === p;
+                  return (
+                    <button key={p} type="button"
+                      onClick={() => setOpenPhase(open ? null : p)}
+                      className="text-[11px] px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                      style={on
+                        ? { background: m.color, color: "#fff", fontWeight: 600 }
+                        : open
+                          ? { background: m.color + "24", color: m.color, fontWeight: 600 }
+                          : { background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }}>
+                      {m.emoji} {m.ko}
+                    </button>
+                  );
+                })}
               </div>
             ))}
           </div>
+
+          {openPhase && PHASE_UI[openPhase] && (
+            <div className="mt-2 rounded-lg px-3 py-2.5 border"
+              style={{ background: PHASE_UI[openPhase].color + "0F", borderColor: PHASE_UI[openPhase].color + "33" }}>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] leading-none">{PHASE_UI[openPhase].emoji}</span>
+                <span className="text-[12px] font-bold" style={{ color: PHASE_UI[openPhase].color }}>
+                  {PHASE_UI[openPhase].ko}
+                </span>
+                <span className="text-[10.5px] text-muted-foreground">{PHASE_UI[openPhase].tag}</span>
+              </div>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-foreground/85">{PHASE_UI[openPhase].desc}</p>
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-foreground/70">
+                <span className="font-semibold" style={{ color: PHASE_UI[openPhase].color }}>봐야 할 것</span>{" "}
+                {PHASE_UI[openPhase].watch}
+              </p>
+              {/* 성격만 알려주고 위험을 안 알려주면 '좋은 자리'로만 읽힌다 */}
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                <span className="font-semibold text-[#BA7517]">위험</span> {PHASE_UI[openPhase].risk}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -99,12 +99,20 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
 };
 
+/**
+ * **다음에 무엇을 돌릴지**를 이 배열이 정한다(화면 카드 번호와 다르다).
+ * 카드는 자기 자리가 정해져 있어, 3번이 먼저 끝나도 1·2번 자리는 그대로 위에 있다.
+ *
+ * 사업보고서 단계를 맨 앞에 둔다 — 가장 오래 걸리고, 이 제품이 파는 것이 그 분석이다.
+ * ⚠️ 서버의 `STEP_ORDER`(api-server/src/lib/ai-agents.ts)와 **같아야 한다.**
+ * 서버만 바꾸면 순서가 안 바뀐다 — 다음 단계를 몰아가는 것은 이쪽이다.
+ */
 export const ANALYSIS_STEPS_ORDER = [
+  "dart_report_analysis",
   "company_intro",
   "industry_analysis",
-  "catalyst_analysis",
   "company_analysis",
-  "dart_report_analysis",
+  "catalyst_analysis",
   "investment_strategy",
   "investment_thesis",
 ] as const;
