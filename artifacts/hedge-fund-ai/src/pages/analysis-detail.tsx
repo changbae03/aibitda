@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, Children, isValidElement, cloneElement, createContext, useContext } from "react";
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo, Children, isValidElement, cloneElement, createContext, useContext } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1215,10 +1215,14 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
           </p>
           {/* 칩은 작게 유지한다 — 아홉 칸을 다 펼치면 정작 본문(사업보고서 분석)이 밀린다.
               대신 **누르면** 그 단계의 성격·위험·봐야 할 것을 아래에 펼친다. */}
-          <div className="space-y-1.5">
+          {/* ⚠️ 예전에는 레이블과 칩을 한 줄(flex-wrap)에 뒀다. 폭이 좁으면 넘친 칩이
+              **레이블 아래 왼쪽 끝**으로 떨어져 묶음이 깨져 보였다(폰에서 '실체 확인'·'쇠퇴').
+              레이블 열과 칩 열을 나눠, 칩이 몇 줄로 접히든 같은 자리에서 시작하게 한다. */}
+          <div className="grid grid-cols-[46px_1fr] gap-x-2 gap-y-1.5 items-start">
             {PHASE_GROUPS.map(g => (
-              <div key={g.key} className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-semibold text-muted-foreground/70 w-[52px] shrink-0">{g.label}</span>
+              <Fragment key={g.key}>
+                <span className="text-[10px] font-semibold text-muted-foreground/70 leading-[22px]">{g.label}</span>
+                <div className="flex flex-wrap gap-1.5">
                 {g.phases.map(p => {
                   const m = PHASE_UI[p];
                   const on = p === latest.phase;
@@ -1236,7 +1240,8 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
                     </button>
                   );
                 })}
-              </div>
+                </div>
+              </Fragment>
             ))}
           </div>
 
