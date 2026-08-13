@@ -3387,7 +3387,10 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
 
   return (
     <div className="mt-4 print:hidden">
-      <div className="rounded-[var(--radius)] border border-border bg-card dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-[#141414] px-5 py-5 space-y-3.5 shadow-[var(--shadow-card)]">
+      {/* ⚠️ 예전에는 `dark:bg-gradient-to-br dark:from-[#1a1a1a]`로 다크 배경을 줬는데,
+          라이트 모드에서도 그 검은 그라디언트가 그대로 그려져 카드가 새까맣게 나왔다
+          (배경색은 흰색인데 그 위에 gradient 이미지가 덮였다). 테마 토큰만 쓴다. */}
+      <div className="rounded-[var(--radius)] border border-border bg-card px-5 py-5 space-y-3.5 shadow-[var(--shadow-card)]">
         <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
           {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
         </p>

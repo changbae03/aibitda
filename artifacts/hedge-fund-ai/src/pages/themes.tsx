@@ -144,13 +144,21 @@ function stockSignalBadge(s: FeedStock): { text: string; cls: string; title: str
       return { text: "기관 매도", cls: "bg-red-50 dark:bg-red-900/20 text-red-500", title: "기관 순매도 중" };
   }
 
-  // 가격+거래량 기반 기존 신호
-  if (s.priceChange == null) return null;
-  const priceUp = s.priceChange > 0.5;
-  const volUp   = (s.volumeRatio ?? 1) >= 1.3;
-  if (priceUp && volUp)   return { text: "거래량 동반 상승", cls: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400", title: "주가↑ + 거래량↑ — 상승 모멘텀 살아있음" };
-  if (priceUp && !volUp)  return { text: "힘 약해지는 중",  cls: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",   title: "주가↑이지만 거래량↓ — 상승 힘 소진 주의" };
-  if (!priceUp && volUp)  return { text: "거래량 증가",     cls: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400", title: "주가↓ + 거래량↑ — 매도세 또는 저가 매수 경합" };
+  // 거래량은 **확실히 튈 때만** 말한다.
+  //
+  // 예전에는 주가·거래량 조합으로 세 가지("거래량 동반 상승"·"힘 약해지는 중"·"거래량
+  // 증가")를 붙였다. 그런데 거래량 비율이 망가져 있어(야후 필드명을 잘못 읽어 항상 1)
+  // **오른 종목이면 예외 없이 "힘 약해지는 중"**이 붙었다 — NVIDIA +3.03%도, 대한제강
+  // +0.57%도 같은 배지였다. 뜻도 안 읽히고 신호도 아니었다.
+  //
+  // 지금은 평균 대비 2배 넘게 터진 경우만 말한다. 애매한 구간은 침묵하는 편이 낫다.
+  const vol = s.volumeRatio;
+  if (vol != null && vol >= 2)
+    return {
+      text: `거래량 ${vol.toFixed(1)}배`,
+      cls: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400",
+      title: "평균 거래량 대비 급증",
+    };
   return null;
 }
 

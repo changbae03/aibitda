@@ -6,7 +6,7 @@ import {
   User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb, Building2,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
-  ShieldCheck, Shield, Newspaper, Globe, Zap, Target, TrendingUp,
+  ShieldCheck, Shield, Newspaper, Globe, Zap, Target, TrendingUp, Star,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -105,6 +105,9 @@ const NAV_GROUPS = [
     items: [
       { href: "/analysis/new", label: "기업 분석", labelEn: "Company Analysis", Icon: Sparkles },
       { href: "/related-stocks", label: "관련주 찾기", labelEn: "Find Related", Icon: Search },
+      // 분석 끝에서 "관심종목에 추가"를 눌러도 볼 곳이 없었다 — 포트폴리오 메뉴를
+      // 걷어내면서 관심종목까지 같이 닫혀버린 탓이다. 담은 것은 꺼낼 수 있어야 한다.
+      { href: "/portfolio", label: "관심종목", labelEn: "Watchlist", Icon: Star },
     ],
   },
   {
