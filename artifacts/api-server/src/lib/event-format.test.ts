@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseEventDate, normalizeCategory, dedupeEvents, type UpcomingEvent, isMarketRelevant, dateEvidenceSupports } from "./event-format.js";
+import { parseEventDate, normalizeCategory, dedupeEvents, type UpcomingEvent, isMarketRelevant, isMarketRelevantSource, isOngoingVisit, dateEvidenceSupports } from "./event-format.js";
 
 /**
  * 일정 추출의 안전망. 날짜를 잘못 읽으면 지난 일이 "내일 일정"으로 뜬다 —
@@ -112,6 +112,102 @@ describe("주가와 무관한 지역 행사는 담지 않는다", () => {
       "응에안성 3개 주요 프로젝트 건설 시작",
     ]) {
       expect(isMarketRelevant(t), t).toBe(true);
+    }
+  });
+
+  /**
+   * 날짜로 훑는 질의는 그날 일정이 적힌 **모든** 기사를 끌어온다.
+   * 실측(2026-08-15 "8월 15일" 예정): 아이돌 방송 안내·굿즈 발매·파리 전시,
+   * 그리고 Vietnam.vn의 하띤 사회주택 추첨이 그대로 일정으로 올라왔다.
+   */
+  it("증시와 무관한 매체는 출처에서 끊는다", () => {
+    for (const src of [
+      "https://www.vietnam.vn Vietnam.vn",
+      "https://www.sortiraparis.com Sortir à Paris",
+      "https://weverse.io Weverse",
+      "https://olympics.com olympics.com",
+      "https://www.insidevina.com 인사이드비나",
+    ]) {
+      expect(isMarketRelevantSource(src), src).toBe(false);
+    }
+  });
+
+  it("종합지·경제지는 막지 않는다 — 같은 매체가 증시 기사도 쓴다", () => {
+    for (const src of [
+      "https://biz.heraldcorp.com 헤럴드경제",
+      "https://www.hankyung.com 한국경제",
+      "https://www.yna.co.kr 연합뉴스",
+      "https://www.kookje.co.kr 국제신문",
+      "", // 출처를 못 읽었으면 막지 않는다
+    ]) {
+      expect(isMarketRelevantSource(src), src).toBe(true);
+    }
+  });
+
+  it("날짜 질의가 끌어온 생활 잡음도 제목에서 막는다", () => {
+    for (const t of [
+      "택배 없는 날",
+      "제천시 공습 대비 민방위 대피훈련",
+      "감리회 감독선거 선거권자 확정",
+      "하띤 시범 사회주택 온라인 추첨",
+      "NH농협은행 창립기념일 기념 음악회",
+    ]) {
+      expect(isMarketRelevant(t), t).toBe(false);
+    }
+  });
+
+  it("대회·공연·소비자 박람회를 막는다 — 날짜 질의가 '개막'으로 끌어온 것들", () => {
+    for (const x of [
+      "구례 여자씨름 왕중왕전 개막",
+      "2026 대구 세계마스터즈육상경기대회 개막",
+      "뮤지컬 '엘리자벳' 개막",
+      "덕적도 '주섬주섬 음악회' 개막",
+      "대전 첫 코베 베이비페어 개막",
+      "의왕역 한신더휴 견본주택 오픈",
+      "에이치플러스 양지병원 성형외과 진료 시작",
+    ]) {
+      expect(isMarketRelevant(x), x).toBe(false);
+    }
+  });
+
+  it("산업 전시회·실적은 그대로 통과시킨다", () => {
+    for (const x of [
+      "반도체 국제전시회 세미콘 개막",
+      "SK스퀘어 실적 발표",
+      "인제니아 코스닥 상장",
+      "광저우 국제 자동차 부품 전시회 개막",
+    ]) {
+      expect(isMarketRelevant(x), x).toBe(true);
+    }
+  });
+
+  it("공모주 청약은 막지 않는다 — 주택 추첨과 다르다", () => {
+    expect(isMarketRelevant("인제니아 공모주 청약 접수 시작")).toBe(true);
+  });
+
+  /**
+   * 실측(2026-08-14 로그): "빌 게이츠 방한, SMR 협력 논의"가 날짜 검산기에 걸려
+   * 통째로 버려졌다 — 근거 "빌 게이츠, 소형모듈원전 협력 논의차 방한"에 일(日)이 없어서다.
+   * 이런 기사에는 날짜가 안 적힌다. 이미 와 있고, 협력 논의가 그 뒤에 이어진다.
+   */
+  it("방한·순방은 날짜 근거가 없어도 살린다", () => {
+    for (const t of [
+      "빌 게이츠, 소형모듈원전 협력 논의차 방한",
+      "왕이 외교부장 방한 예정",
+      "젠슨 황 내한, 국내 협력사와 회동",
+      "대통령 중동 순방 시작",
+    ]) {
+      expect(isOngoingVisit(t), t).toBe(true);
+    }
+  });
+
+  it("일반 회의·행사까지 넓히지 않는다 — 지난 회의가 오늘로 올라오던 버그", () => {
+    for (const t of [
+      "민관합동 점검회의 개최",
+      "국가바이오혁신위원회 첫 회의",
+      "반도체 국제 전시회 개막",
+    ]) {
+      expect(isOngoingVisit(t), t).toBe(false);
     }
   });
 

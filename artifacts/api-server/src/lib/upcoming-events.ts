@@ -18,8 +18,8 @@ import { detectRegions, expandThemeKeywords, searchThemeStocks } from "./theme-s
 
 import {
   normalizeCategory, parseEventDate, todayKst, dedupeEvents, isMarketRelevant, dateEvidenceSupports,
-  type UpcomingEvent, type EventCategory,
-} from "./event-format.js";
+  isMarketRelevantSource, isOngoingVisit,
+  type UpcomingEvent, type EventCategory } from "./event-format.js";
 
 export { normalizeCategory, parseEventDate, todayKst, dedupeEvents };
 export type { UpcomingEvent, EventCategory };
@@ -38,12 +38,19 @@ async function searchNews(query: string, limit = 20): Promise<string[]> {
     const xml = await res.text();
     const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
     const out: string[] = [];
+    let blocked = 0;
     for (const item of items.slice(0, limit)) {
       const t = (item.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/)?.[1]
         ?? item.match(/<title>([^<]+)<\/title>/)?.[1] ?? "").trim();
+      // 출처를 먼저 본다 — 제목만으로는 다른 나라 지역 소식을 걸러낼 수 없다.
+      // RSS의 <source>는 매체명, url 속성은 도메인이라 둘 다 판정에 쓴다.
+      const src = item.match(/<source[^>]*url="([^"]*)"[^>]*>([^<]*)<\/source>/);
+      const sourceText = `${src?.[1] ?? ""} ${src?.[2] ?? ""}`;
+      if (!isMarketRelevantSource(sourceText)) { blocked++; continue; }
       const date = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "";
       if (t) out.push(date ? `[${new Date(date).toISOString().slice(5, 10)}] ${t}` : t);
     }
+    if (blocked > 0) console.log(`[events] "${query}" — 비증시 매체 ${blocked}건 제외`);
     return out;
   } catch (e) {
     console.warn(`[events] 뉴스 검색 예외 "${query}":`, (e as Error)?.message?.slice(0, 60));
@@ -62,7 +69,14 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
   const dateQueries: string[] = [];
   for (let i = 0; i <= daysAhead; i++) {
     const d = new Date(base.getTime() + i * 86400000);
-    dateQueries.push(`"${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일" 예정`);
+    // ⚠️ `"8월 15일" 예정`만 치면 그날 일정이 적힌 **모든** 기사가 온다 —
+    // 아이돌 방송 안내·불꽃쇼·굿즈 발매·파리 전시가 그대로 일정으로 올라왔다.
+    // 증시가 반응하는 낱말을 함께 요구해 애초에 덜 걷어온다(구글 뉴스는 OR를 받는다).
+    const md = `"${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일"`;
+    dateQueries.push(`${md} (실적 OR 착공 OR 수주 OR 승인 OR 상장 OR 발효 OR 인수)`);
+    // ⚠️ 여기에 "개막"을 넣었다가 씨름·육상·뮤지컬·베이비페어가 쏟아졌다.
+    // 산업 전시회 개막은 아래 주제 질의가 업종을 붙여 따로 묻는다.
+    dateQueries.push(`${md} (공시 OR 주주총회 OR 임상 OR 신제품 OR 계약 OR 가동)`);
   }
   // 주가를 움직이는 일정은 임상·정책만이 아니다. 기업의 신제품·수주, 정상급 인사의
   // 발표·순방, 산업 행사까지 넓게 훑는다 — 날짜가 정해진 재료는 미리 알 수 있어야 한다.
@@ -274,7 +288,10 @@ export async function extractEvents(
       if (!date || title.length < 3) continue;   // 날짜·제목 없으면 쓸모없다
       // 날짜는 **서버가 검산한다.** LLM은 근거 없이 오늘로 찍는다 —
       // 8월 10일에 열린 점검회의가 8월 13일 일정으로 들어왔다.
-      if (!dateEvidenceSupports(date, String(r?.dateEvidence ?? ""))) {
+      // 방한·순방은 날짜가 근거에 안 적힌다 — 이미 와 있고, 협력 논의가 그 뒤에 이어진다.
+      // 그 사람이 무엇을 하러 왔는지가 곧 그날 움직일 업종이다(게이츠 → SMR·전력기기).
+      const ongoing = isOngoingVisit(`${title} ${String(r?.dateEvidence ?? "")}`);
+      if (!ongoing && !dateEvidenceSupports(date, String(r?.dateEvidence ?? ""))) {
         dropped.push(`${date} ${title.slice(0, 20)} (근거 "${String(r?.dateEvidence ?? "").slice(0, 24)}")`);
         continue;
       }
