@@ -45,7 +45,7 @@ import { US_PEER_MAP, selectPeerTickers, fetchPeerFinancials } from "../lib/anal
 import { extractJsonSafe, extractFvdJson, repairInvestmentStrategyContent } from "../lib/analysis/json-repair.js";
 import { rawQuery, dbCacheGet, dbCacheSet, mapAnalysisRow, mapStepRow, ensureQaPeerColumns } from "../lib/analysis/store.js";
 import { ai, geminiSemaphore, MAX_CONCURRENT_GEMINI } from "../lib/analysis/gemini.js";
-import { runningStepsLock, pendingDataFetch, preFetchedPeerData, preFetchedWeeklyMA, MAX_CONCURRENT_PIPELINES, pipelineSemaphore, MAX_QUEUE_SIZE, enqueueAnalysis, runningPipelineIds, executeStep, runPipelineBackground, type PipelineCtx } from "../lib/analysis/pipeline.js";
+import { runningStepsLock, subscribeStepStream, pendingDataFetch, preFetchedPeerData, preFetchedWeeklyMA, MAX_CONCURRENT_PIPELINES, pipelineSemaphore, MAX_QUEUE_SIZE, enqueueAnalysis, runningPipelineIds, executeStep, runPipelineBackground, type PipelineCtx } from "../lib/analysis/pipeline.js";
 import { sanitizeFeedback, stripDisplayContent, formatStep, formatAnalysis } from "../lib/analysis/format.js";
 
 // 서버 시작 시 미완료 분석 복구 — src/index.ts가 사용
@@ -1615,7 +1615,39 @@ router.post("/:id/step", async (req, res) => {
   if (alreadyRun) { res.status(409).json({ error: "Step already completed" }); return; }
 
   const lockKey = `${id}-${stepKey}`;
-  if (runningStepsLock.get(lockKey)) { res.status(409).json({ error: "Step already running" }); return; }
+
+  // 이미 백그라운드가 돌리는 중이면 **막지 말고 구경시킨다.**
+  //
+  // 예전에는 409로 돌려보냈고, 화면은 폴링으로 떨어져 저장이 끝날 때까지 스피너만
+  // 돌았다. 사업보고서 단계는 42초라 그 시간이 통째로 빈 화면이었다 — 정작 글은
+  // 그동안 계속 만들어지고 있었는데도.
+  if (runningStepsLock.get(lockKey)) {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    let gone = false;
+    req.on("close", () => { gone = true; });
+    const write = (d: object) => {
+      if (gone) return;
+      try { res.write(`data: ${JSON.stringify(d)}\n\n`); } catch { gone = true; }
+    };
+
+    const sub = subscribeStepStream(lockKey, (d) => {
+      write(d);
+      if ((d as { done?: boolean }).done) { sub?.unsubscribe(); if (!gone) res.end(); }
+    });
+    if (!sub) { res.status(409).end(); return; }   // 막 끝난 경우 — 폴링이 받아간다
+
+    // 늦게 붙었어도 지금까지 쓰인 글을 먼저 준다.
+    if (sub.buffered) write({ t: sub.buffered });
+    if (sub.done) { sub.unsubscribe(); write({ done: true }); res.end(); return; }
+    req.on("close", () => sub.unsubscribe());
+    return;
+  }
+
   runningStepsLock.set(lockKey, true);
 
   // SSE 스트리밍 헤더

@@ -3810,8 +3810,8 @@ export default function AnalysisDetail() {
       });
       if (!res.ok || !res.body) {
         setStreamingStep(null);
-        // 409: 이미 백그라운드에서 실행 중 → 오류 없이 폴링에 맡김
-        if (res.status === 409) return;
+        // 409는 이제 "이미 끝난 단계"일 때만 온다. 백그라운드가 돌리는 중이면
+        // 서버가 막지 않고 그 글을 중계해 주므로(200 SSE) 아래 리더로 흘러간다.
         return;
       }
       const reader = res.body.getReader();
@@ -3845,6 +3845,10 @@ export default function AnalysisDetail() {
             // 예전에는 여기서 토큰을 버리고 저장이 끝난 뒤 refetch로만 보여줬다.
             // 그래서 사업보고서 단계(42초)는 그 시간 내내 스피너만 돌았다 — 서버는
             // 글을 계속 보내고 있었는데도. 읽는 사람은 다 쓰이길 기다릴 필요가 없다.
+            // 서버가 "다시 쓴다"고 하면 화면도 비운다 — 안 그러면 원고가 겹쳐 붙는다.
+            if (msg.reset === true) {
+              setStreamingStep(prev => prev ? { ...prev, content: "" } : prev);
+            }
             if (typeof msg.t === "string" && msg.t.length > 0) {
               setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : prev);
             }

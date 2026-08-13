@@ -58,6 +58,61 @@ import { storeValuationArtifacts } from "./valuation-store.js";
 
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
+
+// ─── 진행 중인 단계 중계소 ────────────────────────────────────────────────────
+//
+// 분석을 만들면 백그라운드 파이프라인이 단계를 돌린다. 그런데 그때 만들어지는 글은
+// 아무 데도 안 흘러가고 DB 저장이 끝나야 화면에 뜬다 — 사업보고서 단계는 42초라
+// 그 시간 내내 스피너만 돌았다.
+//
+// 그래서 진행 중인 단계마다 **중계소**를 연다. 백그라운드는 여기로 글을 흘리고,
+// 화면은 여기에 붙어서 구경한다. 늦게 붙은 사람도 지금까지 쓰인 글을 먼저 받는다.
+interface StepStream {
+  buffer: string;                      // 지금까지 쓰인 글 (늦게 온 구독자용)
+  subs: Set<(data: object) => void>;
+  done: boolean;
+}
+const stepStreams = new Map<string, StepStream>();
+
+export function openStepStream(lockKey: string): void {
+  stepStreams.set(lockKey, { buffer: "", subs: new Set(), done: false });
+}
+
+export function emitStepEvent(lockKey: string, data: Record<string, unknown>): void {
+  const s = stepStreams.get(lockKey);
+  if (!s) return;
+  // ⚠️ QC가 다시 쓰라고 하면 글을 **처음부터 새로** 쓴다. 버퍼를 안 비우면 앞 원고에
+  // 새 원고가 덧붙어 "…있습니다.## 1. 사업 구성의 이동"처럼 이어붙는다(실제로 그랬다).
+  if (data["qc"] === "revising" || data["debate"] === "challenging" || data["restart"] === true) {
+    s.buffer = "";
+    for (const fn of s.subs) { try { fn({ reset: true }); } catch { /* ignore */ } }
+  }
+  if (typeof data["t"] === "string") s.buffer += data["t"] as string;
+  for (const fn of s.subs) { try { fn(data); } catch { /* 구독자 하나가 죽어도 계속 */ } }
+}
+
+export function closeStepStream(lockKey: string): void {
+  const s = stepStreams.get(lockKey);
+  if (!s) return;
+  s.done = true;
+  for (const fn of s.subs) { try { fn({ done: true }); } catch { /* ignore */ } }
+  // 조금 남겨둔다 — 막 붙으려던 화면이 빈손이 되지 않게.
+  setTimeout(() => stepStreams.delete(lockKey), 30_000);
+}
+
+/** 진행 중인 단계를 구독한다. 없으면 null(= 아직 시작 전이거나 이미 끝남). */
+export function subscribeStepStream(
+  lockKey: string, onEvent: (data: object) => void,
+): { buffered: string; done: boolean; unsubscribe: () => void } | null {
+  const s = stepStreams.get(lockKey);
+  if (!s) return null;
+  s.subs.add(onEvent);
+  return {
+    buffered: s.buffer,
+    done: s.done,
+    unsubscribe: () => { s.subs.delete(onEvent); },
+  };
+}
 // Track analyses currently fetching external data (before pipeline starts)
 const pendingDataFetch = new Set<number>();
 
@@ -1489,9 +1544,16 @@ async function runPipelineBackground(id: number): Promise<void> {
       }
 
       runningStepsLock.set(lockKey, true);
+      // 백그라운드가 쓰는 글도 중계소로 흘린다 — 화면이 구경할 수 있게.
+      openStepStream(lockKey);
       try {
-        await executeStep(id, nextStepKey, analysis, existingSteps, undefined, sharedCtx);
+        await executeStep(
+          id, nextStepKey, analysis, existingSteps,
+          (data) => emitStepEvent(lockKey, data as Record<string, unknown>),
+          sharedCtx,
+        );
       } finally {
+        closeStepStream(lockKey);
         runningStepsLock.delete(lockKey);
       }
     }
