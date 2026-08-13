@@ -108,13 +108,13 @@ function sentimentConfig(s?: string) {
     case "mixed":
       return { label: "혼조", bg: "bg-amber-500/10 border-amber-500/30 text-amber-400", dot: "bg-amber-400" };
     default:
-      return { label: "보합", bg: "bg-zinc-700/50 border-zinc-600 text-zinc-400", dot: "bg-zinc-500" };
+      return { label: "보합", bg: "bg-muted border-border text-muted-foreground", dot: "bg-muted-foreground/60" };
   }
 }
 
 function changeColor(v?: number) {
-  if (v == null) return "text-zinc-500";
-  return v > 0 ? "text-red-400" : v < 0 ? "text-blue-400" : "text-zinc-500";
+  if (v == null) return "text-muted-foreground";
+  return v > 0 ? "text-red-400" : v < 0 ? "text-blue-400" : "text-muted-foreground";
 }
 
 function fmtPct(v?: number) {
@@ -153,12 +153,12 @@ function SessionCard({ session, selected, onClick }: {
       onClick={onClick}
       className={`relative text-left w-full rounded-xl border p-4 transition-all duration-150 ${
         selected
-          ? "bg-zinc-800 border-zinc-500 shadow-lg shadow-black/40"
+          ? "bg-muted border-border shadow-lg shadow-black/40"
           : session.isActive
-          ? "bg-zinc-900 border-zinc-700 hover:border-zinc-600"
+          ? "bg-card border-border hover:border-border"
           : available
-          ? "bg-zinc-900/70 border-zinc-800 hover:border-zinc-700"
-          : "bg-zinc-900/30 border-zinc-800/50 opacity-60 hover:opacity-80"
+          ? "bg-card/70 border-border hover:border-border"
+          : "bg-card/30 border-border/50 opacity-60 hover:opacity-80"
       }`}
     >
       {session.isActive && (
@@ -167,9 +167,9 @@ function SessionCard({ session, selected, onClick }: {
 
       <div className="flex items-center gap-1.5 mb-1">
         <span className="text-sm leading-none">{SESSION_ICON[session.icon] ?? "📋"}</span>
-        <span className="text-xs font-semibold text-zinc-200">{session.label}</span>
+        <span className="text-xs font-semibold text-foreground">{session.label}</span>
       </div>
-      <div className="text-[10px] font-mono text-zinc-600 mb-3">
+      <div className="text-[10px] font-mono text-muted-foreground/70 mb-3">
         {session.time.includes("+1")
           ? `익일 ${session.time.replace("+1", "")} KST`
           : session.time === "주말"
@@ -183,21 +183,21 @@ function SessionCard({ session, selected, onClick }: {
             <span className={`w-1 h-1 rounded-full ${sc.dot}`} />
             {sc.label}
           </span>
-          <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
+          <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
             {session.brief!.summary}
           </p>
         </>
       ) : session.status === "generating" ? (
         <div className="space-y-1.5 mt-1">
-          <div className="h-1.5 rounded bg-zinc-700 animate-pulse" />
-          <div className="h-1.5 rounded bg-zinc-700/70 animate-pulse w-4/5" />
-          <div className="h-1.5 rounded bg-zinc-700/50 animate-pulse w-3/5" />
+          <div className="h-1.5 rounded bg-muted animate-pulse" />
+          <div className="h-1.5 rounded bg-muted/70 animate-pulse w-4/5" />
+          <div className="h-1.5 rounded bg-muted/50 animate-pulse w-3/5" />
           <p className="text-[10px] text-amber-400 mt-2">생성 중…</p>
         </div>
       ) : session.status === "past" ? (
-        <p className="text-[11px] text-zinc-700 mt-1">브리핑 없음</p>
+        <p className="text-[11px] text-muted-foreground/70 mt-1">브리핑 없음</p>
       ) : (
-        <p className="text-[11px] text-zinc-600 mt-1">준비중</p>
+        <p className="text-[11px] text-muted-foreground/70 mt-1">준비중</p>
       )}
     </button>
   );
@@ -211,10 +211,10 @@ function IndexGrid({ indices }: { indices: Record<string, MarketIndex> }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
       {entries.map(([name, v]) => (
-        <div key={name} className="bg-zinc-800/80 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] text-zinc-500 mb-0.5 truncate">{v.label ?? name}</p>
+        <div key={name} className="bg-muted/80 rounded-lg px-3 py-2.5">
+          <p className="text-[10px] text-muted-foreground mb-0.5 truncate">{v.label ?? name}</p>
           {v.close != null && (
-            <p className="text-sm font-semibold text-zinc-200 tabular-nums">
+            <p className="text-sm font-semibold text-foreground tabular-nums">
               {v.close.toLocaleString("ko-KR")}
             </p>
           )}
@@ -233,7 +233,7 @@ function IndexGrid({ indices }: { indices: Record<string, MarketIndex> }) {
 
 function SL({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{children}</h3>
+    <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</h3>
   );
 }
 
@@ -249,10 +249,10 @@ function BriefDetail({ session }: { session: SessionSlot }) {
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
           <span className="text-sm font-medium">브리핑 생성 중</span>
         </div>
-        <p className="text-xs text-zinc-500">AI가 현재 시장 데이터를 분석하고 있습니다</p>
+        <p className="text-xs text-muted-foreground">AI가 현재 시장 데이터를 분석하고 있습니다</p>
         <div className="max-w-sm mx-auto space-y-2 mt-6">
           {[1, 0.7, 0.5].map((op, i) => (
-            <div key={i} className="h-2.5 rounded bg-zinc-800 animate-pulse" style={{ opacity: op }} />
+            <div key={i} className="h-2.5 rounded bg-muted animate-pulse" style={{ opacity: op }} />
           ))}
         </div>
       </div>
@@ -267,13 +267,13 @@ function BriefDetail({ session }: { session: SessionSlot }) {
       <div className="py-12 text-center space-y-1">
         {session.isPast ? (
           <>
-            <p className="text-sm text-zinc-500">이 시간대에 브리핑이 생성되지 않았습니다</p>
-            <p className="text-xs text-zinc-700">장 운영 중 자동 생성이 누락된 경우입니다</p>
+            <p className="text-sm text-muted-foreground">이 시간대에 브리핑이 생성되지 않았습니다</p>
+            <p className="text-xs text-muted-foreground/70">장 운영 중 자동 생성이 누락된 경우입니다</p>
           </>
         ) : (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted-foreground">
             {session.label} 브리핑은{" "}
-            <span className="text-zinc-300 font-medium">{timeDisplay}</span> 이후 자동 생성됩니다
+            <span className="text-foreground/80 font-medium">{timeDisplay}</span> 이후 자동 생성됩니다
           </p>
         )}
       </div>
@@ -282,10 +282,10 @@ function BriefDetail({ session }: { session: SessionSlot }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-zinc-200 leading-relaxed">{brief.summary}</p>
+      <p className="text-sm text-foreground leading-relaxed">{brief.summary}</p>
 
       {brief.leadParagraph && (
-        <p className="text-sm text-zinc-300 leading-relaxed border-l-2 border-zinc-700 pl-3">
+        <p className="text-sm text-foreground/80 leading-relaxed border-l-2 border-border pl-3">
           {brief.leadParagraph}
         </p>
       )}
@@ -293,7 +293,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
       {brief.storyLine && (
         <div>
           <SL>심층 분석</SL>
-          <div className="mt-2 text-sm text-zinc-400 leading-relaxed whitespace-pre-line">
+          <div className="mt-2 text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
             {brief.storyLine}
           </div>
         </div>
@@ -311,7 +311,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
               if (!label) return null;
               return (
                 <span key={`${label}-${i}`} title={desc ?? undefined}
-                  className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 cursor-default">
+                  className="text-xs px-2.5 py-1 rounded-full bg-muted border border-border text-foreground/80 cursor-default">
                   {label}
                 </span>
               );
@@ -330,13 +330,13 @@ function BriefDetail({ session }: { session: SessionSlot }) {
               const isNeg = dir === "negative";
               return (
                 <div key={i} className="flex gap-3">
-                  <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${isPos ? "text-red-500" : isNeg ? "text-blue-500" : "text-zinc-600"}`}>
+                  <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${isPos ? "text-red-500" : isNeg ? "text-blue-500" : "text-muted-foreground/70"}`}>
                     {isPos ? "▲" : isNeg ? "▼" : "●"}
                   </span>
                   <div>
-                    <p className="text-sm text-zinc-100 font-medium leading-snug">{e.title}</p>
+                    <p className="text-sm text-foreground font-medium leading-snug">{e.title}</p>
                     {((e as any).impact || e.description) && (
-                      <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                         {(e as any).impact ?? e.description}
                       </p>
                     )}
@@ -353,11 +353,11 @@ function BriefDetail({ session }: { session: SessionSlot }) {
           <SL>섹터 동향</SL>
           <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
             {brief.sectorTrends.map((s) => (
-              <div key={s.sector} className="flex items-center justify-between bg-zinc-800/60 rounded-lg px-3 py-2">
-                <span className="text-xs text-zinc-300 truncate">{s.sector}</span>
+              <div key={s.sector} className="flex items-center justify-between bg-muted/60 rounded-lg px-3 py-2">
+                <span className="text-xs text-foreground/80 truncate">{s.sector}</span>
                 <span className={`text-xs font-medium ml-2 flex-shrink-0 ${
                   (s.change ?? 0) > 0 || s.trend === "상승" || s.trend === "강세" ? "text-red-400" :
-                  (s.change ?? 0) < 0 || s.trend === "하락" || s.trend === "약세" ? "text-blue-400" : "text-zinc-500"
+                  (s.change ?? 0) < 0 || s.trend === "하락" || s.trend === "약세" ? "text-blue-400" : "text-muted-foreground"
                 }`}>
                   {s.change != null ? fmtPct(s.change) : s.trend}
                 </span>
@@ -374,20 +374,20 @@ function BriefDetail({ session }: { session: SessionSlot }) {
             {brief.macroFactors.map((f, i) => {
               if (typeof f === "string") {
                 return (
-                  <div key={i} className="flex gap-2 text-xs text-zinc-400">
-                    <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                  <div key={i} className="flex gap-2 text-xs text-muted-foreground">
+                    <span className="text-muted-foreground/70 flex-shrink-0 mt-0.5">•</span>
                     <span>{f}</span>
                   </div>
                 );
               }
               const mf = f as MacroFactor;
               return (
-                <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-xs">
+                <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 text-xs">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-zinc-200 font-medium">{mf.factor}</span>
-                    <span className="text-zinc-500 shrink-0">{mf.status}</span>
+                    <span className="text-foreground font-medium">{mf.factor}</span>
+                    <span className="text-muted-foreground shrink-0">{mf.status}</span>
                   </div>
-                  {mf.implication && <p className="text-zinc-500 leading-relaxed">{mf.implication}</p>}
+                  {mf.implication && <p className="text-muted-foreground leading-relaxed">{mf.implication}</p>}
                 </div>
               );
             })}
@@ -402,17 +402,17 @@ function BriefDetail({ session }: { session: SessionSlot }) {
             {brief.forwardLook.map((f, i) => {
               if (typeof f === "string") {
                 return (
-                  <div key={i} className="flex gap-2 text-xs text-zinc-400">
-                    <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                  <div key={i} className="flex gap-2 text-xs text-muted-foreground">
+                    <span className="text-muted-foreground/70 flex-shrink-0 mt-0.5">•</span>
                     <span>{f}</span>
                   </div>
                 );
               }
               const fl = f as ForwardLookItem;
               return (
-                <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-xs">
-                  <p className="text-zinc-200 font-medium mb-0.5">{fl.point}</p>
-                  {fl.detail && <p className="text-zinc-500 leading-relaxed">{fl.detail}</p>}
+                <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 text-xs">
+                  <p className="text-foreground font-medium mb-0.5">{fl.point}</p>
+                  {fl.detail && <p className="text-muted-foreground leading-relaxed">{fl.detail}</p>}
                   {fl.watchFor && (
                     <p className="text-amber-500/70 mt-1">📌 {fl.watchFor}</p>
                   )}
@@ -428,7 +428,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
           <SL>투자 포인트</SL>
           <ul className="mt-2 space-y-1.5">
             {brief.actionPoints.map((a, i) => (
-              <li key={i} className="flex gap-2 text-xs text-zinc-300">
+              <li key={i} className="flex gap-2 text-xs text-foreground/80">
                 <span className="text-amber-500 flex-shrink-0 mt-0.5 font-bold">→</span>
                 <span>{typeof a === "string" ? a : JSON.stringify(a)}</span>
               </li>
@@ -440,7 +440,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
       {brief.keyRisk && (
         <div className="bg-blue-950/30 border border-blue-900/40 rounded-lg px-3 py-2.5">
           <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-1">핵심 리스크</p>
-          <p className="text-xs text-zinc-300 leading-relaxed">{brief.keyRisk}</p>
+          <p className="text-xs text-foreground/80 leading-relaxed">{brief.keyRisk}</p>
         </div>
       )}
 
@@ -453,10 +453,10 @@ function BriefDetail({ session }: { session: SessionSlot }) {
               const evDesc  = ev.description ?? null;
               return (
                 <div key={i} className="flex gap-3 text-xs">
-                  <span className="text-zinc-500 font-mono flex-shrink-0 w-20">{ev.date}</span>
+                  <span className="text-muted-foreground font-mono flex-shrink-0 w-20">{ev.date}</span>
                   <div>
-                    <span className="text-zinc-300">{evTitle}</span>
-                    {evDesc && <p className="text-zinc-600 mt-0.5 leading-relaxed">{evDesc}</p>}
+                    <span className="text-foreground/80">{evTitle}</span>
+                    {evDesc && <p className="text-muted-foreground/70 mt-0.5 leading-relaxed">{evDesc}</p>}
                   </div>
                 </div>
               );
@@ -479,28 +479,28 @@ function HistoryItem({ item }: { item: any }) {
   const sessionLabel = SESSION_TYPE_LABEL[item.sessionType] ?? item.sessionType ?? "브리핑";
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
-          <span className="text-xs text-zinc-300 flex-shrink-0">{sessionLabel}</span>
+          <span className="text-xs text-foreground/80 flex-shrink-0">{sessionLabel}</span>
           {item.summary && (
-            <span className="text-xs text-zinc-600 hidden sm:inline truncate">
+            <span className="text-xs text-muted-foreground/70 hidden sm:inline truncate">
               — {item.summary.slice(0, 60)}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          <span className="text-[10px] text-zinc-600">{timeStr}</span>
-          <span className={`text-zinc-600 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
+          <span className="text-[10px] text-muted-foreground/70">{timeStr}</span>
+          <span className={`text-muted-foreground/70 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
         </div>
       </button>
 
       {open && item.data && (
-        <div className="px-4 pb-4 border-t border-zinc-800 pt-4">
+        <div className="px-4 pb-4 border-t border-border pt-4">
           <BriefDetail
             session={{
               slot: item.sessionType,
@@ -606,14 +606,14 @@ export default function MarketAnalysisPage() {
     : "";
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Top bar */}
-      <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-zinc-800">
+      <div className="sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-sm font-bold text-zinc-100 flex-shrink-0">시장 분석</h1>
+            <h1 className="text-sm font-bold text-foreground flex-shrink-0">시장 분석</h1>
             {dateLabel && (
-              <span className="text-xs text-zinc-500 hidden sm:inline truncate">{dateLabel}</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline truncate">{dateLabel}</span>
             )}
             {sessionsData?.generating && (
               <span className="hidden sm:flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 flex-shrink-0">
@@ -623,15 +623,15 @@ export default function MarketAnalysisPage() {
             )}
           </div>
 
-          <div className="flex items-center bg-zinc-900 rounded-lg border border-zinc-800 p-0.5 flex-shrink-0">
+          <div className="flex items-center bg-card rounded-lg border border-border p-0.5 flex-shrink-0">
             {(["kr", "us"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMarket(m)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   market === m
-                    ? "bg-zinc-700 text-zinc-100 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? "bg-muted text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 {m === "kr" ? "🇰🇷 한국" : "🇺🇸 미국"}
@@ -644,22 +644,22 @@ export default function MarketAnalysisPage() {
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         {/* Session Timeline */}
         <section>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-3">
             오늘의 시장 흐름
           </p>
 
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-36 rounded-xl bg-zinc-800/50 animate-pulse" />
+                <div key={i} className="h-36 rounded-xl bg-muted/50 animate-pulse" />
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-zinc-800 p-8 text-center space-y-3">
-              <p className="text-sm text-zinc-500">{error}</p>
+            <div className="rounded-xl border border-border p-8 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">{error}</p>
               <button
                 onClick={() => fetchSessions()}
-                className="text-xs text-zinc-400 hover:text-zinc-200 underline"
+                className="text-xs text-muted-foreground hover:text-foreground underline"
               >
                 다시 시도
               </button>
@@ -680,17 +680,17 @@ export default function MarketAnalysisPage() {
 
         {/* Selected Brief Detail */}
         {selectedSession && !loading && (
-          <section className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between gap-3">
+          <section className="bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="text-base flex-shrink-0">{SESSION_ICON[selectedSession.icon] ?? "📋"}</span>
-                <span className="font-semibold text-sm text-zinc-100 flex-shrink-0">{selectedSession.label}</span>
-                <span className="text-xs text-zinc-600 font-mono flex-shrink-0">{selectedSession.time}</span>
+                <span className="font-semibold text-sm text-foreground flex-shrink-0">{selectedSession.label}</span>
+                <span className="text-xs text-muted-foreground/70 font-mono flex-shrink-0">{selectedSession.time}</span>
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
                 {selectedSession.generatedAt && (
-                  <span className="text-[10px] text-zinc-600 hidden sm:inline">
+                  <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">
                     {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", {
                       hour: "2-digit", minute: "2-digit",
                     })} 생성
@@ -717,7 +717,7 @@ export default function MarketAnalysisPage() {
               if (!historyOpen && history.length === 0) fetchHistory();
               setHistoryOpen((o) => !o);
             }}
-            className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground/80 transition-colors py-1"
           >
             <span className={`transition-transform duration-200 text-[10px] ${historyOpen ? "rotate-90" : ""}`}>▶</span>
             지난 브리핑
@@ -728,11 +728,11 @@ export default function MarketAnalysisPage() {
               {historyLoading ? (
                 <div className="space-y-2">
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-12 rounded-xl bg-zinc-800/50 animate-pulse" />
+                    <div key={i} className="h-12 rounded-xl bg-muted/50 animate-pulse" />
                   ))}
                 </div>
               ) : history.length === 0 ? (
-                <p className="text-xs text-zinc-600 py-3">저장된 브리핑이 없습니다</p>
+                <p className="text-xs text-muted-foreground/70 py-3">저장된 브리핑이 없습니다</p>
               ) : (
                 history.map((item, i) => <HistoryItem key={i} item={item} />)
               )}

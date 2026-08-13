@@ -42,7 +42,6 @@ import {
   FileText,
   Users,
   AlertTriangle,
-  Star,
   Minus,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
@@ -3361,29 +3360,6 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
 
 function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyName: string; isEn: boolean }) {
   const [, setLocation] = useLocation();
-  // 포트폴리오 기능을 접었으므로 여기서는 **관심종목만** 다룬다.
-  const [wlStatus, setWlStatus] = useState<"idle" | "adding" | "added" | "exists">("idle");
-
-  useEffect(() => {
-    fetch(getApiUrl(`/api/portfolio/check/${encodeURIComponent(ticker)}`), { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.inWatchlist) setWlStatus("exists"); })
-      .catch(() => {});
-  }, [ticker]);
-
-  async function addToWatchlist() {
-    setWlStatus("adding");
-    const currency = /^\d{5,6}$/.test(ticker) ? "KRW" : "USD";
-    try {
-      const r = await fetch(getApiUrl("/api/portfolio"), {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, companyName, currency, holdingType: "watchlist" }),
-      });
-      if (r.ok) setWlStatus("added");
-      else setWlStatus("idle");
-    } catch { setWlStatus("idle"); }
-  }
 
   return (
     <div className="mt-4 print:hidden">
@@ -3413,51 +3389,6 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
 
         </div>
 
-        {/* 관심종목 추가 */}
-        {(
-          <div className="pt-0.5">
-            {wlStatus === "exists" || wlStatus === "added" ? (
-              <button
-                onClick={() => setLocation("/portfolio")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-amber-400/30 bg-amber-400/8 hover:bg-amber-400/14 transition-all duration-200 group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-400/15 flex items-center justify-center shrink-0">
-                  <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <p className="text-[13px] font-bold text-amber-600 dark:text-amber-400 leading-tight">
-                    {wlStatus === "added" ? (isEn ? "Added to Watchlist!" : "관심종목에 추가됨!") : (isEn ? "In Watchlist" : "관심종목에 있음")}
-                  </p>
-                  <p className="text-[11px] text-amber-500/70 leading-tight">
-                    {isEn ? "View in portfolio →" : "포트폴리오에서 보기 →"}
-                  </p>
-                </div>
-                <Check className="w-4 h-4 text-amber-500 shrink-0" />
-              </button>
-            ) : (
-              <button
-                onClick={addToWatchlist}
-                disabled={wlStatus === "adding"}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-border/60 bg-muted/20 hover:bg-muted/40 hover:border-amber-400/30 transition-all duration-200 group disabled:opacity-60"
-              >
-                <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-amber-400/10 flex items-center justify-center shrink-0 transition-colors">
-                  {wlStatus === "adding"
-                    ? <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
-                    : <Star className="w-4 h-4 text-muted-foreground group-hover:text-amber-500 transition-colors" />
-                  }
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <p className="text-[13px] font-semibold text-foreground/70 group-hover:text-foreground leading-tight transition-colors">
-                    {isEn ? "Add to Watchlist" : "관심종목에 추가"}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/60 leading-tight">
-                    {isEn ? "Monitor without buying yet" : "아직 살 건 아니지만 지켜보기"}
-                  </p>
-                </div>
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

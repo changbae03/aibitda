@@ -549,7 +549,7 @@ export default function NewAnalysis() {
               </>
             ) : (
               <>
-                <span className="block">몇 년치 사업보고서를 나란히 놓고 대조해, 지금의 단계를 짚어드립니다</span>
+                <span className="block">3년치 공시를 나란히 놓고 대조해 기업의 이면을 파악합니다</span>
                 <span className="block">종목코드나 회사명으로 검색해보세요</span>
               </>
             )}
