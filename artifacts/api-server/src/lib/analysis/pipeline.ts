@@ -515,7 +515,10 @@ async function executeStep(
 
       // ── 중복 방지: 이미 완료된 단계의 담당 영역을 AI에게 고지 ──────────────
       // 각 단계가 이미 다룬 영역을 명시 → AI가 같은 내용을 반복 작성하지 않도록 방지
-      if (stepKey !== "company_intro" && existingSteps.length > 0) {
+      // ⚠️ 예전에는 "이미 끝난 단계"만 적어줬다. 단계를 **병렬로** 돌리면 끝난 것이
+      // 하나도 없어 이 장치가 통째로 무력해진다 — 다섯 단계가 같은 내용을 각자 쓴다.
+      // 담당 영역은 순서와 무관하게 정해져 있으므로, 완료 여부와 상관없이 알려준다.
+      if (stepKey !== "company_intro") {
         const STEP_OWNERSHIP: Record<string, string> = {
           company_intro:        "기업 소개, 핵심 이슈 선언",
           industry_analysis:    "산업 구조·수익 모델, 시장 규모·성장률, 경쟁사 점유율·수익성 비교, 기업의 업계 내 경쟁 포지션(유리/불리), 정책·규제 환경",
@@ -531,13 +534,13 @@ async function executeStep(
           intrinsic_valuation: "절대가치 밸류에이션",
           investment_strategy: "투자 전략",
         };
-        const completedLines = existingSteps
-          .filter(s => STEP_OWNERSHIP[s.stepKey])
-          .map(s => `- [${STEP_LABEL[s.stepKey] ?? s.stepKey}] 이미 다룬 영역: ${STEP_OWNERSHIP[s.stepKey]}`)
+        const completedLines = Object.keys(STEP_OWNERSHIP)
+          .filter(k => k !== stepKey)
+          .map(k => `- [${STEP_LABEL[k] ?? k}] 담당 영역: ${STEP_OWNERSHIP[k]}`)
           .join("\n");
         if (completedLines) {
-          const dedupBlock = `\n\n[⛔ 중복 작성 금지 — 이미 완료된 단계에서 다룬 영역]\n`
-            + `아래 영역은 각 담당 단계에서 이미 상세히 분석됨. 이 단계에서 같은 내용을 다시 설명하는 것은 금지됩니다.\n`
+          const dedupBlock = `\n\n[⛔ 중복 작성 금지 — 다른 단계가 맡은 영역]\n`
+            + `아래 영역은 각 담당 단계가 따로 분석합니다(동시에 진행될 수 있습니다). 이 단계에서 같은 내용을 다시 설명하는 것은 금지됩니다.\n`
             + `꼭 필요한 경우(현재 단계 논리 전개에 필수적인 수치 1개 인용 등) 1문장 이내로만 참조하고, 재분석·재설명은 하지 마세요.\n\n`
             + completedLines;
           enrichedContext = enrichedContext ? enrichedContext + dedupBlock : dedupBlock;
@@ -870,6 +873,22 @@ async function executeStep(
               console.log(`[${stepKey}] 임상단계 바이오로 판정 (임상 언급 ${pl.mentions}건, OPM ${opm.toFixed(1)}%) — 마진 감점 제외`);
             }
           } catch { /* 판정 실패는 기존 방식으로 진행 */ }
+
+          // 매출 **절대액**과 현금 여력. 증감률만으로는 사업의 방향을 알 수 없는
+          // 회사가 있다 — 이뮨온시아는 6.5억 → 1.1억이 "매출급감 −86%"로 찍혔다.
+          if (annualRows.length > 0) {
+            const rev = Number(annualRows[0].revenue);
+            if (Number.isFinite(rev)) stageSig.revenueKrw = rev;
+            // 런웨이 = 현금 ÷ 연 영업손실. 적자일 때만 뜻이 있다.
+            // ⚠️ 분기 조회(quarterRows)에는 cash 컬럼이 없다 — 거기서 꺼내면 NaN이 되어
+            // 런웨이가 **말 없이 계산되지 않는다.** 현금과 손실을 같은 기간(연간)으로 맞춘다.
+            const cash = Number(annualRows[0].cash);
+            const annualLoss = -Number(annualRows[0].operating_income);
+            if (Number.isFinite(cash) && cash > 0 && Number.isFinite(annualLoss) && annualLoss > 0) {
+              stageSig.runwayYears = cash / annualLoss;
+              console.log(`[${stepKey}] 현금 ${(cash / 1e8).toFixed(0)}억 ÷ 연손실 ${(annualLoss / 1e8).toFixed(0)}억 = 런웨이 ${(cash / annualLoss).toFixed(1)}년`);
+            }
+          }
 
           // 국면 신호: 매출성장률·OPM 추세 (최근 확정 연간 vs 직전)
           if (annualRows.length >= 2) {

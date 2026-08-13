@@ -116,6 +116,46 @@ describe("투자자 언어로 나눈 단계 — 폭발 성장·증명 대기", (
   });
 });
 
+describe("임상 바이오는 매출로 줄 세우지 않는다 — 이뮨온시아 회귀", () => {
+  /**
+   * 실측(424870): 매출 2023 1.1억 → 2024 6.5억 → 2025 1.1억, 영업손실 −118 → −126 → −280억.
+   * 매출 증감률만 보면 −86%라 "매출급감"으로 −30점을 받아 쇠퇴가 됐다.
+   * 금액으로는 5억 원 차이이고, 기술이전 마일스톤이 들어온 해와 아닌 해의 차이일 뿐이다.
+   */
+  const immunoncia = {
+    isClinicalBio: true,
+    revenueKrw: 1.1e8,          // 1.1억
+    revGrowthPct: -86,
+    runwayYears: 234 / 280,     // 현금 234억 ÷ 연손실 280억 = 0.84년
+    valuationPercentile: 20,
+  };
+
+  it("매출이 미미한 임상 바이오를 쇠퇴로 판정하지 않는다", () => {
+    expect(classifyStage(immunoncia).phase).not.toBe("decline");
+  });
+
+  it("있는 자리는 '증명 대기' — 기대는 붙었고 숫자는 아직", () => {
+    expect(classifyStage(immunoncia).phase).toBe("waiting");
+  });
+
+  it("매출 증감률을 점수에 쓰지 않고, 그 사실을 근거로 남긴다", () => {
+    const r = scoreSubstance(immunoncia);
+    expect(r.reasons.some(x => x.includes("매출급감"))).toBe(false);
+    expect(r.reasons.some(x => x.includes("증감률로 판단하지 않음"))).toBe(true);
+  });
+
+  it("현금 고갈은 반대로 분명히 말한다 — 이게 진짜 위험이다", () => {
+    const r = scoreSubstance(immunoncia);
+    expect(r.reasons.some(x => x.includes("자금조달 필요"))).toBe(true);
+  });
+
+  it("매출이 충분한 회사는 규모 예외를 타지 않는다 — 셀트리온형", () => {
+    // 매출 2조대 바이오는 증감률이 그대로 의미를 갖는다
+    const r = scoreSubstance({ isClinicalBio: true, revenueKrw: 2.2e12, revGrowthPct: -86 });
+    expect(r.reasons.some(x => x.includes("매출급감"))).toBe(true);
+  });
+});
+
 describe("턴어라운드는 궤적으로만 감지된다", () => {
   it("직전이 바닥(쇠퇴)이었다가 이번에 크게 올라오면 턴어라운드", () => {
     const v = classifyStage({ revGrowthPct: 15, opmDeltaPp: 4, capexTrend: "expanding", priorSubstanceScore: -40, valuationPercentile: 35 });

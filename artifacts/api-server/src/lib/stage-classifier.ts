@@ -163,6 +163,18 @@ export interface StageSignals {
    * 연구인력 채용이다. 매출·마진으로 재면 **임상에 돈을 쓸수록 쇠퇴로 읽힌다.**
    */
   isClinicalBio?: boolean | null;
+  /**
+   * 최신 연간 매출 절대액(원). **증감률을 믿어도 되는지**를 가른다.
+   * 이뮨온시아는 6.5억 → 1.1억으로 "매출급감 −86%"가 찍혀 쇠퇴로 판정됐다.
+   * 금액으로는 5억 원 차이이고, 임상 바이오의 기술료·마일스톤은 들어온 해와
+   * 아닌 해가 갈릴 뿐이다. 규모가 작으면 %는 사업의 방향을 말해주지 않는다.
+   */
+  revenueKrw?: number | null;
+  /**
+   * 현금으로 버틸 수 있는 햇수 = 현금 ÷ 연 영업손실. 적자 기업에만 의미가 있다.
+   * 매출이 없는 임상 바이오에서 **실제 위험은 매출이 아니라 현금 고갈**이다.
+   */
+  runwayYears?: number | null;
 }
 
 // ─── 가중치 (실측으로 조정) ───────────────────────────────────────────────────
@@ -199,7 +211,12 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
   const reasons: string[] = [];
   const add = (pts: number, why: string) => { score += pts; reasons.push(`${pts >= 0 ? "+" : ""}${pts} ${why}`); };
 
-  if (s.revGrowthPct != null) {
+  // 규모가 작으면 증감률은 방향이 아니라 잡음이다 — 금액 몇 억이 ±80%를 만든다.
+  const tinyRevenue = s.revenueKrw != null && s.revenueKrw < TINY_REVENUE_KRW;
+  if (tinyRevenue) {
+    reasons.push(`매출 ${(s.revenueKrw! / 1e8).toFixed(0)}억 규모 — 증감률로 판단하지 않음`);
+  }
+  if (s.revGrowthPct != null && !tinyRevenue) {
     const g = s.revGrowthPct;
     // 초고성장(40%+)은 20%대 성장과 다른 신호다 — 상한을 하나 더 둬서 마진·운전자본
     // 감점 하나에 "둔화"로 눌리지 않게 한다(NVDA 매출 +65%가 피크아웃으로 오분류되던 사례).
@@ -223,6 +240,13 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
     else if (d >= 1) add(7, `마진개선 ${d.toFixed(1)}%p`);
     else if (d <= -3) add(-15, `마진악화 ${d.toFixed(1)}%p`);
     else if (d <= -1) add(-8, `마진악화 ${d.toFixed(1)}%p`);
+  }
+  // 매출로 판단할 수 없는 회사(임상 바이오)에서는 현금이 곧 생존 시간이다.
+  if (s.runwayYears != null) {
+    const y = s.runwayYears;
+    if (y < 1) add(-25, `현금 ${y.toFixed(1)}년치 — 자금조달 필요`);
+    else if (y < 2) add(-10, `현금 ${y.toFixed(1)}년치`);
+    else add(8, `현금 ${y.toFixed(1)}년치 확보`);
   }
   if (s.capexTrend === "expanding") add(12, "설비투자 확대");
   else if (s.capexTrend === "cutting") add(-8, "설비투자 축소");
@@ -302,6 +326,9 @@ const SIGNAL_KEYS: Array<keyof StageSignals> = [
   "headcountGrowthPct", "cccDeltaDays", "valuationPercentile",
 ];
 
+/** 이 밑으로는 매출 증감률을 사업의 방향으로 읽지 않는다(100억). */
+const TINY_REVENUE_KRW = 100 * 1e8;
+
 /** 두 축을 조합해 국면을 판정한다. */
 export function classifyStage(s: StageSignals): StageVerdict {
   const substance = scoreSubstance(s);
@@ -325,8 +352,18 @@ export function classifyStage(s: StageSignals): StageVerdict {
   // 직전보다 나아지는 중이면 아직 증명 전(대기), 나빠지는 중이면 정점을 지난 것(피크아웃).
   const improving = s.priorSubstanceScore != null && substance.score > s.priorSubstanceScore;
 
+  /**
+   * 임상 바이오는 **아직 팔 물건이 없는 회사**다. 매출·마진 축으로 줄을 세우면
+   * 늘 바닥에 놓여 "쇠퇴"가 된다(이뮨온시아·메디포스트가 그랬다).
+   * 이 회사들이 실제로 있는 자리는 "기대는 붙었고 숫자는 아직" — 증명 대기다.
+   * 확인할 것도 매출이 아니라 임상 결과·기술이전·현금이다.
+   */
+  const preRevenueBio = s.isClinicalBio === true
+    && s.revenueKrw != null && s.revenueKrw < TINY_REVENUE_KRW;
+
   let phase: Phase;
-  if (substance.state === "rebounding") phase = "turnaround";
+  if (preRevenueBio) phase = "waiting";
+  else if (substance.state === "rebounding") phase = "turnaround";
   else if (substance.state === "strong") phase = hyper ? "hypergrowth" : premium ? "numbers" : "proving";
   else if (substance.state === "slowing") phase = premium ? (improving ? "waiting" : "peakout") : "value";
   else /* contracting */ phase = premium ? "hype" : "decline";

@@ -116,3 +116,25 @@ export const ANALYSIS_STEPS_ORDER = [
   "investment_strategy",
   "investment_thesis",
 ] as const;
+
+/**
+ * **동시에 돌려도 되는 단계.** 각자 자기 자료(공시 원문·재무·뉴스)로 쓰고 서로를 읽지 않는다.
+ * 한 장씩 차례로 채우면 뒤 카드는 앞 카드가 다 끝날 때까지 스피너만 돈다 —
+ * 그럴 이유가 없다.
+ */
+export const PARALLEL_STEPS = [
+  "dart_report_analysis",
+  "company_intro",
+  "industry_analysis",
+  "company_analysis",
+  "catalyst_analysis",
+] as const;
+
+/**
+ * **앞 단계를 읽고 쓰는 단계.** 종합이라 병렬로 돌리면 읽을 것이 없다.
+ * 위 다섯이 모두 끝난 뒤 차례로 돈다.
+ */
+export const SYNTHESIS_STEPS = [
+  "investment_strategy",
+  "investment_thesis",
+] as const;

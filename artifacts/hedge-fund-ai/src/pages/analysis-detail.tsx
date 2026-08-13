@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, Children, isValidEle
 import { useRoute, useLocation } from "wouter";
 import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AGENTS, ANALYSIS_STEPS_ORDER, type AgentInfo } from "@/lib/agents";
+import { AGENTS, ANALYSIS_STEPS_ORDER, PARALLEL_STEPS, SYNTHESIS_STEPS, type AgentInfo } from "@/lib/agents";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
@@ -3844,8 +3844,15 @@ export default function AnalysisDetail() {
     qcFeedback?: string;
     debateStatus?: DebateStatus;
   }
-  const [streamingStep, setStreamingStep] = useState<StreamingStepState | null>(null);
-  const isStreaming = streamingStep !== null;
+  /**
+   * **여러 단계가 동시에 흐른다.** 예전에는 하나만 담을 수 있어서(단일 객체)
+   * 카드가 한 장씩 차례로만 채워졌다 — 1번이 끝나야 2번이 시작했다.
+   * 단계별로 따로 담아 병렬 스트리밍을 그대로 화면에 올린다.
+   */
+  const [streamingSteps, setStreamingSteps] = useState<Record<string, StreamingStepState>>({});
+  const isStreaming = Object.keys(streamingSteps).length > 0;
+  /** 그 단계의 흐르는 상태(없으면 undefined) */
+  const streamOf = (k: string): StreamingStepState | undefined => streamingSteps[k];
   const triggeredSteps = useRef<Set<string>>(new Set());
   const runStreamingStepRef = useRef<((stepKey: string) => void) | null>(null);
   const hasInitiatedRef = useRef(false);
@@ -3864,7 +3871,13 @@ export default function AnalysisDetail() {
   };
 
   const runStreamingStep = useCallback(async (stepKey: string) => {
-    setStreamingStep({ key: stepKey, content: "" });
+    const patch = (fn: (prev: StreamingStepState) => StreamingStepState) =>
+      setStreamingSteps(prev => (prev[stepKey] ? { ...prev, [stepKey]: fn(prev[stepKey]!) } : prev));
+    const clear = () => setStreamingSteps(prev => {
+      if (!prev[stepKey]) return prev;
+      const next = { ...prev }; delete next[stepKey]; return next;
+    });
+    setStreamingSteps(prev => ({ ...prev, [stepKey]: { key: stepKey, content: "" } }));
     let completedSuccessfully = false;
     try {
       const res = await fetch(getApiUrl(`/api/analysis/${id}/step`), {
@@ -3873,7 +3886,7 @@ export default function AnalysisDetail() {
         body: JSON.stringify({ stepKey }),
       });
       if (!res.ok || !res.body) {
-        setStreamingStep(null);
+        clear();
         // 409는 이제 "이미 끝난 단계"일 때만 온다. 백그라운드가 돌리는 중이면
         // 서버가 막지 않고 그 글을 중계해 주므로(200 SSE) 아래 리더로 흘러간다.
         return;
@@ -3892,17 +3905,17 @@ export default function AnalysisDetail() {
           try {
             const msg = JSON.parse(line.slice(6));
             if (msg.debate === "challenging") {
-              setStreamingStep(prev => prev ? { ...prev, debateStatus: "challenging" } : null);
+              patch(prev => ({ ...prev, debateStatus: "challenging" }));
             } else if (msg.debate === "synthesizing") {
-              setStreamingStep(prev => prev ? { ...prev, debateStatus: "synthesizing" } : null);
+              patch(prev => ({ ...prev, debateStatus: "synthesizing" }));
             } else if (msg.qc === "checking") {
-              setStreamingStep(prev => prev ? { ...prev, debateStatus: undefined, qcStatus: "checking" } : null);
+              patch(prev => ({ ...prev, debateStatus: undefined, qcStatus: "checking" }));
             } else if (msg.qc === "approved") {
-              setStreamingStep(prev => prev ? { ...prev, qcStatus: "approved", qcScore: msg.score } : null);
+              patch(prev => ({ ...prev, qcStatus: "approved", qcScore: msg.score }));
             } else if (msg.qc === "revising") {
-              setStreamingStep(prev => prev ? { ...prev, qcStatus: "revising", qcScore: msg.score, qcFeedback: msg.feedback } : null);
+              patch(prev => ({ ...prev, qcStatus: "revising", qcScore: msg.score, qcFeedback: msg.feedback }));
             } else if (msg.qc === "revised") {
-              setStreamingStep(prev => prev ? { ...prev, qcStatus: "revised", qcScore: msg.score } : null);
+              patch(prev => ({ ...prev, qcStatus: "revised", qcScore: msg.score }));
             }
             // 글자가 도착하면 **바로 화면에 쌓는다.**
             //
@@ -3911,10 +3924,10 @@ export default function AnalysisDetail() {
             // 글을 계속 보내고 있었는데도. 읽는 사람은 다 쓰이길 기다릴 필요가 없다.
             // 서버가 "다시 쓴다"고 하면 화면도 비운다 — 안 그러면 원고가 겹쳐 붙는다.
             if (msg.reset === true) {
-              setStreamingStep(prev => prev ? { ...prev, content: "" } : prev);
+              patch(prev => ({ ...prev, content: "" }));
             }
             if (typeof msg.t === "string" && msg.t.length > 0) {
-              setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : prev);
+              patch(prev => ({ ...prev, content: prev.content + msg.t }));
             }
             if (msg.done) {
               queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
@@ -3924,77 +3937,61 @@ export default function AnalysisDetail() {
         }
       }
     } catch {
-      setStreamingStep(null);
+      clear();
       return;
     }
 
     // Clear streaming card now that the step is saved
-    setStreamingStep(null);
+    clear();
 
-    // Auto-chain: immediately trigger the next step without relying on effects
-    if (completedSuccessfully) {
-      const nextIndex = ANALYSIS_STEPS_ORDER.indexOf(stepKey) + 1;
-      if (nextIndex < ANALYSIS_STEPS_ORDER.length) {
-        const nextKey = ANALYSIS_STEPS_ORDER[nextIndex];
-        if (!triggeredSteps.current.has(nextKey)) {
-          triggeredSteps.current.add(nextKey);
-          // Slight delay to let React flush state before starting next step
-          setTimeout(() => {
-            runStreamingStepRef.current?.(nextKey);
-          }, 200);
-        }
-      }
-    }
+    // 다음에 무엇을 돌릴지는 아래 드라이버 효과가 정한다.
+    // 예전에는 여기서 "내 다음 순번"을 직접 불렀고, 그래서 **항상 한 줄로만** 흘렀다.
+    void completedSuccessfully;
   }, [id, queryClient]);
 
   // Keep ref up-to-date so the setTimeout inside can always call the latest version
   runStreamingStepRef.current = runStreamingStep;
 
-  // On mount / resume: start from the first pending step if analysis is already in_progress
-  // error 상태지만 미완료 스텝이 있는 경우에도 run-pipeline으로 자동 재시도
+  /**
+   * 단계 드라이버 — **병렬 묶음을 한꺼번에 띄우고, 종합은 그 뒤에 차례로.**
+   *
+   * 예전에는 끝난 단계가 자기 다음 순번을 불렀다(한 줄 체인). 그래서 사업보고서
+   * 단계가 도는 40여 초 동안 나머지 카드는 아무것도 못 하고 기다렸다.
+   * 다섯 단계는 서로를 읽지 않으므로 같이 흘려보내고, 앞을 읽어야 하는 종합만 뒤에 둔다.
+   */
   useEffect(() => {
     if (!analysis) return;
 
     const isResumable =
       analysis.status === "in_progress" ||
       (analysis.status === "error" && analysis.steps.length < ANALYSIS_STEPS_ORDER.length);
-
     if (!isResumable) return;
 
-    // 백그라운드 파이프라인이 실행 중인지 확인/보장 (클라이언트 이탈 후 재진입 시 안전망)
-    fetch(getApiUrl(`/api/analysis/${id}/run-pipeline`), { method: "POST", headers: { "Content-Type": "application/json" } })
-      .catch(console.error);
-
-    if (analysis.status !== "in_progress") return; // error 상태는 서버 백그라운드에 위임
-    if (hasInitiatedRef.current) return;
-    const nextIndex = analysis.steps.length;
-    if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
-    const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
-    if (triggeredSteps.current.has(nextStepKey)) return;
+    // 백그라운드 파이프라인이 살아 있는지 보장(클라이언트가 떠나도 이어지도록)
+    if (!hasInitiatedRef.current) {
+      fetch(getApiUrl(`/api/analysis/${id}/run-pipeline`), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+      }).catch(console.error);
+    }
+    if (analysis.status !== "in_progress") return;  // error는 서버 백그라운드에 맡긴다
     hasInitiatedRef.current = true;
-    triggeredSteps.current.add(nextStepKey);
-    runStreamingStep(nextStepKey);
+
+    const done = new Set(analysis.steps.map((s: any) => s.stepKey));
+    const start = (k: string) => {
+      if (done.has(k) || triggeredSteps.current.has(k)) return;
+      triggeredSteps.current.add(k);
+      runStreamingStep(k);
+    };
+
+    // 1) 병렬 묶음 — 남은 것을 전부 동시에
+    const pending = PARALLEL_STEPS.filter(k => !done.has(k) && !triggeredSteps.current.has(k));
+    if (pending.length > 0) { pending.forEach(start); return; }
+
+    // 2) 다섯이 다 끝나야 종합으로 넘어간다(앞 내용을 읽고 쓰기 때문)
+    if (!PARALLEL_STEPS.every(k => done.has(k))) return;
+    const next = SYNTHESIS_STEPS.find(k => !done.has(k) && !triggeredSteps.current.has(k));
+    if (next) start(next);
   }, [analysis?.status, analysis?.steps.length, id, runStreamingStep]);
-
-  // Auto-advance: 스트리밍이 끝나고 다음 단계가 남아 있으면 자동으로 실행
-  // 체인이 끊겨 수동 버튼이 나타나는 현상 방지
-  useEffect(() => {
-    if (!analysis || analysis.status !== "in_progress") return;
-    if (isStreaming) return;
-    const nextIndex = analysis.steps.length;
-    if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
-    const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
-    if (triggeredSteps.current.has(nextStepKey)) return;
-
-    // 짧은 딜레이 후 자동 실행 (React state flush 대기)
-    const timer = setTimeout(() => {
-      if (triggeredSteps.current.has(nextStepKey)) return;
-      triggeredSteps.current.add(nextStepKey);
-      runStreamingStep(nextStepKey);
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [analysis?.status, analysis?.steps.length, isStreaming, runStreamingStep]);
 
   // ⑨ IntersectionObserver for floating verdict card
   useEffect(() => {
@@ -4498,8 +4495,8 @@ export default function AnalysisDetail() {
       {(() => {
         const introStep = analysis.steps.find((s: any) => s.stepKey === "company_intro");
         const indStep   = analysis.steps.find((s: any) => s.stepKey === "industry_analysis");
-        const streamingIntro = streamingStep?.key === "company_intro";
-        const streamingInd   = streamingStep?.key === "industry_analysis";
+        const streamingIntro = !!streamOf("company_intro");
+        const streamingInd   = !!streamOf("industry_analysis");
         const hasAny = !!(introStep || indStep);
         const activelyStreaming = streamingIntro || streamingInd;
         if (!hasAny && !activelyStreaming && (isComplete || isError)) return null;
@@ -4546,12 +4543,12 @@ export default function AnalysisDetail() {
       {/* ══ 섹션 2: 실적과 주가 — 숫자가 먼저, 이유는 3번에서 ══ */}
       {(() => {
         const compStep = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
-        const streamingComp = streamingStep?.key === "company_analysis";
+        const streamingComp = !!streamOf("company_analysis");
         const dartStarted = !!(
           analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis") ||
           analysis.steps.find((s: any) => s.stepKey === "company_analysis") ||
-          streamingStep?.key === "dart_report_analysis" ||
-          streamingStep?.key === "company_analysis"
+          !!streamOf("dart_report_analysis") ||
+          !!streamOf("company_analysis")
         );
         const showCard = isComplete || dartStarted;
         if (!showCard) return null;
@@ -4597,8 +4594,8 @@ export default function AnalysisDetail() {
       {(() => {
         const dartStep  = analysis.steps.find((s: any) => s.stepKey === "dart_report_analysis");
         const compStep  = analysis.steps.find((s: any) => s.stepKey === "company_analysis");
-        const streamingDart = streamingStep?.key === "dart_report_analysis";
-        const streamingComp = streamingStep?.key === "company_analysis";
+        const streamingDart = !!streamOf("dart_report_analysis");
+        const streamingComp = !!streamOf("company_analysis");
         const sec1Done = !!(
           analysis.steps.find((s: any) => s.stepKey === "company_intro") ||
           analysis.steps.find((s: any) => s.stepKey === "industry_analysis")
@@ -4633,9 +4630,9 @@ export default function AnalysisDetail() {
                     {isEn ? "Reading filings…" : "사업보고서 읽는 중…"}
                   </span>
                 </div>
-                {streamingStep?.content ? (
+                {streamOf("dart_report_analysis")?.content ? (
                   <div className="animate-in fade-in duration-300">
-                    <MdBlock src={streamingStep.content} isEn={isEn} />
+                    <MdBlock src={streamOf("dart_report_analysis")!.content} isEn={isEn} />
                   </div>
                 ) : (
                   <p className="text-[12.5px] text-muted-foreground/60 py-3">
@@ -4652,7 +4649,7 @@ export default function AnalysisDetail() {
       {/* ══ 섹션 4: 지금 이 기업에 무슨 일이 일어나고 있나 ══ */}
       {(() => {
         const catStep = analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis");
-        const streamingCat = streamingStep?.key === "catalyst_analysis";
+        const streamingCat = !!streamOf("catalyst_analysis");
         const hasAny = !!catStep;
         // 뉴스 타임라인은 항상 표시 (캐시 기반 독립 fetch)
         const prevDone = !!(
@@ -4700,12 +4697,12 @@ export default function AnalysisDetail() {
       {/* ══ 섹션 5: 애빛다 총정리 (투자 판단 + 6렌즈) ══ */}
       {(() => {
         const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
-        const streamingStrat = streamingStep?.key === "investment_strategy";
+        const streamingStrat = !!streamOf("investment_strategy");
         const thesisStep = analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
-        const streamingThesis = streamingStep?.key === "investment_thesis";
+        const streamingThesis = !!streamOf("investment_thesis");
         const catStarted = !!(
           analysis.steps.find((s: any) => s.stepKey === "catalyst_analysis") ||
-          streamingStep?.key === "catalyst_analysis"
+          !!streamOf("catalyst_analysis")
         );
         const showSection = !!stratStep || streamingStrat || !!thesisStep || streamingThesis ||
           (catStarted && !isComplete && !isError);
@@ -4776,8 +4773,8 @@ export default function AnalysisDetail() {
       {/* ══ 섹션 6: 투자 체크리스트 ══ */}
       {(() => {
         const checklistStep = analysis.steps.find((s: any) => s.stepKey === "checklist");
-        const streamingChecklist = streamingStep?.key === "checklist";
-        const thesisStarted = !!(analysis.steps.find((s: any) => s.stepKey === "investment_thesis") || streamingStep?.key === "investment_thesis");
+        const streamingChecklist = !!streamOf("checklist");
+        const thesisStarted = !!(analysis.steps.find((s: any) => s.stepKey === "investment_thesis") || !!streamOf("investment_thesis"));
         // isComplete 여부와 무관하게 thesis가 시작된 이후엔 섹션 표시
         // (과거 완료 분석에서 checklist가 없어도 pending 상태로 표시 → 수동 실행 가능)
         const showSection = !!checklistStep || streamingChecklist || thesisStarted;
