@@ -80,6 +80,11 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
     // 해외·정상외교 (한국 증시에 즉시 반영된다)
     "트럼프 발표 예정", "미국 관세 발효 예정", "한미 정상회담 예정",
     "정상 방한 예정", "국빈 방문 일정", "수출 계약 서명식 예정",
+    // ⚠️ **거물의 방한은 국가원수만이 아니다.** "정상 방한 예정"으로는 왕이·마크롱만
+    // 올라오고, 2026-08-13 "빌 게이츠 방한 — 정·재계와 SMR 협력 논의"가 한 건도 안 걸렸다.
+    // 같은 날 `"방한 일정"`으로 치니 **1위로 나왔다.** 기업인·투자자의 방한을 따로 묻는다.
+    // (실측: 이 세 질의가 빌 게이츠·샘 올트먼·젠슨 황을 모두 잡았다)
+    "방한 일정", "내한 일정 협력", "회장 방한 협력 논의",
     // 산업 행사·전시 (신기술 공개가 몰린다)
     "국제 전시회 개막 예정 반도체", "기술 컨퍼런스 개최 예정", "수주 입찰 결과 발표 예정",
     // 정책 회의체 — 날짜가 잡힌 회의는 그날 업종이 통째로 움직인다
@@ -124,7 +129,9 @@ function buildPrompt(headlines: string[], today: string, daysAhead: number): str
 - 시장: 지수 편입·리밸런싱, 금리 결정, 주요 경제지표 발표
 
 [제외할 것]
-- 이미 지난 일 (과거형 서술)
+- 이미 지난 일 (과거형 서술). 단, **남은 일정이 앞에 있으면 담으세요** — "오늘 입국,
+  내일 총리·회장 면담"처럼 방문은 시작됐어도 정작 재료가 되는 만남·발표가 아직이면
+  그건 앞으로의 일정입니다. 실제로 "빌 게이츠 방한"을 과거형으로 보고 통째로 빠뜨렸습니다.
 - 날짜를 특정할 수 없는 것
 - 특정 산업·종목과 연결되지 않는 일반 뉴스
 - 사고·소송 등 부정적 이벤트만 있는 것 (투자자가 챙기려는 건 '재료'입니다)
@@ -146,6 +153,17 @@ date 필드가 **반드시 같아야** 합니다 — 다르면 사용자가 하�
 - 2: 해당 섹터가 움직임 (업종 정책, 중형주 임상 결과, 지수 리밸런싱)
 - 1: 참고 수준 (소형 이벤트, 간접 영향)
 
+[사람이 오는 일정은 **그 사람의 본업**으로 이으세요]
+방한·내한·순방·정상회담은 그 자체로는 재료가 아닙니다. 오는 사람이 **어떤 사업을
+이끄는지**, 한국에서 **누구와 무엇을 논의하는지**가 재료입니다. 거기까지 적어야
+투자자가 쓸 수 있습니다.
+- 예: "빌 게이츠 방한, 정·재계와 SMR 협력 논의" → 본업은 테라파워(차세대 원전)입니다.
+  sectors는 ["원전", "SMR", "전력기기"]가 되고, 원자로 기자재·전력설비 기업이 부각됩니다.
+  단순히 "빌 게이츠 방한"으로 끝내면 아무 쓸모가 없습니다.
+- summary에는 **어느 산업이 왜 부각되는지**를 반드시 한 문장으로 적으세요.
+- 확인된 사업만 씁니다. 그 사람이 실제로 이끄는 회사·사업이 무엇인지 모르면
+  섹터를 비우세요 — 지어내는 것보다 비우는 편이 낫습니다.
+
 [중요] 종목은 **뉴스에 실제로 언급됐거나 그 산업의 대표 종목**만 적으세요.
 억지로 채우지 말고, 확실하지 않으면 종목 대신 섹터만 적으세요. 지어내면 안 됩니다.
 
@@ -164,7 +182,7 @@ JSON 배열만 출력하세요(다른 텍스트 없이):
 importance: 3=시장 전체가 주목, 2=해당 섹터 주목, 1=참고
 
 [뉴스 헤드라인]
-${headlines.slice(0, 320).join("\n")}`;
+${headlines.slice(0, 700).join("\n")}`;
 }
 
 /** 헤드라인 묶음 → 구조화된 예정 이벤트. 실패하면 빈 배열(분석을 막지 않는다) */
@@ -211,7 +229,11 @@ export async function extractEvents(
               },
               importance: { type: "integer" },
             },
-            required: ["date", "title", "category"],
+            // ⚠️ **필수로 적지 않으면 안 채운다.** sectors·importance·summary를 선택으로
+            // 뒀더니 11건 전부 `sectors: []`, `importance: 2`로 왔다(전부 기본값).
+            // 화면에서 "어느 산업이 부각되나"를 말해주는 것이 바로 sectors인데,
+            // 그게 늘 비어 있으니 일정만 있고 인사이트가 없었다.
+            required: ["date", "title", "category", "summary", "sectors", "importance"],
           },
         } as any,
       },
@@ -360,6 +382,50 @@ async function enrichRegionalEvents(events: UpcomingEvent[]): Promise<void> {
   }
 }
 
+/**
+ * 산업 재료가 걸린 일정에 **사업보고서 근거로** 관련주를 더 붙인다.
+ *
+ * 지역 확장(`enrichRegionalEvents`)과 같은 이유다. Gemini는 기사에 이름이 나온
+ * 종목만 안다 — "빌 게이츠 방한, SMR 협력 논의" 기사에는 HD현대·SK만 나오고,
+ * 정작 **원자로 기자재·전력기기를 만드는 회사**는 한 곳도 안 나온다.
+ * 그건 공시가 알고 있다.
+ *
+ * 지역 일정과 달리 근접 조건이 없으므로, **말이 겹치기만 한 회사**가 섞이지 않도록
+ * 사업보고서에 그 말이 2번 이상 나온 것만 받는다(스치듯 언급한 회사 제외).
+ */
+async function enrichIndustryEvents(events: UpcomingEvent[]): Promise<void> {
+  // "사람이 오거나, 정책이 움직이는" 일정 — 기사에 안 나오는 수혜주가 실제로 있는 자리다.
+  const HINT = /방한|내한|순방|정상회담|협력\s*논의|업무협약|MOU|육성|활성화\s*방안|실증|클러스터|국가산단|착공|수주/;
+  const targets = events
+    .filter(e => e.importance >= 2 && HINT.test(`${e.title} ${e.summary ?? ""}`))
+    .filter(e => detectRegions(`${e.title} ${e.summary ?? ""}`).length === 0) // 지역은 저쪽이 맡는다
+    .slice(0, 3);
+  if (targets.length === 0) return;
+
+  for (const e of targets) {
+    try {
+      // 섹터가 잡혀 있으면 그게 더 정확한 검색어다 — 제목에는 사람 이름만 있을 때가 많다.
+      const theme = e.sectors?.length ? `${e.sectors.join(" ")} ${e.title}` : e.title;
+      const kws = await expandThemeKeywords(theme);
+      const hits = await searchThemeStocks(kws, 10);
+      const picked = hits.filter(h => h.name && h.mentions >= 2).slice(0, 4);
+      if (picked.length === 0) continue;
+
+      const known = new Set(e.tickers.map(t => t.ticker ?? t.name));
+      for (const h of picked) {
+        if (known.has(h.ticker) || known.has(h.name!)) continue;
+        e.tickers.push({
+          ticker: h.ticker, name: h.name!,
+          why: `사업보고서에 ${h.mentions}회 언급`,
+        });
+      }
+      console.log(`[events] "${e.title.slice(0, 20)}" 공시 관련주 ${picked.length}개 추가`);
+    } catch (err) {
+      console.warn("[events] 산업 관련주 확장 실패:", (err as Error)?.message?.slice(0, 60));
+    }
+  }
+}
+
 export async function refreshUpcomingEvents(daysAhead = 7): Promise<number> {
   const today = todayKst();
   const headlines = await collectEventNews(today, daysAhead);
@@ -380,6 +446,7 @@ export async function refreshUpcomingEvents(daysAhead = 7): Promise<number> {
   }
 
   await enrichRegionalEvents(events);
+  await enrichIndustryEvents(events);
 
   // 이 기간은 **매번 새로 쓴다**. 안 그러면 예전 실행에서 들어온 잡음이 계속 남는다 —
   // 걸러내는 규칙을 고쳐도 이미 저장된 "고흥군 햅쌀 예약판매" 같은 행이 그대로 보였다.
