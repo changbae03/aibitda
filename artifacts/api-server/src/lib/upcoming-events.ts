@@ -82,12 +82,26 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
     "정상 방한 예정", "국빈 방문 일정", "수출 계약 서명식 예정",
     // 산업 행사·전시 (신기술 공개가 몰린다)
     "국제 전시회 개막 예정 반도체", "기술 컨퍼런스 개최 예정", "수주 입찰 결과 발표 예정",
+    // 정책 회의체 — 날짜가 잡힌 회의는 그날 업종이 통째로 움직인다
+    "관계장관회의 개최 예정", "위원회 첫 회의 개최", "민관 간담회 개최 예정",
   ];
+
+  // ⚠️ 정책 질의에는 **업종 이름을 넣어야** 그 업종 정책이 잡힌다.
+  //
+  // "정부 정책 발표 예정"으로는 부동산 대책만 올라온다. 실제로 8/12 "국가바이오혁신위원회,
+  // 바이오 투자 활성화 방안 논의"는 그 질의로 한 건도 안 걸렸는데, "바이오 투자 활성화
+  // 방안"으로 치니 **1위로 나왔다.** 업종을 넣은 질의를 따로 돌린다.
+  const SECTORS = ["바이오", "반도체", "이차전지", "방산", "조선", "원전", "AI", "로봇"];
+  const sectorQueries = SECTORS.flatMap(s => [
+    `${s} 투자 활성화 방안`,
+    `${s} 육성 방안 발표`,
+  ]);
+
   const all = await Promise.all(
-    [...dateQueries, ...topicQueries].map(q => searchNews(q, 10)),
+    [...dateQueries, ...topicQueries, ...sectorQueries].map(q => searchNews(q, 10)),
   );
   const headlines = [...new Set(all.flat())];
-  console.log(`[events] 뉴스 ${headlines.length}건 수집 (날짜 질의 ${dateQueries.length} + 주제 ${topicQueries.length})`);
+  console.log(`[events] 뉴스 ${headlines.length}건 수집 (날짜 ${dateQueries.length} + 주제 ${topicQueries.length} + 업종정책 ${sectorQueries.length})`);
   return headlines;
 }
 
