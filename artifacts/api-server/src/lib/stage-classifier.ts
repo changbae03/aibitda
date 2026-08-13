@@ -129,6 +129,15 @@ export interface StageSignals {
   recentQuarterOpmPct?: number | null;
   /** 전년 동기 적자 → 이번 분기 흑자 */
   recentQuarterSwungToProfit?: boolean | null;
+
+  /**
+   * 임상단계 바이오인가 — **제조업 잣대가 통하지 않는 회사**.
+   *
+   * 메디포스트가 "쇠퇴"로 나왔다. 근거는 마진악화 −2.9%p와 최근 분기 마진 급악화였는데,
+   * 바이오는 임상을 돌릴수록 마진이 나빠지는 게 정상이다. 인력 확장 6%도 감점이 아니라
+   * 연구인력 채용이다. 매출·마진으로 재면 **임상에 돈을 쓸수록 쇠퇴로 읽힌다.**
+   */
+  isClinicalBio?: boolean | null;
 }
 
 // ─── 가중치 (실측으로 조정) ───────────────────────────────────────────────────
@@ -176,7 +185,12 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
     else if (g >= -15) add(-18, `매출역성장 ${g.toFixed(0)}%`);
     else add(-30, `매출급감 ${g.toFixed(0)}%`);
   }
-  if (s.opmDeltaPp != null) {
+  // 임상 바이오는 마진 악화를 감점하지 않는다 — 그게 곧 사업(임상 투자)이기 때문이다.
+  // 대신 매출이 실제로 꺾이는지(제품·기술료)와 반등 여부만 본다.
+  const bio = s.isClinicalBio === true;
+  if (bio) reasons.push("임상단계 바이오 — 마진 대신 매출·현금 흐름으로 판단");
+
+  if (!bio && s.opmDeltaPp != null) {
     // 문턱 하나로 ±15을 몰아주면 −2.1%p 같은 경계값이 판정을 통째로 뒤집는다(칼날).
     // 완만하게 나눠 한 지표가 국면을 좌우하지 못하게 한다.
     const d = s.opmDeltaPp;
@@ -206,7 +220,7 @@ export function scoreSubstance(s: StageSignals): SubstanceResult {
 
   // 최신 확정 분기(YoY) — 연간보다 신선한 신호. 연간이 아직 적자여도 분기가 먼저 돌아선다.
   if (s.recentQuarterSwungToProfit) add(20, "최근 분기 흑자전환(YoY)");
-  if (s.recentQuarterOpmDeltaPp != null) {
+  if (!bio && s.recentQuarterOpmDeltaPp != null) {
     const d = s.recentQuarterOpmDeltaPp;
     if (d >= 10) add(12, `최근 분기 마진 급개선 ${d.toFixed(0)}%p(YoY)`);
     else if (d >= 3) add(6, `최근 분기 마진개선 ${d.toFixed(1)}%p(YoY)`);

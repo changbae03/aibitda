@@ -235,3 +235,35 @@ describe("중앙값 언저리는 프리미엄이 아니다 — 메디포스트 �
     expect(v.phase).toBe("proving");
   });
 });
+
+describe("임상 바이오는 제조업 잣대로 재지 않는다 — 메디포스트 회귀", () => {
+  /**
+   * 메디포스트(078160)가 "쇠퇴"로 나왔다. 근거는 마진악화 −2.9%p와 최근 분기 마진
+   * 급악화 −15%p였는데, **바이오는 임상을 돌릴수록 마진이 나빠지는 게 정상**이다.
+   * 매출은 +4%로 늘고 인력도 6% 늘렸는데(연구인력 채용) 쇠퇴로 읽혔다.
+   */
+  const 메디포스트 = {
+    revGrowthPct: 4, opmDeltaPp: -2.9, headcountGrowthPct: 6,
+    cccDeltaDays: 42, recentQuarterOpmDeltaPp: -15, valuationPercentile: 50,
+  };
+
+  it("바이오 표시가 없으면 예전처럼 마진으로 깎여 쇠퇴로 간다", () => {
+    expect(classifyStage(메디포스트).phase).toBe("decline");
+  });
+
+  it("임상 바이오면 마진 악화로 쇠퇴 판정되지 않는다", () => {
+    const v = classifyStage({ ...메디포스트, isClinicalBio: true });
+    expect(v.phase).not.toBe("decline");
+    expect(v.substance.state).not.toBe("contracting");
+  });
+
+  it("바이오여도 매출이 급감하면 쇠퇴로 잡는다 — 봐주기가 아니다", () => {
+    const v = classifyStage({ ...메디포스트, revGrowthPct: -30, isClinicalBio: true, valuationPercentile: 20 });
+    expect(v.phase).toBe("decline");
+  });
+
+  it("왜 다르게 봤는지 근거에 남긴다", () => {
+    const r = scoreSubstance({ ...메디포스트, isClinicalBio: true });
+    expect(r.reasons.some(x => x.includes("임상단계 바이오"))).toBe(true);
+  });
+});

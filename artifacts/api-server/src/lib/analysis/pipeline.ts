@@ -832,6 +832,30 @@ async function executeStep(
             const rev = Number(r?.revenue), oi = Number(r?.operating_income);
             return Number.isFinite(rev) && rev > 0 && Number.isFinite(oi) ? oi / rev : null;
           };
+          // 임상단계 바이오인지 먼저 가른다 — **제조업 잣대가 통하지 않는 회사**다.
+          //
+          // 메디포스트가 "쇠퇴"로 나왔는데 근거가 마진악화였다. 바이오는 임상을 돌릴수록
+          // 마진이 나빠지는 게 정상이라, 매출·마진으로 재면 **임상에 돈을 쓸수록 쇠퇴**가
+          // 된다. 업종이 바이오이면서 적자(또는 마진이 매우 얇으면) 임상단계로 본다 —
+          // 이미 이익을 내는 CDMO·바이오시밀러(삼성바이오로직스·셀트리온)는 제외된다.
+          try {
+            const m = (await rawQuery(
+              `SELECT industry, kis_industry, opm FROM stocks WHERE ticker = $1 LIMIT 1`,
+              [analysis.ticker],
+            ))[0];
+            const ind = `${m?.industry ?? ""} ${m?.kis_industry ?? ""} ${analysis.industry ?? ""}`;
+            const isBioSector = /바이오|제약|생명공학|의약|Biotech|Pharmaceutical|Drug/i.test(ind);
+            // ⚠️ 종목 마스터의 opm은 자주 비어 있다(메디포스트가 그랬다). 그래서
+            // **방금 조회한 실제 재무**로 먼저 계산하고, 없을 때만 마스터를 본다.
+            const opmFromFin = annualRows.length > 0 ? opmOf(annualRows[0]) : null;
+            const opm = opmFromFin != null ? opmFromFin * 100
+              : (m?.opm == null ? null : Number(m.opm));
+            if (isBioSector && opm != null && opm < 5) {
+              stageSig.isClinicalBio = true;
+              console.log(`[${stepKey}] 임상단계 바이오로 판정 (OPM ${opm}%) — 마진 감점 제외`);
+            }
+          } catch { /* 판정 실패는 기존 방식으로 진행 */ }
+
           // 국면 신호: 매출성장률·OPM 추세 (최근 확정 연간 vs 직전)
           if (annualRows.length >= 2) {
             stageSig.revGrowthPct = pctChange(Number(annualRows[0].revenue), Number(annualRows[1].revenue));
