@@ -47,36 +47,61 @@ export interface PhaseMeta {
   tagline: string;
   /** 이 단계에서 **무엇을 봐야 하는가** — 판정보다 이게 실제로 쓸모 있다 */
   watchKo: string;
+  /** 이 단계가 안고 있는 위험 — 성격만 알려주고 위험을 안 알려주면 반쪽이다 */
+  riskKo: string;
+  /**
+   * 성격 묶음. 화면은 단계를 이 순서로 묶어 보여준다.
+   * ⚠️ 왼쪽일수록 좋다는 뜻이 아니다 — 성격이 다를 뿐이다.
+   */
+  group: "성장" | "반등" | "성숙" | "경계";
 }
 
 const META: Record<Phase, PhaseMeta> = {
   hypergrowth: { phase: "hypergrowth", stageNumber: 3, labelKo: "폭발 성장",
     tagline: "성장 속도가 전부인 구간 — 밸류에이션은 뒷전",
-    watchKo: "성장률이 꺾이는 첫 신호. 이 구간은 속도가 멈추는 순간 평가가 통째로 바뀝니다" },
+    watchKo: "성장률이 꺾이는 첫 신호. 이 구간은 속도가 멈추는 순간 평가가 통째로 바뀝니다",
+    riskKo: "성장률이 꺾이면 평가가 통째로 바뀝니다. 비싸게 들어가면 되돌림이 큽니다",
+    group: "성장" },
   numbers:     { phase: "numbers",     stageNumber: 3, labelKo: "숫자 싸움",
     tagline: "실적이 높은 눈높이를 매번 증명해야 유지",
-    watchKo: "다음 실적이 시장 기대를 넘는지. 눈높이가 이미 높아 '잘 나와도' 부족할 수 있습니다" },
+    watchKo: "다음 실적이 시장 기대를 넘는지. 눈높이가 이미 높아 '잘 나와도' 부족할 수 있습니다",
+    riskKo: "눈높이가 이미 높아 '잘 나와도' 부족할 수 있습니다",
+    group: "성장" },
   proving:     { phase: "proving",     stageNumber: 2, labelKo: "실체 확인",
     tagline: "실적은 좋은데 시장이 아직 안 알아줌",
-    watchKo: "저평가가 해소될 계기(실적 발표·수주·정책). 계기가 없으면 오래 방치되기도 합니다" },
+    watchKo: "저평가가 해소될 계기(실적 발표·수주·정책). 계기가 없으면 오래 방치되기도 합니다",
+    riskKo: "저평가가 해소될 계기가 없으면 오래 방치되기도 합니다",
+    group: "성장" },
   turnaround:  { phase: "turnaround",  stageNumber: null, labelKo: "턴어라운드",
     tagline: "바닥 찍고 실적이 돌아서는 중",
-    watchKo: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다" },
+    watchKo: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다",
+    riskKo: "한 분기 반짝일 수 있습니다. 다음 분기가 갈림길입니다",
+    group: "반등" },
   waiting:     { phase: "waiting",     stageNumber: 2, labelKo: "증명 대기",
     tagline: "기대는 붙었고 숫자는 아직 — 다음 실적이 가른다",
-    watchKo: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다" },
+    watchKo: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다",
+    riskKo: "기대가 숫자로 증명되지 못하면 실망이 큽니다",
+    group: "반등" },
   peakout:     { phase: "peakout",     stageNumber: 4, labelKo: "피크아웃 전조",
     tagline: "정점을 지나 성장이 식는데 기대는 남아 있음",
-    watchKo: "성장 둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다" },
+    watchKo: "성장 둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다",
+    riskKo: "기대가 먼저 빠지면 낙폭이 큽니다",
+    group: "경계" },
   value:       { phase: "value",       stageNumber: 5, labelKo: "성숙·가치",
     tagline: "성장은 멈췄고 기대도 낮다 — 이익·배당으로 보는 구간",
-    watchKo: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도" },
+    watchKo: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도",
+    riskKo: "성장 재점화 재료가 없으면 오래 눌려 있습니다",
+    group: "성숙" },
   hype:        { phase: "hype",        stageNumber: 1, labelKo: "기대 선반영",
     tagline: "실적은 뒷걸음인데 주가에 기대만 붙음",
-    watchKo: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다 — 거품을 경계할 자리" },
+    watchKo: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다 — 거품을 경계할 자리",
+    riskKo: "실체로 바뀌는 증거가 없으면 되돌림이 빠릅니다 — 거품 경계",
+    group: "경계" },
   decline:     { phase: "decline",     stageNumber: null, labelKo: "쇠퇴",
     tagline: "실적도 기대도 함께 내려감",
-    watchKo: "바닥의 신호(구조조정·사업 재편·적자 축소). 반등 근거 없이 싸다는 이유만으론 부족합니다" },
+    watchKo: "바닥의 신호(구조조정·사업 재편·적자 축소). 반등 근거 없이 싸다는 이유만으론 부족합니다",
+    riskKo: "싸다는 이유만으론 부족합니다. 바닥 신호 없이 들어가면 더 내려갈 수 있습니다",
+    group: "경계" },
 };
 
 /** 화면에 단계 지도를 그릴 때 쓰는 순서 — 좋은 자리부터 나쁜 자리로 */

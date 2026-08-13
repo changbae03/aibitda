@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyStage, scoreSubstance, phaseMeta, detectClinicalPipeline } from "./stage-classifier.js";
+import { classifyStage, scoreSubstance, phaseMeta, detectClinicalPipeline, PHASE_ORDER } from "./stage-classifier.js";
 
 /**
  * 국면 판정의 안전망. 실제 SK하이닉스 궤적(쇠퇴→턴어라운드→숫자싸움)을 픽스처로 고정한다.
@@ -102,6 +102,17 @@ describe("투자자 언어로 나눈 단계 — 폭발 성장·증명 대기", (
     for (const p of ["hypergrowth", "numbers", "proving", "turnaround", "waiting", "peakout", "value", "hype", "decline"] as const) {
       expect(phaseMeta(p).watchKo.length, p).toBeGreaterThan(10);
     }
+  });
+
+  // 성격만 알려주고 위험을 안 알려주면 '좋은 자리'로만 읽힌다.
+  // 화면(analysis-detail.tsx)이 단계마다 성격·위험을 나란히 보여주므로 둘 다 있어야 한다.
+  it("모든 단계가 위험과 성격 묶음을 갖는다", () => {
+    const groups = new Set<string>();
+    for (const p of PHASE_ORDER) {
+      expect(phaseMeta(p).riskKo.length, p).toBeGreaterThan(10);
+      groups.add(phaseMeta(p).group);
+    }
+    expect([...groups].sort()).toEqual(["경계", "반등", "성숙", "성장"]);
   });
 });
 

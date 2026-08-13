@@ -882,39 +882,61 @@ interface StageRow {
  * watch("지금 봐야 할 것")가 핵심이다 — 판정만으로는 쓸모가 없고, 그 단계에서
  * 무엇을 확인해야 하는지가 실제 판단을 돕는다.
  */
-const PHASE_UI: Record<string, { ko: string; tag: string; color: string; emoji: string; desc: string; watch: string }> = {
+const PHASE_UI: Record<string, { ko: string; tag: string; color: string; emoji: string; desc: string; watch: string; risk: string }> = {
   hypergrowth: { ko: "폭발 성장", tag: "속도가 전부", color: "#0F6E56", emoji: "🚀",
     desc: "매출이 폭발적으로 늘고 있어요. 이런 구간에선 밸류에이션(비싼지 싼지)보다 성장 속도 자체가 주가를 끌고 갑니다.",
-    watch: "성장률이 꺾이는 첫 신호. 속도가 멈추는 순간 평가 기준이 통째로 바뀝니다." },
+    watch: "성장률이 꺾이는 첫 신호. 속도가 멈추는 순간 평가 기준이 통째로 바뀝니다.",
+    risk: "속도가 꺾이면 평가 기준이 통째로 바뀝니다" },
   numbers:     { ko: "숫자 싸움", tag: "실적도 기대도 높음", color: "#0F6E56", emoji: "📈",
     desc: "실적이 좋고 주가도 그만큼 높아요. 높은 눈높이를 실적이 매번 증명해야 유지되는 구간입니다.",
-    watch: "다음 실적이 시장 기대를 넘는지. 눈높이가 높아 '잘 나와도' 부족할 수 있습니다." },
+    watch: "다음 실적이 시장 기대를 넘는지. 눈높이가 높아 '잘 나와도' 부족할 수 있습니다.",
+    risk: "눈높이가 높아 '잘 나와도' 부족할 수 있습니다" },
   proving:     { ko: "실체 확인", tag: "좋은데 아직 쌈", color: "#0F6E56", emoji: "🔍",
     desc: "실적은 좋아지는데 주가는 아직 싸요. 시장이 아직 덜 알아본 상태일 수 있습니다.",
-    watch: "저평가가 풀릴 계기(실적·수주·정책). 계기가 없으면 오래 방치되기도 합니다." },
+    watch: "저평가가 풀릴 계기(실적·수주·정책). 계기가 없으면 오래 방치되기도 합니다.",
+    risk: "풀릴 계기가 없으면 오래 방치되기도 합니다" },
   turnaround:  { ko: "턴어라운드", tag: "바닥 찍고 반등", color: "#185FA5", emoji: "🔄",
     desc: "바닥을 찍고 실적이 다시 살아나기 시작했어요. 분위기가 바뀌는 국면입니다.",
-    watch: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다." },
+    watch: "반등이 이어지는지. 한 분기 반짝인지, 다음 분기도 이어지는지가 갈림길입니다.",
+    risk: "한 분기 반짝일 수 있습니다" },
   waiting:     { ko: "증명 대기", tag: "숫자를 기다리는 중", color: "#BA7517", emoji: "⏳",
     desc: "기대는 이미 주가에 붙었는데 숫자는 아직 안 나왔어요. 다음 실적이 방향을 가릅니다.",
-    watch: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다." },
+    watch: "기대의 근거가 숫자로 나오는 시점. 증명되면 재평가, 밀리면 실망이 큽니다.",
+    risk: "증명되지 못하면 실망이 큽니다" },
   peakout:     { ko: "피크아웃 전조", tag: "기대가 실적을 앞섬", color: "#BA7517", emoji: "⚠️",
     desc: "정점을 지나 성장이 식는데 주가 기대는 아직 높아요. 기대가 실적을 앞서간 구간입니다.",
-    watch: "둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다." },
+    watch: "둔화가 일시적인지 추세인지. 기대가 먼저 빠지면 낙폭이 큽니다.",
+    risk: "기대가 먼저 빠지면 낙폭이 큽니다" },
   value:       { ko: "성숙·가치", tag: "빠른 성장은 끝", color: "#5F5E5A", emoji: "🏦",
     desc: "빠른 성장은 끝났고 기대도 낮아졌어요. 이제는 이익과 배당으로 보는 구간입니다.",
-    watch: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도." },
+    watch: "이익의 안정성과 주주환원(배당·자사주). 성장 재점화 재료가 있는지도.",
+    risk: "재점화 재료가 없으면 오래 눌려 있습니다" },
   hype:        { ko: "기대 선반영", tag: "기대만 앞섬", color: "#A32D2D", emoji: "🫧",
     desc: "실적은 뒷걸음치는데 주가엔 기대만 실렸어요. 실체 없이 기대만 큰 상태라 거품을 경계할 자리입니다.",
-    watch: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다." },
+    watch: "기대가 실체로 바뀌는 증거. 없으면 되돌림이 빠릅니다.",
+    risk: "실체로 바뀌지 않으면 되돌림이 빠릅니다" },
   decline:     { ko: "쇠퇴", tag: "실적·기대 동반 하락", color: "#5F5E5A", emoji: "🔻",
     desc: "실적도 기대도 같이 내려가요. 사업이 힘을 잃어가는 국면입니다.",
-    watch: "바닥의 신호(구조조정·사업 재편·적자 축소). 싸다는 이유만으론 부족합니다." },
+    watch: "바닥의 신호(구조조정·사업 재편·적자 축소). 싸다는 이유만으론 부족합니다.",
+    risk: "바닥 신호 없이는 더 내려갈 수 있습니다" },
 };
 
-/** 단계 지도 순서 — 좋은 자리부터 나쁜 자리로. 백엔드 PHASE_ORDER와 같아야 한다. */
-const PHASE_ORDER = ["hypergrowth", "numbers", "proving", "turnaround",
-                     "waiting", "peakout", "value", "hype", "decline"] as const;
+/**
+ * 단계 지도 — **성격끼리 묶는다.**
+ * 예전에는 9개를 한 줄로 늘어놨는데, 왼쪽이 좋고 오른쪽이 나쁘다는 뜻으로 읽혔다.
+ * 실제로는 모멘텀 세기 순일 뿐이고 좋고 나쁨의 순서가 아니다.
+ * 백엔드 `stage-classifier.ts`의 `group`과 같은 묶음이어야 한다.
+ */
+const PHASE_GROUPS: { key: string; label: string; note: string; phases: readonly string[] }[] = [
+  { key: "성장", label: "성장 자리", note: "실적이 늘고 있는 구간",
+    phases: ["hypergrowth", "numbers", "proving"] },
+  { key: "반등", label: "반등 자리", note: "방향이 막 바뀌는 구간",
+    phases: ["turnaround", "waiting"] },
+  { key: "성숙", label: "성숙 자리", note: "성장보다 이익으로 보는 구간",
+    phases: ["value"] },
+  { key: "경계", label: "경계 자리", note: "실적과 기대가 어긋난 구간",
+    phases: ["peakout", "hype", "decline"] },
+];
 
 // 히어로 오른쪽 카드 — 적정주가 자리를 대체한다. 애빛다는 목표가가 아니라 '국면'을 말한다.
 function HeroPhase({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
@@ -1182,21 +1204,47 @@ function StageMap({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) 
       {/* ── 단계 지도 — 주식 관점의 단계들 중 이 기업이 어디에 있나 ── */}
       {!isEn && (
         <div className="mb-4">
-          <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">기업이 놓이는 단계들</p>
-          <div className="flex flex-wrap gap-1.5">
-            {PHASE_ORDER.map(p => {
-              const m = PHASE_UI[p];
-              const on = p === latest.phase;
-              return (
-                <span key={p}
-                  className="text-[11px] px-2 py-1 rounded-lg transition-colors"
-                  style={on
-                    ? { background: m.color, color: "#fff", fontWeight: 600 }
-                    : { background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }}>
-                  {m.emoji} {m.ko}
-                </span>
-              );
-            })}
+          <p className="text-[11px] font-semibold text-muted-foreground">기업이 놓이는 단계들</p>
+          <p className="text-[10.5px] text-muted-foreground/70 mt-0.5 mb-2 leading-relaxed">
+            좋고 나쁨의 순서가 아닙니다 — 성격이 다르고, 그래서 확인할 것이 다릅니다.
+          </p>
+          <div className="space-y-2.5">
+            {PHASE_GROUPS.map(g => (
+              <div key={g.key}>
+                <div className="flex items-baseline gap-1.5 mb-1">
+                  <span className="text-[10.5px] font-bold text-foreground/70">{g.label}</span>
+                  <span className="text-[10px] text-muted-foreground/70">{g.note}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {g.phases.map(p => {
+                    const m = PHASE_UI[p];
+                    const on = p === latest.phase;
+                    return (
+                      <div key={p}
+                        className="rounded-lg px-2.5 py-2 border transition-colors"
+                        style={on
+                          ? { background: m.color + "14", borderColor: m.color + "59" }
+                          : { background: "hsl(var(--muted) / 0.4)", borderColor: "transparent" }}>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] leading-none">{m.emoji}</span>
+                          <span className="text-[11.5px] font-semibold"
+                            style={{ color: on ? m.color : "hsl(var(--foreground) / 0.75)" }}>{m.ko}</span>
+                          {on && (
+                            <span className="text-[9.5px] font-bold px-1 py-px rounded"
+                              style={{ background: m.color, color: "#fff" }}>지금</span>
+                          )}
+                        </div>
+                        {/* 성격과 위험을 함께 둔다 — 성격만 보이면 '좋은 자리'로만 읽힌다 */}
+                        <p className="mt-1 text-[10.5px] leading-snug text-foreground/65">{m.tag}</p>
+                        <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground/80">
+                          <span className="text-[#BA7517]">위험</span> {m.risk}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
