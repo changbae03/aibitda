@@ -3361,34 +3361,15 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
 
 function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyName: string; isEn: boolean }) {
   const [, setLocation] = useLocation();
-  const [pfStatus, setPfStatus] = useState<"idle" | "checking" | "adding" | "added" | "exists">("checking");
+  // 포트폴리오 기능을 접었으므로 여기서는 **관심종목만** 다룬다.
   const [wlStatus, setWlStatus] = useState<"idle" | "adding" | "added" | "exists">("idle");
 
   useEffect(() => {
     fetch(getApiUrl(`/api/portfolio/check/${encodeURIComponent(ticker)}`), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d) { setPfStatus("idle"); return; }
-        if (d.inPortfolio) setPfStatus("exists");
-        else if (d.inWatchlist) { setPfStatus("idle"); setWlStatus("exists"); }
-        else setPfStatus("idle");
-      })
-      .catch(() => setPfStatus("idle"));
+      .then(d => { if (d?.inWatchlist) setWlStatus("exists"); })
+      .catch(() => {});
   }, [ticker]);
-
-  async function addToPortfolio() {
-    setPfStatus("adding");
-    const currency = /^\d{5,6}$/.test(ticker) ? "KRW" : "USD";
-    try {
-      const r = await fetch(getApiUrl("/api/portfolio"), {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, companyName, currency, holdingType: "portfolio" }),
-      });
-      if (r.ok) { setPfStatus("added"); setWlStatus("idle"); }
-      else setPfStatus("idle");
-    } catch { setPfStatus("idle"); }
-  }
 
   async function addToWatchlist() {
     setWlStatus("adding");
@@ -3410,7 +3391,7 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
         <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
           {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {/* 홈으로 */}
           <button
             onClick={() => setLocation("/")}
@@ -3427,47 +3408,10 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
             </span>
           </button>
 
-          {/* 포트폴리오 추가 / 보기 */}
-          {pfStatus === "exists" || pfStatus === "added" ? (
-            <button
-              onClick={() => setLocation("/portfolio")}
-              className="relative flex flex-col items-center gap-2 rounded-[var(--radius)] border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 px-4 py-4 transition-all duration-200 group overflow-hidden"
-            >
-              <div className="w-10 h-10 rounded-[var(--radius)] bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
-                <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <span className="text-[13px] font-bold text-emerald-700 dark:text-emerald-400 leading-tight text-center">
-                {pfStatus === "added" ? (isEn ? "Added!" : "추가 완료!") : (isEn ? "In Portfolio" : "포트폴리오에 있음")}
-              </span>
-              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 leading-tight text-center">
-                {isEn ? "View portfolio →" : "포트폴리오 보기 →"}
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={addToPortfolio}
-              disabled={pfStatus === "adding" || pfStatus === "checking"}
-              className="relative flex flex-col items-center gap-2 rounded-[var(--radius)] border border-[#FF8A7A]/50 bg-gradient-to-br from-[#FF8A7A]/10 to-[#FF8A7A]/5 hover:from-[#FF8A7A]/20 hover:to-[#FF8A7A]/10 hover:border-[#FF8A7A]/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
-            >
-              <div className="absolute inset-0 rounded-[var(--radius)] bg-[#FF8A7A]/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="w-10 h-10 rounded-[var(--radius)] bg-[#FF8A7A]/15 flex items-center justify-center group-hover:bg-[#FF8A7A]/25 transition-colors relative">
-                {pfStatus === "adding" || pfStatus === "checking"
-                  ? <Loader2 className="w-5 h-5 text-[#FF8A7A] animate-spin" />
-                  : <Briefcase className="w-5 h-5 text-[#FF8A7A]" />
-                }
-              </div>
-              <span className="text-[13px] font-bold text-[#FF8A7A] leading-tight text-center relative">
-                {isEn ? "Add to Portfolio" : "포트폴리오에 추가"}
-              </span>
-              <span className="text-[11px] text-[#FF8A7A]/70 leading-tight text-center relative">
-                {isEn ? "Track this stock" : "이 종목 바로 편입하기"}
-              </span>
-            </button>
-          )}
         </div>
 
-        {/* 관심종목 추가 — 포트폴리오에 없을 때만 표시 */}
-        {pfStatus !== "exists" && pfStatus !== "added" && (
+        {/* 관심종목 추가 */}
+        {(
           <div className="pt-0.5">
             {wlStatus === "exists" || wlStatus === "added" ? (
               <button
