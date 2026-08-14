@@ -10,8 +10,8 @@ export default function PrivacyPage() {
       </h1>
       <p className="text-sm text-muted-foreground mb-8">
         {isEn
-          ? "Effective: January 1, 2025 · Last updated: April 1, 2026"
-          : "시행일: 2025년 1월 1일 · 최종 수정: 2026년 4월 1일"}
+          ? "Effective: January 1, 2025 · Last updated: August 15, 2026"
+          : "시행일: 2025년 1월 1일 · 최종 수정: 2026년 8월 15일"}
       </p>
 
       <Section title={isEn ? "1. Information We Collect" : "1. 수집하는 개인정보 항목"}>
@@ -168,7 +168,7 @@ export default function PrivacyPage() {
               <li>Request to suspend processing</li>
               <li>Revoke consent and withdraw membership (Settings &gt; Delete Account)</li>
             </ul>
-            <p className="mt-2">Requests can be submitted via our support email (support@cbst.kr) or through the Settings page.</p>
+            <p className="mt-2">Submit requests through in-app Support (Menu → Support) or the Settings page.</p>
           </>
         ) : (
           <>
@@ -178,7 +178,7 @@ export default function PrivacyPage() {
               <li>처리 정지 요청</li>
               <li>동의 철회 및 회원 탈퇴 (설정 &gt; 계정 탈퇴)</li>
             </ul>
-            <p className="mt-2">요청은 고객센터(support@cbst.kr) 또는 설정 페이지를 통해 접수하실 수 있습니다.</p>
+            <p className="mt-2">요청은 앱 내 관리자 문의(메뉴 → 고객 문의) 또는 설정 페이지에서 접수하실 수 있습니다.</p>
           </>
         )}
       </Section>
@@ -194,18 +194,25 @@ export default function PrivacyPage() {
       <Section title={isEn ? "8. Privacy Officer" : "8. 개인정보 보호책임자"}>
         {isEn ? (
           <>
-            <p>For privacy-related inquiries, complaints, or remediation, please contact us below.</p>
+            <p>
+              For privacy-related inquiries, complaints, or remediation, use{" "}
+              <strong>Support</strong> inside the app (Menu → Support). We reply in the same thread,
+              so you can see the history of your request.
+            </p>
             <ul className="list-none mt-2 space-y-1">
               <li>Officer: Privacy Officer (CBST)</li>
-              <li>Email: privacy@cbst.kr</li>
+              <li>Channel: In-app Support</li>
             </ul>
           </>
         ) : (
           <>
-            <p>개인정보 관련 문의·불만·피해구제 등은 아래로 연락주십시오.</p>
+            <p>
+              개인정보 관련 문의·불만·피해구제 등은 앱 안의 <strong>관리자 문의</strong>(메뉴 → 고객 문의)로
+              접수해 주십시오. 같은 대화에 답변이 달려 처리 경과를 함께 보실 수 있습니다.
+            </p>
             <ul className="list-none mt-2 space-y-1">
               <li>담당자: 개인정보 보호책임자 (CBST)</li>
-              <li>이메일: privacy@cbst.kr</li>
+              <li>접수 창구: 앱 내 관리자 문의</li>
             </ul>
           </>
         )}

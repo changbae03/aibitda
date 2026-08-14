@@ -10,8 +10,8 @@ export default function TermsPage() {
       </h1>
       <p className="text-sm text-muted-foreground mb-8">
         {isEn
-          ? "Effective: January 1, 2025 · Last updated: April 1, 2026"
-          : "시행일: 2025년 1월 1일 · 최종 수정: 2026년 4월 1일"}
+          ? "Effective: January 1, 2025 · Last updated: August 15, 2026"
+          : "시행일: 2025년 1월 1일 · 최종 수정: 2026년 8월 15일"}
       </p>
 
       <Section title={isEn ? "Article 1 (Purpose)" : "제1조 (목적)"}>
@@ -114,6 +114,11 @@ export default function TermsPage() {
 
       <Section title={isEn ? "Article 9 (Dispute Resolution)" : "제9조 (분쟁 해결)"}>
         <p>
+          {isEn
+            ? "Please raise any issue through in-app Support (Menu → Support) first. We respond in the same thread so the history stays visible to you."
+            : "이용 중 문제가 생기면 먼저 앱 안의 관리자 문의(메뉴 → 고객 문의)로 알려주십시오. 같은 대화에 답변이 달려 처리 경과를 함께 보실 수 있습니다."}
+        </p>
+        <p className="mt-2">
           {isEn
             ? "Disputes arising from use of the Service shall be governed by the laws of the Republic of Korea. Jurisdiction shall be determined in accordance with the Civil Procedure Act."
             : "서비스 이용으로 발생한 분쟁은 대한민국 법령을 준거법으로 하며, 관할 법원은 민사소송법의 규정에 따릅니다."}
