@@ -20,6 +20,7 @@ import { pool } from "@workspace/db";
 import { isKoreanTicker } from "@workspace/shared";
 import { lookupCorpCode } from "./dart-store.js";
 import { parseZip, htmlToText } from "./dart-business-content.js";
+import { refreshThemeSearchDocs } from "./theme-search.js";
 import {
   type BizReportYear, TIMELINE_SECTIONS, extractSections, parsePeriod, periodLabel,
   renderTimelineBody, BODY_BUDGET,
@@ -91,7 +92,82 @@ async function fetchReportText(rceptNo: string, key: string): Promise<string | n
 }
 
 /**
- * 최근 N년치 사업보고서를 받아 저장한다. 이미 받은 해는 건너뛴다.
+ * **오늘 새로 올라온 정기공시**를 종목 단위로 훑는다.
+ *
+ * 예전에는 새 보고서를 알아채는 길이 두 가지뿐이었다 — 누가 그 종목을 분석하거나,
+ * 사람이 전 종목 배치를 돌리거나. 그래서 메디포스트 반기보고서가 나온 날에도
+ * 원문은 직전 분기(2026 Q1)에 멈춰 있었다. 회사별로 2,800번 물어볼 필요는 없다 —
+ * DART 공시검색은 **기간으로** 한 번에 준다.
+ */
+export async function listRecentFilers(days = 2): Promise<string[]> {
+  const key = process.env["DART_API_KEY"];
+  if (!key) { console.warn("[biz-timeline] DART_API_KEY 없음 — 신규 공시 훑기 건너뜀"); return []; }
+  const fmt = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+  const end = new Date();
+  const bgn = new Date(end.getTime() - days * 86_400_000);
+
+  const tickers = new Set<string>();
+  for (let page = 1; page <= 30; page++) {
+    const res = await fetch(
+      `${DART_API}/list.json?crtfc_key=${key}&bgn_de=${fmt(bgn)}&end_de=${fmt(end)}` +
+      `&pblntf_ty=A&last_reprt_at=N&page_count=100&page_no=${page}`,
+      { signal: AbortSignal.timeout(20_000) },
+    ).catch(() => null);
+    if (!res?.ok) break;
+    const data = await res.json() as any;
+    // 013 = 조회 결과 없음. 오류를 조용히 삼키지 않고 남긴다.
+    if (data.status === "013") break;
+    if (data.status !== "000" || !Array.isArray(data.list)) {
+      console.warn(`[biz-timeline] 신규 공시 조회 실패 status=${data.status}`);
+      break;
+    }
+    for (const r of data.list as any[]) {
+      if (!/사업보고서|반기보고서|분기보고서/.test(r.report_nm ?? "")) continue;
+      const code: string = (r.stock_code ?? "").trim();
+      if (code && isKoreanTicker(code)) tickers.add(code);
+    }
+    if (page >= Number(data.total_page ?? 1)) break;
+  }
+  return [...tickers];
+}
+
+/**
+ * 새 정기공시를 낸 종목들의 원문을 받아 저장하고, 검색·판정용 정본까지 따라 올린다.
+ * 이미 받은 기간은 `collectBizTimeline`이 건너뛰므로 반복 실행이 싸다.
+ */
+export async function collectNewFilings(days = 2): Promise<{ filers: number; updated: number }> {
+  const filers = await listRecentFilers(days);
+  if (!filers.length) return { filers: 0, updated: 0 };
+
+  // 반기·사업보고서 마감일에는 하루에 2,500종목이 몰린다(2026-08-14에 2,532종목).
+  // 한 줄로 세우면 밤을 새우므로 몇 개씩 동시에 간다. 다만 DART를 두드리는 일이라
+  // 넉넉히 벌리지 않는다 — 막히면 그날 수집이 통째로 빈다.
+  const CONCURRENCY = 4;
+  let updated = 0, done = 0;
+  const queue = [...filers];
+
+  const worker = async () => {
+    for (;;) {
+      const ticker = queue.pop();
+      if (!ticker) return;
+      try {
+        const r = await collectBizTimeline(ticker, 4);
+        if (r.collected > 0) updated++;
+      } catch (e) {
+        console.warn(`[biz-timeline] ${ticker} 신규 공시 수집 실패:`, (e as Error)?.message?.slice(0, 80));
+      }
+      // 조용히 오래 도는 작업은 멈춘 것과 구분이 안 된다 — 진행을 남긴다.
+      if (++done % 200 === 0) console.log(`[biz-timeline] 진행 ${done}/${filers.length} (갱신 ${updated})`);
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  console.log(`[biz-timeline] 신규 정기공시 ${filers.length}종목 확인, ${updated}종목 원문 갱신`);
+  return { filers: filers.length, updated };
+}
+
+/**
+ * 최근 N년치 사업보고서를 받아 저장한다. 이미 받은 기간은 건너뛴다.
  */
 export async function collectBizTimeline(
   ticker: string,
@@ -144,6 +220,13 @@ export async function collectBizTimeline(
     collected++;
     got.push(label);
     console.log(`[biz-timeline] ${ticker} ${label} 저장 (${content.length}자)`);
+  }
+
+  // 새로 받은 게 있으면 검색·판정용 정본도 같이 올린다.
+  // 이걸 배치에만 맡겨두면, 원문은 최신인데 검색·바이오 판정은 지난 분기를 보게 된다.
+  if (collected > 0) {
+    await refreshThemeSearchDocs(ticker)
+      .catch(e => console.warn(`[biz-timeline] ${ticker} 검색 정본 갱신 실패:`, (e as Error)?.message?.slice(0, 80)));
   }
 
   return { collected, skipped, periods: got.reverse() };

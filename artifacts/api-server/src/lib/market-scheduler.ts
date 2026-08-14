@@ -29,6 +29,7 @@ import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performanc
 import { refreshSectorBands } from "./valuation/sector-bands.js";
 import { backfillKisIndustry } from "./kis-industry-backfill.js";
 import { refreshUpcomingEvents } from "./upcoming-events.js";
+import { collectNewFilings } from "./biz-timeline.js";
 import { pool } from "@workspace/db";
 import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
 import { triggerSignalsRefresh } from "../routes/themes.js";
@@ -42,6 +43,7 @@ let middayBriefToday      = "";   // 11:00 KST 장중 1차 브리핑
 let afternoonBriefToday   = "";   // 14:00 KST 장중 2차 브리핑
 let eveningBriefToday     = "";   // 22:00 KST 야간 브리핑
 let closingBriefToday     = "";   // 16:30 KST 장마감 브리핑
+let filingsCollectedDate  = "";   // 새 정기공시 수집 — 하루 1회
 let eventsRefreshedSlot   = "";   // 다가오는 일정 — 3시간마다 (슬롯 중복 방지)
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
@@ -241,6 +243,20 @@ function checkAndRun() {
     refreshUpcomingEvents(7)
       .then(n => console.log(`[scheduler] 다가오는 일정 ${n}건 저장`))
       .catch(e => console.error("[scheduler] 다가오는 일정 갱신 실패:", e?.message));
+  }
+
+  // ── 새 정기공시(사업·반기·분기보고서) 수집: 매일 20:30 KST = 11:30 UTC ────
+  //
+  // 정기보고서는 장 마감 후 저녁에 몰려 올라온다(반기 마감일 8/14에만 수백 건).
+  // 예전에는 새 보고서를 알아채는 길이 "누가 그 종목을 분석할 때"뿐이라, 메디포스트
+  // 반기보고서가 나온 날에도 원문은 직전 분기에 멈춰 있었다. 이틀치를 겹쳐 훑어
+  // 서버가 잠깐 꺼져 있던 날을 흘리지 않는다.
+  if (utcH === 11 && utcM === 30 && filingsCollectedDate !== dateStr) {
+    filingsCollectedDate = dateStr;
+    console.log("[scheduler] 새 정기공시 수집 시작 (20:30 KST)");
+    collectNewFilings(2)
+      .then(r => console.log(`[scheduler] 새 정기공시: ${r.filers}종목 확인, ${r.updated}종목 갱신`))
+      .catch(e => console.error("[scheduler] 새 정기공시 수집 실패:", e?.message));
   }
 
   // ── 장중 30분 동기 갱신: 09:00~15:30 KST = 00:00~06:30 UTC (평일) ──────────

@@ -160,11 +160,15 @@ export function parseKeywords(raw: string): string[] {
  * dart_biz_reports는 분기까지 쌓여 427MB지만 검색에 필요한 건 최신본(22MB)뿐이다.
  * 수집 배치가 끝난 뒤 한 번 부르면 된다. 새로 들어온 것만 갱신하므로 반복 호출이 싸다.
  */
-export async function refreshThemeSearchDocs(): Promise<number> {
+export async function refreshThemeSearchDocs(ticker?: string): Promise<number> {
+  // 종목을 주면 그 종목만 — 분석·수집 직후 한 건만 따라 올리는 데 쓴다.
+  // 예전에는 전체 갱신뿐이라 **배치를 손으로 돌릴 때까지** 새 보고서가 검색·판정에
+  // 반영되지 않았다(메디포스트 반기보고서가 그랬다).
   const { rowCount } = await pool.query(`
     INSERT INTO theme_search_docs (ticker, bsns_year, quarter, doc, updated_at)
     SELECT DISTINCT ON (ticker) ticker, bsns_year, quarter, content, NOW()
       FROM dart_biz_reports
+     ${ticker ? "WHERE ticker = $1" : ""}
      ORDER BY ticker, bsns_year DESC, quarter DESC
     ON CONFLICT (ticker) DO UPDATE
       SET bsns_year = EXCLUDED.bsns_year, quarter = EXCLUDED.quarter,
@@ -172,7 +176,7 @@ export async function refreshThemeSearchDocs(): Promise<number> {
       WHERE theme_search_docs.bsns_year < EXCLUDED.bsns_year
          OR (theme_search_docs.bsns_year = EXCLUDED.bsns_year
              AND theme_search_docs.quarter < EXCLUDED.quarter)
-  `);
+  `, ticker ? [ticker] : []);
   return rowCount ?? 0;
 }
 
