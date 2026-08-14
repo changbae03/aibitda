@@ -138,14 +138,12 @@ const ADMIN_GROUPS = [
     label: "유저",
     items: [
       { href: "/admin/user-management", label: "유저 관리",   Icon: Users },
-      { href: "/admin/promo-codes",     label: "프로모 코드", Icon: Tag },
     ],
   },
   {
     label: "콘텐츠",
     items: [
       { href: "/admin/analyses",     label: "전체 보고서",    Icon: FileText },
-      { href: "/admin/portfolios",   label: "유저 포트폴리오", Icon: LayoutGrid },
       { href: "/admin/notices",      label: "공지사항",       Icon: Megaphone },
     ],
   },
@@ -154,8 +152,6 @@ const ADMIN_GROUPS = [
     items: [
       { href: "/admin/feedback", label: "유저 피드백",  Icon: MessageSquare },
       { href: "/admin/support",  label: "고객 문의",    Icon: Headphones },
-      { href: "/admin/quality",   label: "AI 관리",      Icon: ShieldCheck },
-      { href: "/admin/earnings",  label: "실적 정확도",  Icon: Target },
       { href: "/admin/users",     label: "관리자 관리",  Icon: Shield },
     ],
   },

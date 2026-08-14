@@ -53,13 +53,8 @@ const AdminUsers           = lazy(() => import("@/pages/admin-users"));
 const AdminFeedback        = lazy(() => import("@/pages/admin-feedback"));
 const AdminUserManagement  = lazy(() => import("@/pages/admin-user-management"));
 const AdminDashboard       = lazy(() => import("@/pages/admin-dashboard"));
-const AdminPromoCodes      = lazy(() => import("@/pages/admin-promo-codes"));
 const AdminSupportPage     = lazy(() => import("@/pages/admin-support"));
 const AdminNoticesPage     = lazy(() => import("@/pages/admin-notices"));
-const AdminQuality         = lazy(() => import("@/pages/admin-quality"));
-const AdminPortfolios      = lazy(() => import("@/pages/admin-portfolios"));
-const AdminCalibration     = lazy(() => import("@/pages/admin-calibration"));
-const AdminEarnings        = lazy(() => import("@/pages/admin-earnings"));
 
 const ConsentModal = lazy(() => import("@/components/consent-modal"));
 
@@ -296,13 +291,8 @@ function Router() {
                 <Route path="/settings" component={SettingsPage} />
                 <Route path="/about" component={AboutPage} />
                 <Route path="/calendar" component={CalendarPage} />
-                <Route path="/admin/promo-codes" component={AdminPromoCodes} />
                 <Route path="/admin/support" component={AdminSupportPage} />
                 <Route path="/admin/notices" component={AdminNoticesPage} />
-                <Route path="/admin/quality" component={AdminQuality} />
-                <Route path="/admin/portfolios" component={AdminPortfolios} />
-                <Route path="/admin/calibration" component={AdminCalibration} />
-                <Route path="/admin/earnings" component={AdminEarnings} />
                 <Route path="/market-analysis" component={MarketAnalysis} />
                 <Route path="/etf-analysis" component={ETFAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />
