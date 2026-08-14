@@ -30,6 +30,7 @@ import { refreshSectorBands } from "./valuation/sector-bands.js";
 import { backfillKisIndustry } from "./kis-industry-backfill.js";
 import { refreshUpcomingEvents } from "./upcoming-events.js";
 import { collectNewFilings } from "./biz-timeline.js";
+import { collectNewUSFilings } from "./us-biz-reports.js";
 import { pool } from "@workspace/db";
 import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
 import { triggerSignalsRefresh } from "../routes/themes.js";
@@ -43,7 +44,8 @@ let middayBriefToday      = "";   // 11:00 KST 장중 1차 브리핑
 let afternoonBriefToday   = "";   // 14:00 KST 장중 2차 브리핑
 let eveningBriefToday     = "";   // 22:00 KST 야간 브리핑
 let closingBriefToday     = "";   // 16:30 KST 장마감 브리핑
-let filingsCollectedDate  = "";   // 새 정기공시 수집 — 하루 1회
+let filingsCollectedDate  = "";   // 새 정기공시 수집(한국) — 하루 1회
+let usFilingsCollectedDate = "";  // 새 10-K 수집(미국) — 하루 1회
 let eventsRefreshedSlot   = "";   // 다가오는 일정 — 3시간마다 (슬롯 중복 방지)
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
@@ -257,6 +259,20 @@ function checkAndRun() {
     collectNewFilings(2)
       .then(r => console.log(`[scheduler] 새 정기공시: ${r.filers}종목 확인, ${r.updated}종목 갱신`))
       .catch(e => console.error("[scheduler] 새 정기공시 수집 실패:", e?.message));
+  }
+
+  // ── 새 10-K 수집: 매일 07:30 KST = 22:30 UTC ──────────────────────────────
+  //
+  // 미국은 회계연도 말이 회사마다 달라 10-K가 1년 내내 흩어져 들어온다 —
+  // 한국처럼 마감일에 몰리지 않으므로 하루 물량은 보통 수십 건이다.
+  // 미국 장 마감(06:00 UTC) 뒤 그날 색인이 확정된 시각에 돈다.
+  // 사흘치를 겹쳐 훑어 주말·공휴일(색인 파일 없음)을 건너뛰어도 놓치지 않는다.
+  if (utcH === 22 && utcM === 30 && usFilingsCollectedDate !== dateStr) {
+    usFilingsCollectedDate = dateStr;
+    console.log("[scheduler] 새 10-K 수집 시작 (07:30 KST)");
+    collectNewUSFilings(3)
+      .then(r => console.log(`[scheduler] 새 10-K: ${r.filers}종목 확인, ${r.updated}종목 갱신`))
+      .catch(e => console.error("[scheduler] 새 10-K 수집 실패:", e?.message));
   }
 
   // ── 장중 30분 동기 갱신: 09:00~15:30 KST = 00:00~06:30 UTC (평일) ──────────

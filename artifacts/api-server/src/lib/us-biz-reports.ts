@@ -7,7 +7,7 @@
  */
 
 import { pool } from "@workspace/db";
-import { fetchMultiYearBusiness } from "./sec-edgar-content.js";
+import { fetchMultiYearBusiness, getCikToTicker } from "./sec-edgar-content.js";
 
 export interface USBizReport { fy: number; filedDate: string | null; content: string; }
 
@@ -44,4 +44,60 @@ export async function collectUSBizReports(ticker: string, n = 4): Promise<USBizR
   const rows: USBizReport[] = fetched.map(f => ({ fy: f.fy, filedDate: f.filedDate, content: f.text }));
   if (rows.length > 0) await saveUSBizReports(ticker, rows);
   return rows.sort((a, b) => a.fy - b.fy);
+}
+
+/**
+ * **오늘 새로 올라온 10-K**를 종목 단위로 훑는다 — 한국의 `collectNewFilings`와 짝이다.
+ *
+ * 회사별로 10,000번 물어볼 필요가 없다. SEC 일별 색인(daily-index)이 그날 접수된
+ * 모든 제출을 한 파일로 준다. 여기서 10-K만 골라 그 회사만 받아온다.
+ *
+ * ⚠️ 미국은 회계연도 말이 회사마다 달라 10-K가 1년 내내 흩어져 들어온다.
+ * 한국처럼 마감일에 몰리지 않으므로 하루 물량은 보통 수십 건이다.
+ */
+export async function collectNewUSFilings(days = 3): Promise<{ filers: number; updated: number }> {
+  const rev = await getCikToTicker().catch(() => new Map<number, string>());
+  if (rev.size === 0) { console.warn("[us-biz] CIK 맵 로드 실패 — 신규 10-K 훑기 건너뜀"); return { filers: 0, updated: 0 }; }
+
+  const tickers = new Set<string>();
+  for (let d = 0; d < days; d++) {
+    const day = new Date(Date.now() - d * 86_400_000);
+    const y = day.getUTCFullYear();
+    const qtr = Math.floor(day.getUTCMonth() / 3) + 1;
+    const ymd = day.toISOString().slice(0, 10).replace(/-/g, "");
+    const url = `https://www.sec.gov/Archives/edgar/daily-index/${y}/QTR${qtr}/form.${ymd}.idx`;
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": "AiBITDA Research ai@aibotda.com" },
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => null);
+    // 주말·공휴일은 색인 파일 자체가 없다(404). 오류가 아니다.
+    if (!res?.ok) continue;
+
+    for (const line of (await res.text()).split("\n")) {
+      // 고정폭: 폼종류 · 회사명 · CIK · 날짜 · 파일경로
+      // ⚠️ 날짜는 `20260813` 형식이다. `2026-08-13`으로 찾으면 한 건도 안 걸린다.
+      if (!/^10-K(\/A)?\s/.test(line)) continue;
+      const m = line.match(/\s(\d{1,10})\s+\d{8}\s/);
+      if (!m) continue;
+      const t = rev.get(Number(m[1]));
+      if (t) tickers.add(t);
+    }
+  }
+
+  let updated = 0;
+  for (const ticker of tickers) {
+    try {
+      // 이미 있는 종목은 `collectUSBizReports`가 저장본을 그대로 돌려주므로,
+      // 새 회계연도가 들어와도 갱신되지 않는다. 그래서 여기서는 직접 받아 저장한다.
+      const fetched = await fetchMultiYearBusiness(ticker, 4);
+      if (fetched.length === 0) continue;
+      await saveUSBizReports(ticker, fetched.map(f => ({ fy: f.fy, filedDate: f.filedDate, content: f.text })));
+      updated++;
+    } catch (e) {
+      console.warn(`[us-biz] ${ticker} 신규 10-K 수집 실패:`, (e as Error)?.message?.slice(0, 80));
+    }
+  }
+  console.log(`[us-biz] 신규 10-K ${tickers.size}종목 확인, ${updated}종목 갱신`);
+  return { filers: tickers.size, updated };
 }

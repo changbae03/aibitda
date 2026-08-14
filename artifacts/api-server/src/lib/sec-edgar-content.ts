@@ -48,6 +48,18 @@ async function getCikMap(): Promise<Map<string, number>> {
   return map;
 }
 
+/**
+ * CIK → ticker 역방향 표. 일별 제출 목록은 회사를 **CIK로만** 준다.
+ * 같은 CIK에 여러 티커가 걸리면(우선주·클래스주) 먼저 온 것을 쓴다 —
+ * 어차피 10-K는 회사 단위라 어느 쪽으로 저장해도 같은 본문이다.
+ */
+export async function getCikToTicker(): Promise<Map<number, string>> {
+  const map = await getCikMap();
+  const rev = new Map<number, string>();
+  for (const [ticker, cik] of map) if (!rev.has(cik)) rev.set(cik, ticker);
+  return rev;
+}
+
 /** ticker → CIK. 미국 재무(companyfacts) 수집에서 재사용한다. 없으면 null. */
 export async function getCik(ticker: string): Promise<number | null> {
   try {
