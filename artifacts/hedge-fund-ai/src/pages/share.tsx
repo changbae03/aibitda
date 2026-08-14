@@ -7,7 +7,7 @@ import {
   ArrowRight, TrendingUp, TrendingDown,
   Target, Building2, Loader2, AlertCircle,
   Check, Link2, ShieldCheck, Globe2, PieChart, Zap,
-  Users, Database, RefreshCw, FileText, ExternalLink,
+  Users, Database, RefreshCw, FileText, ExternalLink, BarChart2,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import StockChart, { type ChartLevels, type ChartEvent } from "@/components/StockChart";
