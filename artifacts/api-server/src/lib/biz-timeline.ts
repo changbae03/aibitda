@@ -18,7 +18,7 @@
 
 import { pool } from "@workspace/db";
 import { isKoreanTicker } from "@workspace/shared";
-import { lookupCorpCode } from "./dart-store.js";
+import { lookupCorpCode, fetchAndStoreDartQuarterly } from "./dart-store.js";
 import { parseZip, htmlToText } from "./dart-business-content.js";
 import { refreshThemeSearchDocs } from "./theme-search.js";
 import {
@@ -153,6 +153,13 @@ export async function collectNewFilings(days = 2): Promise<{ filers: number; upd
       try {
         const r = await collectBizTimeline(ticker, 4);
         if (r.collected > 0) updated++;
+        // 보고서가 나온 날이 곧 재무가 나온 날이다 — 같이 받는다.
+        //
+        // 예전에는 DART 재무도 "누가 그 종목을 분석할 때"만 받아서, 2,804종목 중
+        // 43종목에만 있었다(전부 분석 이력이 있는 종목). 처음 보는 종목은 분석을
+        // 시작하고서야 재무를 받느라 느렸고, 국면 판정·순부채·분기 검산이 얇게 돌았다.
+        // 30일 내 수집분은 이 함수가 알아서 건너뛴다.
+        await fetchAndStoreDartQuarterly(ticker);
       } catch (e) {
         console.warn(`[biz-timeline] ${ticker} 신규 공시 수집 실패:`, (e as Error)?.message?.slice(0, 80));
       }
