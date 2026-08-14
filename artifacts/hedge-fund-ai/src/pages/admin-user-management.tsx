@@ -3,8 +3,7 @@ import {
   Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
   ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink, BarChart2, Star,
-  Download, SlidersHorizontal, Users, Activity, UserCheck,
-} from "lucide-react";
+  Download, SlidersHorizontal, Users, Activity, UserCheck, Eye } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 interface AdminStats {
@@ -284,6 +283,14 @@ export default function AdminUserManagement() {
   const [analysesTotal, setAnalysesTotal] = useState(0);
   const [analysesPage, setAnalysesPage] = useState(1);
   const [analysesLoading, setAnalysesLoading] = useState(false);
+  /**
+   * 이 사람이 **읽은** 보고서. 돌린 것(analyses)만 보면 절반이다 —
+   * 남의 공개 보고서를 읽은 것은 거기 안 잡힌다.
+   */
+  const [viewed, setViewed] = useState<Array<{
+    ticker: string; companyName: string | null; analysisId: number | null;
+    lastViewedAt: string | null; viewCount: number; isOwn: boolean;
+  }>>([]);
 
   const [creditDelta, setCreditDelta] = useState("");
   const [creditReason, setCreditReason] = useState("");
@@ -342,6 +349,7 @@ export default function AdminUserManagement() {
         const d = await r.json();
         setAnalyses(d.analyses);
         setAnalysesTotal(d.total);
+        setViewed(d.viewed ?? []);
       }
     } finally {
       setAnalysesLoading(false);
@@ -938,6 +946,60 @@ export default function AdminUserManagement() {
                     })}
                   </tbody>
                 </table>
+              )}
+            </div>
+
+            {/* ── 읽은 보고서 ────────────────────────────────────────────────
+                "분석 이력"은 돌린 횟수다. 한 번 만든 보고서를 열 번 다시 읽어도
+                거기 숫자는 그대로고, 남의 공개 보고서를 읽은 것은 아예 안 잡힌다. */}
+            <div className="mt-4">
+              <div className="flex items-center gap-1.5 px-1 mb-2">
+                <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground">읽은 보고서 ({viewed.length}종목)</span>
+              </div>
+              {viewed.length === 0 ? (
+                <p className="px-1 text-[11px] text-muted-foreground/70">
+                  아직 열람 기록이 없습니다. 기록은 2026-08-15부터 쌓기 시작했습니다.
+                </p>
+              ) : (
+                <div className="rounded-lg border border-border/50 overflow-hidden">
+                  <table className="w-full">
+                    <tbody>
+                      {viewed.map((v, i) => (
+                        <tr key={`${v.ticker}-${i}`} className="border-b border-border/30 last:border-0 hover:bg-muted/20">
+                          <td className="px-4 py-2.5">
+                            <span className="font-mono text-[12px] font-semibold text-foreground">{v.ticker}</span>
+                            {v.companyName && <span className="ml-1.5 text-xs text-muted-foreground">{v.companyName}</span>}
+                            {!v.isOwn && (
+                              <span className="ml-1.5 text-[9.5px] px-1 py-px rounded bg-muted text-muted-foreground">
+                                남의 보고서
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[11px] text-muted-foreground whitespace-nowrap">
+                            {v.viewCount}회
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[11px] text-muted-foreground whitespace-nowrap">
+                            {fmt(v.lastViewedAt)}
+                          </td>
+                          <td className="pr-3 py-2.5 text-right">
+                            {v.analysisId != null && (
+                              <a
+                                href={getApiUrl(`/analysis/${v.analysisId}`)}
+                                target="_blank" rel="noopener noreferrer" title="보고서 보기"
+                                className="inline-flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary px-1.5 py-1 rounded hover:bg-primary/5 transition-colors"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                보기
+                              </a>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
