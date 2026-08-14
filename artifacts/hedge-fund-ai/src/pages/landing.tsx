@@ -32,24 +32,24 @@ function KakaoIcon() {
 const COPY = {
   ko: {
     badge: "공시 기반 AI 리서치",
-    h1a: "뉴스 말고,",
-    h1b: "공시로.",
-    sub: "몇 년치 사업보고서를 AI가 나란히 읽고, 이 기업이 성장하는지 꺾이는지 돌아서는지 알려드립니다.",
+    h1a: "애빛다,",
+    h1b: "행간을 읽다.",
+    sub: "축적된 사업보고서에서 기업의 행간을 분석합니다. 회사가 무엇을 바꿨고 무엇을 감췄는지, 몇 년치를 나란히 놓아야 보입니다.",
     values: [
       {
+        icon: Quote,
+        title: "공시로 찾는 관련주",
+        desc: "뉴스가 짚어준 종목 말고, 회사가 사업보고서에 직접 적어놓은 것으로 찾습니다. 왜 걸렸는지 근거 문장까지 보여드립니다.",
+      },
+      {
         icon: FileSearch,
-        title: "5년치 공시를 3분에",
-        desc: "300쪽짜리 사업보고서를 해마다 나란히 놓고 무엇이 달라졌는지 짚어줍니다. 설비투자·연구개발·인력·재고 회전까지.",
+        title: "5년치를 나란히 놓고",
+        desc: "300쪽짜리 사업보고서를 해마다 겹쳐 읽고 무엇이 달라졌는지 짚어줍니다. 설비투자·연구개발·인력·재고 회전까지.",
       },
       {
         icon: Compass,
         title: "지금 어느 단계인가",
-        desc: "폭발 성장 · 턴어라운드 · 피크아웃 전조… 9단계 중 어디인지 판정하고, 왜 그렇게 봤는지 근거를 함께 보여줍니다.",
-      },
-      {
-        icon: Quote,
-        title: "테마 관련주, 회사 말로 찾기",
-        desc: "뉴스가 짚어준 종목 말고 회사가 사업보고서에 직접 적어놓은 것으로 찾습니다. 근거 문장까지 함께요.",
+        desc: "폭발 성장 · 턴어라운드 · 피크아웃 전조… 아홉 자리 중 어디인지 판정하고, 왜 그렇게 봤는지 근거를 함께 보여줍니다.",
       },
     ],
     proof: ["상장사 2,700여 곳 공시 수집", "모든 수치에 출처 문장", "한국 · 미국 주식"],
@@ -62,24 +62,24 @@ const COPY = {
   },
   en: {
     badge: "AI research, grounded in filings",
-    h1a: "Skip the news.",
-    h1b: "Read the filings.",
-    sub: "AI reads years of regulatory filings side by side and tells you whether a business is growing, stalling, or turning around.",
+    h1a: "aibitda,",
+    h1b: "reading between the lines.",
+    sub: "We analyze what companies imply, not just what they state — across years of accumulated filings, side by side.",
     values: [
       {
+        icon: Quote,
+        title: "Find theme stocks in the filings",
+        desc: "Not the tickers the news happened to name — the companies that wrote about that business themselves, quoted line by line.",
+      },
+      {
         icon: FileSearch,
-        title: "Five years of filings in three minutes",
+        title: "Five years, side by side",
         desc: "We line up 300-page annual reports year by year and point out what changed — capex, R&D, headcount, inventory turns.",
       },
       {
         icon: Compass,
         title: "Which stage is it in?",
         desc: "Hypergrowth, turnaround, peaking out — we place the company in one of nine stages and show the evidence behind it.",
-      },
-      {
-        icon: Quote,
-        title: "Find theme stocks in the company's own words",
-        desc: "Not the tickers the news happened to name — the companies that wrote about that business themselves, quoted line by line.",
       },
     ],
     proof: ["Filings from 2,700+ listed companies", "Every figure carries its source", "Korea · US markets"],
