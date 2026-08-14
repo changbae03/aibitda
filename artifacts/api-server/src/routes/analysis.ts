@@ -29,6 +29,7 @@ import { normalizeTicker } from "@workspace/shared";
 import { ensureStockRegistered } from "../lib/stock-registry.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { collectBizTimeline } from "../lib/biz-timeline.js";
+import { recordAnalysisView } from "../lib/analysis-views.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent, fetchEdgarTimeSeries, fetchEdgarMDA } from "../lib/sec-edgar-content.js";
 import { fetchDartTimeSeries } from "../lib/dart-timeseries.js";
@@ -126,6 +127,16 @@ router.post("/", async (req, res) => {
     : null;
 
   const userId = schedulerUserId ?? getUserId(req);
+
+  // ── 로그인 필수 ──────────────────────────────────────────────────────────
+  //
+  // 예전에는 비로그인이면 **크레딧 검사를 통째로 건너뛰고** 익명으로 분석이 만들어졌다.
+  // 아래 크레딧 블록이 `userId &&`로 묶여 있었기 때문이다. 그래서 누가 무엇을 봤는지
+  // 알 수 없었고(516건 중 117건이 주인 없음), 사용량 제한도 걸리지 않았다.
+  if (!isSchedulerCall && !userId) {
+    res.status(401).json({ error: "카카오 로그인 후 이용할 수 있습니다." });
+    return;
+  }
 
   if (!isSchedulerCall) {
     // ── 서버 과부하 방어: 큐 용량 초과 시 크레딧 차감 전 즉시 거절 ──────────
@@ -1105,6 +1116,16 @@ router.get("/share/:id", async (req, res) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
+    // 공유 링크로 들어와도 로그인은 받는다. 안 그러면 이 열람이 어디에도 안 남는다.
+    const requestUserId = getUserId(req);
+    if (!requestUserId) {
+      res.status(401).json({ error: "카카오 로그인 후 이용할 수 있습니다." });
+      return;
+    }
+    // 읽은 사실을 남긴다. 실패해도 열람을 막지 않는다(부가 기록이므로).
+    recordAnalysisView(id, requestUserId, aRows[0].ticker ?? null)
+      .catch(e => console.warn("[analysis] 조회 기록 실패:", (e as Error)?.message?.slice(0, 80)));
+
     const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
     res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));
   } catch (err: any) {
@@ -1577,6 +1598,13 @@ router.get("/:id", async (req, res) => {
     const requestUserId = getUserId(req);
     const isPublic = aRows[0].is_public === 'true' || aRows[0].is_public === true;
 
+    // 공개 보고서라도 로그인은 받는다 — 누가 무엇을 읽었는지 남기지 못하면
+    // 운영 화면의 숫자가 실제 사용과 어긋난다.
+    if (!requestUserId) {
+      res.status(401).json({ error: "카카오 로그인 후 이용할 수 있습니다." });
+      return;
+    }
+
     if (analysisUserId && analysisUserId !== requestUserId && !isPublic) {
       // 관리자는 모든 보고서 열람 가능
       const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [requestUserId]);
@@ -1585,6 +1613,9 @@ router.get("/:id", async (req, res) => {
         return;
       }
     }
+
+    recordAnalysisView(id, requestUserId, aRows[0].ticker ?? null)
+      .catch(e => console.warn("[analysis] 조회 기록 실패:", (e as Error)?.message?.slice(0, 80)));
 
     const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
     res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));

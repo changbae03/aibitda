@@ -715,6 +715,20 @@ router.get("/user-list/:userId/analyses", async (req, res) => {
     [userId]
   );
 
+  // 돌린 것만 보면 절반이다 — 남의 공개 보고서를 읽은 것은 여기 안 잡힌다.
+  // 운영자가 알고 싶은 건 "이 사람이 무엇에 관심 있나"이므로 열람도 함께 준다.
+  const viewed = await pool.query(
+    `SELECT v.ticker, v.analysis_id, max(v.viewed_at) AS last_viewed, count(*)::int AS views,
+            a.company_name, (a.user_id = $1) AS is_own
+       FROM analysis_views v
+       LEFT JOIN analyses a ON a.id = v.analysis_id
+      WHERE v.user_id = $1
+      GROUP BY v.ticker, v.analysis_id, a.company_name, a.user_id
+      ORDER BY max(v.viewed_at) DESC
+      LIMIT 30`,
+    [userId]
+  ).catch(() => ({ rows: [] as any[] }));
+
   res.json({
     analyses: rows.map(r => ({
       id: r.id,
@@ -727,6 +741,43 @@ router.get("/user-list/:userId/analyses", async (req, res) => {
       createdAt: r.created_at,
     })),
     total: parseInt(countResult.rows[0].count, 10),
+    viewed: viewed.rows.map(r => ({
+      ticker: r.ticker,
+      companyName: r.company_name ?? null,
+      analysisId: r.analysis_id == null ? null : Number(r.analysis_id),
+      lastViewedAt: r.last_viewed,
+      viewCount: Number(r.views),
+      isOwn: r.is_own === true,
+    })),
+  });
+});
+
+/**
+ * 실제로 **읽힌** 종목 순위. 만든 횟수(analyses)와 다르다 —
+ * 한 번 만든 보고서를 여럿이 여러 번 읽으면 여기서만 보인다.
+ */
+router.get("/top-viewed", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const days = Math.min(90, Math.max(1, parseInt((req.query.days as string) ?? "7", 10)));
+  const { rows } = await pool.query(
+    `SELECT v.ticker, count(*)::int AS views, count(DISTINCT v.user_id)::int AS users,
+            max(a.company_name) AS company_name
+       FROM analysis_views v
+       LEFT JOIN analyses a ON a.id = v.analysis_id
+      WHERE v.ticker IS NOT NULL AND v.viewed_at > NOW() - ($1 || ' days')::interval
+      GROUP BY v.ticker ORDER BY views DESC LIMIT 30`,
+    [String(days)]
+  ).catch(() => ({ rows: [] as any[] }));
+  res.json({
+    days,
+    items: rows.map(r => ({
+      ticker: r.ticker, companyName: r.company_name ?? null,
+      views: Number(r.views), users: Number(r.users),
+    })),
   });
 });
 

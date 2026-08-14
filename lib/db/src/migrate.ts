@@ -33,6 +33,20 @@ export async function runMigrations() {
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
 
+      -- 누가 어떤 보고서를 읽었는지. "총 분석 수"는 만든 횟수지 읽은 횟수가 아니라
+      -- 운영 화면의 숫자가 실제 사용과 어긋나 있었다.
+      CREATE TABLE IF NOT EXISTS analysis_views (
+        id SERIAL PRIMARY KEY,
+        analysis_id INTEGER NOT NULL REFERENCES analyses(id),
+        user_id TEXT NOT NULL,
+        ticker TEXT,
+        viewed_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_analysis_views_user ON analysis_views (user_id, viewed_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_analysis_views_ticker ON analysis_views (ticker, viewed_at DESC);
+      -- 30분 내 재열람을 걸러내는 조회가 (analysis_id, user_id, viewed_at)로 들어온다.
+      CREATE INDEX IF NOT EXISTS idx_analysis_views_dedupe ON analysis_views (analysis_id, user_id, viewed_at DESC);
+
       CREATE TABLE IF NOT EXISTS model_insights (
         id SERIAL PRIMARY KEY,
         analysis_id INTEGER,
