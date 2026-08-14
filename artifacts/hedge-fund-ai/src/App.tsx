@@ -246,9 +246,33 @@ function ConsentGate() {
 }
 
 function HomeRedirect() {
+  const { data, isLoading } = useAuth();
   const [, setLocation] = useLocation();
-  useEffect(() => { setLocation("/analysis/new", { replace: true }); }, [setLocation]);
+  useEffect(() => {
+    if (isLoading) return;
+    setLocation(data?.user ? "/analysis/new" : "/login", { replace: true });
+  }, [isLoading, data?.user, setLocation]);
   return null;
+}
+
+/**
+ * 로그인 관문. 로그인하지 않았으면 앱 화면을 보여주지 않고 랜딩으로 돌린다.
+ *
+ * 예전에는 서버만 401을 냈다. 그래서 접속하면 분석 화면이 그대로 뜨고,
+ * **버튼을 누른 뒤에야** 막혔다 — 무엇을 하려다 막힌 건지 알기 어려웠고,
+ * 누가 무엇을 보는지도 남지 않았다. 문을 앞에 둔다.
+ */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { data, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    if (!isLoading && !data?.user) setLocation("/login", { replace: true });
+  }, [isLoading, data?.user, setLocation]);
+
+  // 아직 확인 중일 때 로그인 화면을 깜빡 보여주면 안 된다(로그인한 사람에게도 보인다).
+  if (isLoading) return <PageLoader />;
+  if (!data?.user) return null;
+  return <>{children}</>;
 }
 
 function Router() {
@@ -267,6 +291,7 @@ function Router() {
 
         {/* 사이드바 있는 앱 페이지 */}
         <Route>
+          <RequireAuth>
           <AppLayout>
             <Suspense fallback={<PageLoader />}>
               <Switch>
@@ -308,6 +333,7 @@ function Router() {
               </Switch>
             </Suspense>
           </AppLayout>
+          </RequireAuth>
         </Route>
       </Switch>
     </Suspense>
