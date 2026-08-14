@@ -106,13 +106,21 @@ export default function Landing() {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
     if (ref) localStorage.setItem("pending_referral", ref);
+    // 어디로 가려다 로그인 화면에 왔는지 기억한다. 카카오는 자기 주소로 돌아오므로
+    // 쿼리로는 이어지지 않는다 — 저장해두지 않으면 공유받은 글을 잃어버린다.
+    const next = params.get("next");
+    if (next && next.startsWith("/")) sessionStorage.setItem("post_login_next", next);
     if (params.get("from") === "kakao") {
       qc.invalidateQueries({ queryKey: ["auth/me"] });
     }
   }, [qc]);
 
   useEffect(() => {
-    if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
+    if (kakaoLoading || !kakaoAuth?.user) return;
+    const next = sessionStorage.getItem("post_login_next");
+    sessionStorage.removeItem("post_login_next");
+    // 열린 리다이렉트를 막는다 — 우리 앱 안의 경로만 따른다.
+    setLocation(next && next.startsWith("/") && !next.startsWith("//") ? next : "/analysis/new");
   }, [kakaoLoading, kakaoAuth, setLocation]);
 
   const handleKakaoLogin = () => {

@@ -266,7 +266,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { data, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   useEffect(() => {
-    if (!isLoading && !data?.user) setLocation("/login", { replace: true });
+    if (isLoading || data?.user) return;
+    // 어디로 가려 했는지 실어 보낸다 — 로그인 후 그 자리로 돌려보내기 위해서다.
+    const here = window.location.pathname + window.location.search;
+    setLocation(`/login?next=${encodeURIComponent(here)}`, { replace: true });
   }, [isLoading, data?.user, setLocation]);
 
   // 아직 확인 중일 때 로그인 화면을 깜빡 보여주면 안 된다(로그인한 사람에게도 보인다).

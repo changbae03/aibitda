@@ -996,14 +996,21 @@ export default function SharePage() {
   const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // 401(로그인 필요)과 404(없는 글)를 갈라야 한다. 하나로 뭉치면 로그인만 하면
+  // 볼 수 있는 보고서가 "찾을 수 없습니다"로 나가 공유가 통째로 죽은 것처럼 보인다.
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(getApiUrl(`/api/analysis/share/${id}`))
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => { setAnalysis(d); setLoading(false); })
+    // ⚠️ credentials를 빼면 쿠키가 안 실려 **로그인한 사람도** 401을 받는다.
+    fetch(getApiUrl(`/api/analysis/share/${id}`), { credentials: "include" })
+      .then((r) => {
+        if (r.status === 401) { setNeedsLogin(true); setLoading(false); return null; }
+        return r.ok ? r.json() : Promise.reject();
+      })
+      .then((d) => { if (d) { setAnalysis(d); setLoading(false); } })
       .catch(() => { setError(true); setLoading(false); });
 
     // 공유자 크레딧 지급 트리거 — 뷰어가 공유자와 다른 사람일 때만 백엔드에서 지급
@@ -1027,6 +1034,24 @@ export default function SharePage() {
       <div className="flex flex-col items-center gap-3">
         <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
         <p className="text-slate-400 text-sm">리포트를 불러오는 중...</p>
+      </div>
+    </div>
+  );
+
+  if (needsLogin) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+      <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+        <p className="text-slate-100 text-lg font-bold">공유받은 리포트가 여기 있습니다</p>
+        <p className="text-slate-400 text-sm leading-relaxed">
+          몇 년치 사업보고서를 나란히 읽은 분석입니다.<br />
+          카카오로 로그인하면 바로 보실 수 있습니다.
+        </p>
+        <button
+          onClick={() => setLocation(`/login?next=${encodeURIComponent(`/share/${id}`)}`)}
+          className="mt-1 px-5 py-2.5 rounded-xl bg-[#FEE500] text-black text-sm font-bold hover:brightness-95 transition"
+        >
+          카카오로 로그인하고 보기
+        </button>
       </div>
     </div>
   );
