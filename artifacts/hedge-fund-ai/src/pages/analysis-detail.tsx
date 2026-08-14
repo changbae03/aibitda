@@ -776,9 +776,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               }
             </motion.button>
             <p className="text-center text-[10px] text-muted-foreground mt-1.5">
-              {/* 로그인을 필수로 바꾼 뒤에도 "로그인 없이 볼 수 있다"고 적혀 있었다.
-                  받는 사람이 겪는 것과 다른 안내는 공유가 고장 난 것처럼 느끼게 한다. */}
-              {isEnModal ? "Recipients sign in with Kakao to read it" : "받는 분은 카카오 로그인 후 보실 수 있습니다"}
+              {isEnModal ? "Anyone can view this report — no login required" : "로그인 없이도 누구나 리포트를 볼 수 있습니다"}
             </p>
           </div>
 

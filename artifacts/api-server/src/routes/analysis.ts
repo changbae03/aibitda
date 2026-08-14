@@ -1116,15 +1116,14 @@ router.get("/share/:id", async (req, res) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    // 공유 링크로 들어와도 로그인은 받는다. 안 그러면 이 열람이 어디에도 안 남는다.
+    // 공유 링크는 **누구나 볼 수 있다.** 받는 사람에게 로그인을 요구하면 공유가 죽는다.
+    // 로그인이 필요한 것은 새 보고서를 만드는 쪽이다(POST /).
+    // 로그인한 사람이 읽었을 때만 기록이 남는다 — 익명은 누구인지 알 수 없으므로 세지 않는다.
     const requestUserId = getUserId(req);
-    if (!requestUserId) {
-      res.status(401).json({ error: "카카오 로그인 후 이용할 수 있습니다." });
-      return;
+    if (requestUserId) {
+      recordAnalysisView(id, requestUserId, aRows[0].ticker ?? null)
+        .catch(e => console.warn("[analysis] 조회 기록 실패:", (e as Error)?.message?.slice(0, 80)));
     }
-    // 읽은 사실을 남긴다. 실패해도 열람을 막지 않는다(부가 기록이므로).
-    recordAnalysisView(id, requestUserId, aRows[0].ticker ?? null)
-      .catch(e => console.warn("[analysis] 조회 기록 실패:", (e as Error)?.message?.slice(0, 80)));
 
     const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
     res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));
