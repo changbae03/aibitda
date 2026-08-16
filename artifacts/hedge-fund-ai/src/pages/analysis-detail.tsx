@@ -1602,6 +1602,110 @@ function fmtMC(v: number | null | undefined): string {
   return `${(v / 1e6).toFixed(0)}M`;
 }
 
+/**
+ * 피어 비교 — **같은 업종의 다른 회사와 나란히.**
+ *
+ * 예전 `PeerMultiplesPanel`은 밸류에이션 시절 스냅샷 표를 봤고, 그 표가 채워지지
+ * 않아 운영에서 늘 빈손이었다(그래서 접힌 서랍에 묻혀 있었다).
+ * 지표는 종목 마스터에 이미 다 있으니 그걸 조인해서 준다.
+ *
+ * ⚠️ 0은 결측이다. PER 0배인 회사는 없다 — 빈칸으로 두고, 지어내지 않는다.
+ */
+function PeerComparePanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  interface Row {
+    ticker: string; name: string | null; reason?: string | null;
+    per: number | null; pbr: number | null; roe: number | null; opm: number | null;
+    marketCap: string | number | null;
+  }
+  const [data, setData] = useState<{ subject: Row | null; peers: Row[]; source: string } | null>(null);
+  const [openReason, setOpenReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(getApiUrl(`/api/peers/compare/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive) setData(d); })
+      .catch(() => { if (alive) setData(null); });
+    return () => { alive = false; };
+  }, [ticker]);
+
+  if (!data || data.peers.length === 0) return null;
+
+  const num = (v: number | null | undefined) => (v == null || v === 0 ? null : Number(v));
+  const fmtX = (v: number | null | undefined) => { const n = num(v); return n == null ? "—" : `${n.toFixed(1)}배`; };
+  const fmtP = (v: number | null | undefined) => { const n = num(v); return n == null ? "—" : `${n.toFixed(1)}%`; };
+  const fmtCap = (v: string | number | null | undefined) => {
+    if (v == null) return "—";
+    const n = Number(v); if (!isFinite(n) || n === 0) return "—";
+    return n >= 1e12 ? `${(n / 1e12).toFixed(1)}조` : `${Math.round(n / 1e8).toLocaleString()}억`;
+  };
+
+  const rows: Array<Row & { self?: boolean }> = [
+    ...(data.subject ? [{ ...data.subject, self: true }] : []),
+    ...data.peers,
+  ];
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-2">
+        <span className="text-[13px] font-bold text-foreground">{isEn ? "Peer comparison" : "같은 업종과 나란히"}</span>
+        <span className="text-[10.5px] text-muted-foreground">
+          {data.source === "ai"
+            ? (isEn ? "peers chosen from filings" : "공시를 읽고 고른 비교군")
+            : (isEn ? "same sector, similar size" : "같은 업종·비슷한 규모")}
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px]">
+          <thead>
+            <tr className="border-b border-border/50">
+              <th className="text-left py-1.5 text-[10px] font-semibold text-muted-foreground uppercase">{isEn ? "Company" : "종목"}</th>
+              <th className="text-right py-1.5 px-2 text-[10px] font-semibold text-muted-foreground">PER</th>
+              <th className="text-right py-1.5 px-2 text-[10px] font-semibold text-muted-foreground">PBR</th>
+              <th className="text-right py-1.5 px-2 text-[10px] font-semibold text-muted-foreground">ROE</th>
+              <th className="text-right py-1.5 px-2 text-[10px] font-semibold text-muted-foreground">{isEn ? "OPM" : "영업이익률"}</th>
+              <th className="text-right py-1.5 pl-2 text-[10px] font-semibold text-muted-foreground">{isEn ? "Cap" : "시총"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={`${r.ticker}-${i}`}
+                  className={cn("border-b border-border/25 last:border-0", r.self && "bg-primary/5")}>
+                <td className="py-2 pr-2">
+                  <button type="button"
+                    onClick={() => setOpenReason(openReason === r.ticker ? null : r.ticker)}
+                    className={cn("text-left", r.reason ? "cursor-pointer hover:underline" : "cursor-default")}>
+                    <span className={cn("text-[12px]", r.self ? "font-bold text-foreground" : "font-medium text-foreground/85")}>
+                      {r.name ?? r.ticker}
+                    </span>
+                    {r.self && <span className="ml-1 text-[9.5px] text-primary font-semibold">{isEn ? "this" : "이 기업"}</span>}
+                  </button>
+                </td>
+                <td className="py-2 px-2 text-right text-[12px] tabular-nums text-foreground/80">{fmtX(r.per)}</td>
+                <td className="py-2 px-2 text-right text-[12px] tabular-nums text-foreground/80">{fmtX(r.pbr)}</td>
+                <td className="py-2 px-2 text-right text-[12px] tabular-nums text-foreground/80">{fmtP(r.roe)}</td>
+                <td className="py-2 px-2 text-right text-[12px] tabular-nums text-foreground/80">{fmtP(r.opm)}</td>
+                <td className="py-2 pl-2 text-right text-[12px] tabular-nums text-muted-foreground">{fmtCap(r.marketCap)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 왜 이 회사가 비교군인지 — AI가 공시를 읽고 적어둔 사유가 있다 */}
+      {openReason && rows.find(r => r.ticker === openReason)?.reason && (
+        <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+          {rows.find(r => r.ticker === openReason)!.reason}
+        </p>
+      )}
+      <p className="mt-2 text-[10.5px] text-muted-foreground/70">
+        {isEn ? "Blank means not reported. Loss-making companies show negative PER." : "빈칸은 값이 없는 것입니다. 적자 기업은 PER이 음수로 나옵니다."}
+      </p>
+    </div>
+  );
+}
+
 function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
   const [data, setData] = useState<PeerSnapshotResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -4588,6 +4692,14 @@ export default function AnalysisDetail() {
                 </div>
               ) : null}
 
+              {/* 피어 비교 — 숫자만 보면 이 회사가 비싼지 싼지 알 수 없다.
+                  같은 업종 회사를 나란히 놓아야 그 숫자에 뜻이 생긴다. */}
+              <div className="px-5 sm:px-6 py-5">
+                <ErrorBoundary fallback={null}>
+                  <PeerComparePanel ticker={analysis.ticker} isEn={isEn} />
+                </ErrorBoundary>
+              </div>
+
               {/* 주가 흐름 — 상단에 이미 표시되므로 이 섹션에서는 생략 */}
             </div>
           </NarrativeSectionBlock>
@@ -4826,7 +4938,6 @@ export default function AnalysisDetail() {
           <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
           <AnalystConsensusPanel ticker={analysis.ticker} currentPrice={(analysis as any).startPrice ?? null} isEn={isEn} />
           <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
-          <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
           <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
           <FilingTimelinePanel ticker={analysis.ticker} isEn={isEn} />
         </div>

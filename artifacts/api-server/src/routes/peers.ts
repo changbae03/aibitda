@@ -1,4 +1,7 @@
 import { Router, type IRouter } from "express";
+import { getPeersWithMetrics, getSectorPeers } from "../lib/peer-store.js";
+import { pool } from "@workspace/db";
+import { normalizeTicker } from "@workspace/shared";
 import {
   collectPeers,
   getLatestPeers,
@@ -9,6 +12,36 @@ import {
 } from "../lib/peer-collector.js";
 
 const router: IRouter = Router();
+
+/**
+ * GET /api/peers/compare/:ticker — **리포트에 띄우는 피어 비교.**
+ *
+ * `/latest`는 밸류에이션 시절 스냅샷 표를 본다. 그 표는 채워지지 않아 운영에서
+ * 늘 "데이터 없음"이었다. 지표는 이미 종목 마스터(`stocks` 뷰)에 한국 2,800 +
+ * 미국 10,400 종목분이 정리돼 있으니 **외부 API로 다시 받지 않는다.**
+ *
+ * AI가 고른 피어(`stock_peers`)를 먼저 쓰고, 없으면 업종·시총이 비슷한 종목으로 채운다.
+ */
+router.get("/compare/:ticker", async (req, res) => {
+  try {
+    const ticker = normalizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "종목코드가 올바르지 않습니다" }); return; }
+
+    let peers = await getPeersWithMetrics(ticker, 6);
+    let source: "ai" | "sector" = "ai";
+    // AI가 아직 고른 적 없는 종목(분석 전)은 업종 피어로 대신한다.
+    if (peers.length === 0) { peers = await getSectorPeers(ticker, 5); source = "sector"; }
+
+    const { rows } = await pool.query(
+      `SELECT ticker, name, market, sector, per, pbr, roe, opm, market_cap, current_price
+         FROM stocks WHERE ticker = $1 LIMIT 1`, [ticker]);
+
+    res.json({ subject: rows[0] ?? null, peers, source });
+  } catch (e: any) {
+    console.error("[peers] compare 실패:", e?.message);
+    res.status(500).json({ error: "피어 비교를 불러오지 못했습니다" });
+  }
+});
 
 // POST /api/peers/collect
 router.post("/collect", async (req, res) => {
