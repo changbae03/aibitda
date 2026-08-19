@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
+import { getOvernightThemes } from "../lib/overnight-themes.js";
 import { getThemePassages, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords, findMentionsByTicker } from "../lib/theme-search.js";
 
 /**
@@ -107,5 +108,20 @@ router.get("/mentions", async (req, res) => {
   } catch (e) {
     console.warn("[mentions] 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "mentions_failed" });
+  }
+});
+
+
+/**
+ * 간밤 재료로 만들어진 테마 — 테마 흐름 목록 맨 위에 얹는다.
+ * 수급으로 만든 테마와 **구분해서** 보여준다. 만들어진 방식이 다르다.
+ */
+router.get("/overnight-themes", async (req, res) => {
+  try {
+    const themes = await getOvernightThemes(String(req.query["force"] ?? "") === "1");
+    res.json({ count: themes.length, themes });
+  } catch (e) {
+    console.warn("[overnight] 실패:", (e as Error)?.message?.slice(0, 80));
+    res.status(500).json({ error: "overnight_failed" });
   }
 });

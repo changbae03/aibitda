@@ -595,9 +595,10 @@ export default function AdminUserManagement() {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">등급</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">가입일</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">마지막 활동</th>
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide" title="최근 7일간 생성한 보고서 수">7일</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">오늘</th>
                   <th className="w-6" />
                 </tr>
@@ -612,9 +613,10 @@ export default function AdminUserManagement() {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">등급</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">가입일</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">마지막 활동</th>
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide" title="최근 7일간 생성한 보고서 수">7일</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">오늘</th>
                   <th className="w-6" />
                 </tr>
@@ -649,6 +651,11 @@ export default function AdminUserManagement() {
                           const t = TIER_CONFIG[u.tier ?? "free"] ?? TIER_CONFIG.free;
                           return <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", t.color)}>{t.label}</span>;
                         })()}
+                      </td>
+                      {/* 언제 들어온 사람인지가 없으면 "마지막 활동 6월"이 오래된 유저인지
+                          최근 가입자인지 구분되지 않는다. */}
+                      <td className="px-3 py-2.5 text-[11px] text-muted-foreground/70 whitespace-nowrap hidden lg:table-cell">
+                        {u.createdAt ? fmt(u.createdAt) : <span className="text-muted-foreground/40">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap hidden lg:table-cell">
                         {u.lastActivity ? fmt(u.lastActivity) : <span className="text-muted-foreground/40">없음</span>}

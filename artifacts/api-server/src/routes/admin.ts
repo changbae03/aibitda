@@ -613,7 +613,15 @@ router.get("/user-list", async (req, res) => {
        uc.created_at,
        uc.last_login_at,
        COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses,
-       MAX(a.created_at) AS last_activity
+       -- ⚠️ 예전에는 MAX(a.created_at)만 봤다. 그러면 "마지막 활동"이 사실은
+       -- **마지막 분석**이라, 어제 로그인해 보고서를 읽기만 한 사람이 석 달 전으로
+       -- 표시됐다. 상단의 "7일 활성"과 숫자가 어긋나 화면이 멈춘 것처럼 보였다.
+       -- 로그인·분석·열람 중 **가장 최근**을 활동으로 본다.
+       GREATEST(
+         MAX(a.created_at),
+         uc.last_login_at,
+         (SELECT MAX(v.viewed_at) FROM analysis_views v WHERE v.user_id = uc.user_id)
+       ) AS last_activity
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
