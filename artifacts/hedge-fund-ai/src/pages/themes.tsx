@@ -788,18 +788,45 @@ export default function ThemesPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          <ThemeForceRanking feed={feed} />
-          {[...feed]
-            .sort((a, b) => {
-              const fa = computeThemeForce(a.stocks)?.avg ?? -Infinity;
-              const fb = computeThemeForce(b.stocks)?.avg ?? -Infinity;
-              return fb - fa;
-            })
-            .map((item, idx) => (
-              <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
-            ))}
-        </div>
+        (() => {
+          // 이 화면의 목표는 **지금 돈이 몰리는 테마**를 찾는 것이다.
+          // 조정 중인 테마까지 다 펼치면(8개 중 5개가 그랬다) 정작 강세인 하나가 묻힌다.
+          // 지우지는 않는다 — 조정이 반등의 앞자리일 때가 있어 눌러서 볼 수 있게 둔다.
+          const sorted = [...feed].sort((a, b) => {
+            const fa = computeThemeForce(a.stocks)?.avg ?? -Infinity;
+            const fb = computeThemeForce(b.stocks)?.avg ?? -Infinity;
+            return fb - fa;
+          });
+          const isCooling = (t: typeof sorted[number]) =>
+            phaseMeta(t.phase, computeThemeForce(t.stocks)?.avg).label === "조정 중";
+          const live = sorted.filter(t => !isCooling(t));
+          const cooling = sorted.filter(isCooling);
+          return (
+            <div className="space-y-3">
+              <ThemeForceRanking feed={feed} />
+              {live.map((item, idx) => (
+                <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
+              ))}
+              {cooling.length > 0 && (
+                <details className="group rounded-2xl border border-border bg-card overflow-hidden">
+                  <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none
+                                      hover:bg-muted/30 transition-colors list-none">
+                    <span className="text-[13px] text-muted-foreground">
+                      조정 중인 테마 {cooling.length}개
+                      <span className="ml-1.5 text-muted-foreground/60">— 돈이 빠지는 중입니다</span>
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-muted-foreground/50 group-open:rotate-180 transition-transform" />
+                  </summary>
+                  <div className="p-3 pt-0 space-y-3 border-t border-border/40">
+                    {cooling.map((item, idx) => (
+                      <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {/* ── 투자자 행동 신호 ───────────────────────────────────────── */}
