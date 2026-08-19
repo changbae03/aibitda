@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
-import { getThemePassages, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords } from "../lib/theme-search.js";
+import { getThemePassages, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords, findMentionsByTicker } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -56,14 +56,17 @@ router.get("/theme-stocks", async (req, res) => {
     // 결과가 빈약하면 그때만 AI로 넓힌다. 뉴스 말("호남 반도체 클러스터")을 회사가
     // 쓰는 말("시스템반도체·파운드리·후공정")로 옮기는 단계다. Gemini 호출이 붙으므로
     // 항상 하지 않고, 잘 안 걸릴 때만 — 흔한 테마(CDMO)는 확장 없이 즉시 답한다.
-    if (hits.length < 5 && kws.length === 1) {
+    // 사용자가 "이 말만"을 켜면 넓히지 않는다. 에보뮨을 찾는데 면역글로불린·혈장이
+    // 함께 나오면, 정작 그 회사만 보고 싶을 때 목록에서 찾을 수가 없다.
+    const exactOnly = String(req.query["exact"] ?? "") === "1";
+    if (!exactOnly && hits.length < 5 && kws.length === 1) {
       used = await expandThemeKeywords(kws[0]);
       if (used.length > 1) {
         hits = await searchThemeStocks(used, limit, regions);
         expanded = true;
       }
     }
-    res.json({ keywords: used, expanded, regions, count: hits.length, hits });
+    res.json({ keywords: used, expanded, exactOnly, regions, count: hits.length, hits });
   } catch (e) {
     console.warn("[theme-search] 실패:", (e as Error)?.message?.slice(0, 80));
     res.status(500).json({ error: "theme_search_failed" });
@@ -89,3 +92,20 @@ router.get("/theme-passages", async (req, res) => {
 });
 
 export default router;
+
+
+/**
+ * 누가 이 회사를 적었나 — 리포트의 역방향 검색 카드.
+ * 종목 이름은 서버가 종목 마스터에서 찾는다(호출부가 이름을 지어 보내면 어긋난다).
+ */
+router.get("/mentions", async (req, res) => {
+  try {
+    const ticker = String(req.query["ticker"] ?? "").trim();
+    if (!ticker) { res.status(400).json({ error: "ticker_required" }); return; }
+    const { name, mentions } = await findMentionsByTicker(ticker, 12);
+    res.json({ ticker, name, count: mentions.length, mentions });
+  } catch (e) {
+    console.warn("[mentions] 실패:", (e as Error)?.message?.slice(0, 80));
+    res.status(500).json({ error: "mentions_failed" });
+  }
+});

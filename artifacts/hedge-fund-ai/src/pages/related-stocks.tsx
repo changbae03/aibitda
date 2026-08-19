@@ -48,6 +48,11 @@ export default function RelatedStocksPage() {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  /**
+   * "이 말만 찾기". 기본은 결과가 빈약할 때 뜻이 가까운 말로 넓히는데,
+   * 에보뮨처럼 **그 이름이 적힌 회사만** 보고 싶을 때가 있다. 그때는 넓히지 않는다.
+   */
+  const [exactOnly, setExactOnly] = useState(false);
   // 목록의 값은 종목 이름이 아니라 **근거**다. 눌렀을 때 바로 분석으로 보내면
   // "왜 이 회사가 나왔지"를 확인할 자리가 없어진다 — 근거를 먼저 펼쳐 보여준다.
   const [detail, setDetail] = useState<Hit | null>(null);
@@ -66,13 +71,13 @@ export default function RelatedStocksPage() {
     } catch { setPassages([]); }
   };
 
-  const run = async (raw: string) => {
+  const run = async (raw: string, exact = exactOnly) => {
     const text = raw.trim();
     if (text.length < 2 || loading) return;
     setQ(text); setLoading(true); setFailed(false);
     try {
       const r = await fetch(
-        getApiUrl(`api/events/theme-stocks?q=${encodeURIComponent(text)}&limit=20`),
+        getApiUrl(`api/events/theme-stocks?q=${encodeURIComponent(text)}&limit=20${exact ? "&exact=1" : ""}`),
         { credentials: "include" },
       );
       // 실패(500)와 "결과 없음"은 다르다. 뭉뚱그리면 고칠 수 없는 화면이 된다.
@@ -119,6 +124,28 @@ export default function RelatedStocksPage() {
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEn ? "Find" : "찾기")}
         </button>
       </form>
+
+      {/* 이 스위치는 **검색창 바로 밑**에 둔다. 결과를 보고 나서야 "이 말만"이 필요해지므로,
+          결과 옆이 아니라 다시 찾을 자리 옆에 있어야 손이 간다. */}
+      <label className="flex items-center gap-2 px-1 cursor-pointer select-none w-fit">
+        <input
+          type="checkbox"
+          checked={exactOnly}
+          onChange={e => {
+            const on = e.target.checked;
+            setExactOnly(on);
+            // 켜고 끌 때 바로 다시 찾는다 — 체크만 하고 아무 일도 안 일어나면 고장으로 보인다.
+            if (q.trim().length >= 2) run(q, on);
+          }}
+          className="w-3.5 h-3.5 rounded accent-primary"
+        />
+        <span className="text-[12px] text-muted-foreground">
+          {isEn ? "Exact keyword only" : "이 말만 찾기"}
+          <span className="ml-1.5 text-muted-foreground/50">
+            {isEn ? "(no related terms)" : "(뜻이 가까운 말로 넓히지 않음)"}
+          </span>
+        </span>
+      </label>
 
       {/* 뭘 칠 수 있는지 보여준다 — 빈 검색창만 있으면 아무도 안 친다 */}
       {!result && !loading && (

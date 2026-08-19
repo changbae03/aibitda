@@ -324,3 +324,65 @@ export async function getThemePassages(
   }
   return { bsnsYear: Number(rows[0].bsns_year), passages: passages.slice(0, 12) };
 }
+
+export interface Mention {
+  ticker: string;
+  name: string;
+  industry: string | null;
+  marketCap: number | null;
+  /** 그 회사가 이 회사를 적어둔 대목 — 근거 없이 관계를 주장하지 않는다 */
+  snippet: string;
+}
+
+/**
+ * **누가 이 회사를 적었나** — 역방향 검색.
+ *
+ * 지금까지는 한 회사의 보고서를 읽는 일만 했다. 하지만 우리는 2,762곳의 원문을
+ * 전부 갖고 있고, 그러면 반대 방향으로도 물을 수 있다 —
+ * "다른 회사들이 이 회사를 뭐라고 적어놨나".
+ *
+ * 회사가 스스로 밝힌 경쟁사보다 정직하다. 남이 우리를 고객·매출처·경쟁사로 적을 때는
+ * 자기 사업을 설명하려고 적은 것이기 때문이다. 한화오션을 적어둔 12곳은 대부분
+ * 조선 기자재 회사였다 — 뉴스에는 안 나오는 공급망이다.
+ */
+export async function findMentioningCompanies(
+  ticker: string, companyName: string, limit = 12,
+): Promise<Mention[]> {
+  const name = companyName.trim();
+  // 2글자 이름은 아무 데나 걸린다("한화"가 한화오션·한화솔루션 본문에 모두 나온다).
+  if (name.length < 3) return [];
+
+  const { rows } = await pool.query(
+    `SELECT d.ticker,
+            COALESCE(s.name, d.ticker) AS name,
+            s.industry,
+            s.market_cap,
+            -- 이름이 나온 자리 앞뒤를 잘라 근거로 준다
+            substring(d.doc from greatest(1, position($1 in d.doc) - 70) for 240) AS snippet
+       FROM theme_search_docs d
+       LEFT JOIN stocks s ON s.ticker = d.ticker
+      WHERE d.ticker <> $2
+        AND d.doc LIKE '%' || $1 || '%'
+      ORDER BY s.market_cap DESC NULLS LAST
+      LIMIT $3`,
+    [name, ticker, limit],
+  );
+  return rows.map((r: any) => ({
+    ticker: String(r.ticker),
+    name: String(r.name),
+    industry: r.industry ?? null,
+    marketCap: r.market_cap == null ? null : Number(r.market_cap),
+    snippet: String(r.snippet ?? "").replace(/\s+/g, " ").trim(),
+  }));
+}
+
+
+/** 티커만 주면 이름을 종목 마스터에서 찾아 역방향 검색까지 한 번에. */
+export async function findMentionsByTicker(
+  ticker: string, limit = 12,
+): Promise<{ name: string | null; mentions: Mention[] }> {
+  const { rows } = await pool.query(`SELECT name FROM stocks WHERE ticker = $1 LIMIT 1`, [ticker]);
+  const name = String(rows[0]?.name ?? "").trim();
+  if (!name) return { name: null, mentions: [] };
+  return { name, mentions: await findMentioningCompanies(ticker, name, limit) };
+}

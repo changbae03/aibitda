@@ -83,6 +83,11 @@ export async function collectEventNews(today: string, daysAhead = 7): Promise<st
   const topicQueries = [
     // 기업 이벤트
     "임상 결과 발표 예정", "식약처 허가 심사 예정", "대규모 수주 계약 체결 예정",
+    // 바이오는 날짜가 정해진 재료가 가장 많은 업종인데 질의가 '식약처'뿐이었다.
+    // 실제 재료는 학회 발표(ASCO·ESMO)·FDA 심사·기술수출에서 나온다 —
+    // 머크·모더나 암백신 3상도 "학회 발표 예정"으로만 예고됐다.
+    "임상 3상 톱라인 발표 예정", "ASCO ESMO 학회 발표 예정",
+    "FDA 승인 심사 예정 신약", "기술수출 계약 발표 예정 바이오",
     "신제품 공개 예정", "신차 출시 예정", "양산 시작 예정", "공장 착공 예정",
     "실적 발표 예정 상장사", "주주총회 예정", "기업설명회 IR 예정",
     "상장 예정 공모주", "인수합병 발표 예정",
@@ -375,7 +380,19 @@ export async function getUpcomingEvents(daysAhead = 7): Promise<UpcomingEvent[]>
   // 조회할 때도 한 번 더 걸러낸다. DB 유니크는 (날짜, 제목 그대로)라서 "인제니아 코스닥
   // 상장"과 "인제니아, 코스닥 상장"이 각각 저장돼 있다 — 이미 쌓인 행은 지울 수 없으니
   // 읽을 때 합친다.
-  return dedupeEvents(list);
+  // 수급 잡동사니가 자리를 다 차지하는 것을 막는다.
+  //
+  // 주식병합·거래정지·신주상장은 **그 종목 주주에게만** 의미가 있는데 건수가 많아,
+  // 하루치 목록을 통째로 덮어 임상·정책 같은 재료가 아래로 밀렸다. 하루 2건까지만 둔다
+  // (중요도 순이므로 남는 것은 그중 큰 건이다).
+  const perDay = new Map<string, number>();
+  const trimmed = dedupeEvents(list).filter(e => {
+    if (e.category !== "지수·수급") return true;
+    const n = (perDay.get(e.eventDate) ?? 0) + 1;
+    perDay.set(e.eventDate, n);
+    return n <= 2;
+  });
+  return trimmed;
 }
 
 /** 수집 → 추출 → 저장 한 번에. 스케줄러·수동 실행 공통 진입점. */

@@ -349,6 +349,13 @@ export async function fetchUsMarketNews(): Promise<string> {
     "US economy GDP employment CPI",
     "oil price energy sector commodities",
     "US China trade tariff geopolitics",
+    // ⚠️ 질의가 지수·연준·빅테크·유가·관세뿐이라 **섹터 재료가 통째로 빠졌다.**
+    // 머크·모더나 암백신 3상 성공(2026-08-19)이 브리핑에 한 줄도 안 실렸다.
+    // 바이오는 하루 만에 섹터를 통째로 움직이는 재료가 가장 잦은 곳이다.
+    "FDA approval clinical trial biotech pharma",
+    "healthcare sector stocks drug pipeline",
+    // 반도체는 빅테크 질의에 얹혀 있었다 — 장비·파운드리는 종목이 달라 따로 묻는다.
+    "semiconductor chip stocks TSMC AMD Micron",
   ];
 
   function parseRssItems(xml: string, maxItems = 8): string[] {

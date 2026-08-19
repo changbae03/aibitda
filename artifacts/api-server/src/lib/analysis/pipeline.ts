@@ -1018,6 +1018,31 @@ async function executeStep(
         try {
           const usYears = await collectUSFinancials(analysis.ticker);
           Object.assign(stageSig, usStageSignals(usYears));
+
+          // 임상단계 바이오 예외는 **미국에도 걸려야 한다.**
+          //
+          // 예외가 `annualRows`(한국 DART 재무) 블록 안에만 있어서 미국 종목은
+          // 통째로 건너뛰었다. 모더나가 "쇠퇴"로 나왔다 — 매출 −40%·마진 −36.2%p는
+          // 사실이지만 코로나 특수가 끝난 되돌림이고, 지금 가치는 파이프라인에 있다.
+          try {
+            const usDoc = (await rawQuery(
+              `SELECT content FROM us_biz_reports WHERE ticker = $1 ORDER BY fy DESC LIMIT 1`,
+              [analysis.ticker],
+            ))[0];
+            const usPl = detectClinicalPipeline(String(usDoc?.content ?? ""));
+            const usInd = `${analysis.industry ?? ""}`;
+            const usBio = usPl.hasPipeline
+              || (usPl.mentions === 0 && /Biotech|Pharmaceutical|Drug|생명공학|제약/i.test(usInd));
+            const lastY = usYears[usYears.length - 1];
+            const usOpm = lastY?.revenue && lastY.revenue > 0 && lastY.operatingIncome != null
+              ? (lastY.operatingIncome / lastY.revenue) * 100 : null;
+            if (usBio && usOpm != null && usOpm < 5) {
+              stageSig.isClinicalBio = true;
+              console.log(`[dart_report_analysis] 임상단계 바이오(미국) — 마진 감점 제외 (임상 언급 ${usPl.mentions}회, OPM ${usOpm.toFixed(1)}%)`);
+            }
+          } catch (e) {
+            console.warn("[dart_report_analysis] 미국 바이오 판정 실패:", (e as Error)?.message?.slice(0, 80));
+          }
           const usTable = renderUSFinancials(usYears);
           if (usTable) { dartBlocks.push(usTable); console.log(`[dart_report_analysis] 미국 재무표 주입 (${usYears.length}개년, SEC EDGAR)`); }
 

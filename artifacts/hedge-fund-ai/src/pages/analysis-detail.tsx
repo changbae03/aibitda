@@ -1650,8 +1650,11 @@ function PeerComparePanel({ ticker, isEn = false }: { ticker: string; isEn?: boo
       <div className="flex items-baseline gap-2 mb-2">
         <span className="text-[13px] font-bold text-foreground">{isEn ? "Peer comparison" : "같은 업종과 나란히"}</span>
         <span className="text-[10.5px] text-muted-foreground">
+          {/* ⚠️ "공시를 읽고 골랐다"고 쓰면 안 된다. 선정에는 공시에 명시된 경쟁사와
+              앞 단계 분석 본문이 들어가지만, 프롬프트에 손으로 박아둔 서브섹터 목록도
+              함께 쓰인다. 메디포스트 피어는 실제로 그 목록에서 나왔다. */}
           {data.source === "ai"
-            ? (isEn ? "peers chosen from filings" : "공시를 읽고 고른 비교군")
+            ? (isEn ? "AI-selected · tap a name for why" : "AI가 고른 비교군 · 이름을 누르면 사유")
             : (isEn ? "same sector, similar size" : "같은 업종·비슷한 규모")}
         </span>
       </div>
@@ -3091,6 +3094,64 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   "검증":       { bg: "bg-lime-500/10",    text: "text-lime-400" },
   "현금":       { bg: "bg-green-500/10",   text: "text-green-400" },
 };
+
+/**
+ * 7번 카드 — **누가 이 회사를 적었나.**
+ *
+ * 지금까지 리포트는 한 회사의 보고서를 읽는 일만 했다. 하지만 애빛다는 상장사
+ * 2,762곳의 원문을 전부 갖고 있고, 그러면 반대로도 물을 수 있다.
+ * 회사가 스스로 밝힌 경쟁사보다 정직하다 — 남이 우리를 매출처·매입처로 적을 때는
+ * 자기 사업을 설명하려고 적은 것이기 때문이다.
+ * 한화오션을 적어둔 12곳은 대부분 조선 기자재 회사였다(뉴스에는 안 나오는 공급망).
+ */
+function MentionsCard({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [data, setData] = useState<{ name: string | null; count: number;
+    mentions: Array<{ ticker: string; name: string; industry: string | null; snippet: string }> } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(getApiUrl(`api/events/mentions?ticker=${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => (r.ok ? r.json() : null)).then(setData).catch(() => setData(null));
+  }, [ticker]);
+
+  // 아무도 안 적었으면 카드를 띄우지 않는다 — 빈 카드는 고장으로 보인다.
+  if (!data || data.count === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] text-muted-foreground leading-relaxed">
+        {isEn
+          ? "Other listed companies that wrote this company's name in their own filings."
+          : "다른 상장사가 자기 사업보고서에 이 회사를 적어둔 곳입니다. 고객·매입처·경쟁사 관계가 드러납니다."}
+      </p>
+      {data.mentions.map(m => {
+        const on = open === m.ticker;
+        return (
+          <div key={m.ticker} className="rounded-lg border border-border/50 overflow-hidden">
+            <button type="button" onClick={() => setOpen(on ? null : m.ticker)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/30 transition-colors text-left">
+              <span className="text-[13px] font-semibold text-foreground">{m.name}</span>
+              <span className="font-mono text-[10.5px] text-muted-foreground/60">{m.ticker}</span>
+              {m.industry && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate max-w-[120px]">
+                  {m.industry}
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 ml-auto shrink-0 text-muted-foreground/50 transition-transform ${on ? "rotate-180" : ""}`} />
+            </button>
+            {/* 관계를 주장만 하면 믿을 수 없다. 그 회사가 적은 문장을 그대로 보여준다. */}
+            {on && (
+              <div className="px-3 pb-3 pt-1 border-t border-border/40">
+                <p className="text-[11.5px] leading-relaxed text-muted-foreground">…{m.snippet}…</p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function ChecklistView({ step, isEn }: { step: any; isEn: boolean }) {
   const data = parseChecklistJson(step.content ?? "");
@@ -4921,6 +4982,27 @@ export default function AnalysisDetail() {
               </ErrorBoundary>
             ) : null}
           </NarrativeSectionBlock>
+          </motion.div>
+        );
+      })()}
+
+      {/* ── 7번: 누가 이 회사를 적었나 ── */}
+      {(() => {
+        const thesisDone = !!analysis.steps.find((s: any) => s.stepKey === "investment_thesis");
+        if (!thesisDone) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
+            <NarrativeSectionBlock
+              num={7}
+              title={isEn ? "Who wrote about this company" : "누가 이 회사를 적었나"}
+              subtitle={isEn ? "Found in other companies' own filings" : "다른 상장사의 사업보고서에서 찾은 관계"}
+              accent="#7c5cff"
+              isEn={isEn}
+            >
+              <ErrorBoundary fallback={null}>
+                <MentionsCard ticker={analysis.ticker} isEn={isEn} />
+              </ErrorBoundary>
+            </NarrativeSectionBlock>
           </motion.div>
         );
       })()}
