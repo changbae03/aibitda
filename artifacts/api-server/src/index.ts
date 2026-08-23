@@ -304,7 +304,15 @@ const server = app.listen(port, () => {
 
   // ── 시장 브리핑 정기 갱신 ─────────────────────────────────────────────────────
   // 평일: 2시간마다 (KST 06~20시), 주말: 4시간마다 (KST 08~20시)
-  // 한국 + 미국 브리핑 동시 갱신
+  //
+  // ⚠️ 예전 주석은 "주말은 2번에 1번 조건 불일치 → 실질 4h"라고 적어놨지만, 실제 조건은
+  // `kstHour < 8` 하나뿐이라 이른 아침만 걸렀다. 주말에도 2시간마다 돌아, 장이 닫힌 날에
+  // 한국·미국 브리핑을 각각 7번씩 다시 썼다. 내용은 거의 그대로인데 LLM만 부른 것이다.
+  //
+  // 시각으로 나누지 않고 **슬롯**으로 나눈다. setInterval은 서버가 켜진 시각부터 2시간
+  // 간격이라 `kstHour % 4 === 0` 같은 조건은 시작 시각에 따라 **한 번도 안 맞을 수 있다**
+  // (09:13에 켜지면 이후 tick은 11·13·15시… 4의 배수가 없다).
+  let briefRefreshedSlot = "";
   setInterval(() => {
     const kstNow  = new Date(Date.now() + 9 * 3600_000);
     const kstDay  = kstNow.getUTCDay();   // 0=일, 6=토
@@ -316,11 +324,17 @@ const server = app.listen(port, () => {
     if (!isWeekend && kstHour < 6) return;
     if (kstHour >= 20) return;
 
+    // 주말은 4시간, 평일은 2시간을 한 슬롯으로 본다. 같은 슬롯에서 두 번 돌지 않는다.
+    const dateStr = kstNow.toISOString().slice(0, 10);
+    const slot = `${dateStr}-${Math.floor(kstHour / (isWeekend ? 4 : 2))}`;
+    if (briefRefreshedSlot === slot) return;
+    briefRefreshedSlot = slot;
+
     const tag = `정기갱신-${isWeekend ? "주말" : "평일"}-KST${kstHour}시`;
     console.log(`[SCHEDULER] 시장 브리핑 갱신 (${tag})`);
     refreshBriefInBackground(tag);
     refreshUsBriefInBackground(tag);
-  }, 2 * 60 * 60 * 1000); // 2시간마다 체크 (주말은 2번에 1번 조건 불일치 → 실질 4h)
+  }, 2 * 60 * 60 * 1000);
 
   // ── 포트폴리오 종목 일일 AI 브리핑 ──────────────────────────────────────────
   // 매일 오전 8시(KST) 기준 재실행: 오늘 브리핑이 없는 종목만 생성, 중복 없음
