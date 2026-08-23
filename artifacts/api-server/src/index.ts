@@ -303,7 +303,7 @@ const server = app.listen(port, () => {
   }, 12 * 60 * 60 * 1000);
 
   // ── 시장 브리핑 정기 갱신 ─────────────────────────────────────────────────────
-  // 평일: 2시간마다 (KST 06~20시), 주말: 4시간마다 (KST 08~20시)
+  // 평일: 2시간마다 (KST 06~20시), 주말: **하루 한 번** (토·일 각 1회, KST 08시 이후 첫 tick)
   //
   // ⚠️ 예전 주석은 "주말은 2번에 1번 조건 불일치 → 실질 4h"라고 적어놨지만, 실제 조건은
   // `kstHour < 8` 하나뿐이라 이른 아침만 걸렀다. 주말에도 2시간마다 돌아, 장이 닫힌 날에
@@ -312,6 +312,7 @@ const server = app.listen(port, () => {
   // 시각으로 나누지 않고 **슬롯**으로 나눈다. setInterval은 서버가 켜진 시각부터 2시간
   // 간격이라 `kstHour % 4 === 0` 같은 조건은 시작 시각에 따라 **한 번도 안 맞을 수 있다**
   // (09:13에 켜지면 이후 tick은 11·13·15시… 4의 배수가 없다).
+  // 주말 슬롯은 날짜 하나이므로, 그날 첫 tick에서 한 번 돌고 그 뒤로는 걸러진다.
   let briefRefreshedSlot = "";
   setInterval(() => {
     const kstNow  = new Date(Date.now() + 9 * 3600_000);
@@ -324,9 +325,9 @@ const server = app.listen(port, () => {
     if (!isWeekend && kstHour < 6) return;
     if (kstHour >= 20) return;
 
-    // 주말은 4시간, 평일은 2시간을 한 슬롯으로 본다. 같은 슬롯에서 두 번 돌지 않는다.
+    // 주말은 **하루**, 평일은 2시간을 한 슬롯으로 본다. 같은 슬롯에서 두 번 돌지 않는다.
     const dateStr = kstNow.toISOString().slice(0, 10);
-    const slot = `${dateStr}-${Math.floor(kstHour / (isWeekend ? 4 : 2))}`;
+    const slot = isWeekend ? dateStr : `${dateStr}-${Math.floor(kstHour / 2)}`;
     if (briefRefreshedSlot === slot) return;
     briefRefreshedSlot = slot;
 

@@ -175,7 +175,7 @@ function SessionCard({ session, selected, onClick }: {
           : session.time === "주말"
           // "수시"는 아무것도 말해주지 않는다 — 언제 다시 볼지 정할 수 없다.
           // 실제 주기를 적는다(서버 index.ts의 정기 갱신과 같아야 한다).
-          ? "토·일 08~20시 · 4시간마다"
+          ? "토·일 하루 한 번"
           : `${session.time} KST`}
       </div>
 
