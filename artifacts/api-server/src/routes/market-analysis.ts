@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { describeUsSession, usTenseRule } from "../lib/us-session.js";
 import { getStatus, runPipeline, runDailyIncrementalUpdate } from "../lib/lstm-predictor.js";
 import { getAllLiveAccuracy, getPredictionHistory, getTodayPredictions, getAccuracyHistory } from "../lib/prediction-tracker.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
@@ -1283,14 +1284,11 @@ async function generateUsBrief(): Promise<MarketBriefResult> {
     vixL != null ? `VIX Fear Index ${vixL.close} (${vixL.close >= 25 ? "Fear" : vixL.close >= 18 ? "Caution" : "Stable"})` : null,
   ].filter(Boolean).join(" | ");
 
-  const sessionDesc =
-    session === "us_premarket"  ? "미국 증시 개장 전 (프리마켓)" :
-    session === "us_open"       ? "미국 증시 정규 거래 시간" :
-    session === "us_afterhours" ? "미국 증시 장 마감 후 (애프터마켓)" :
-    session === "us_overnight"  ? "미국 증시 휴장 중 (한국 낮 시간)" :
-                                  "미국 증시 주말 휴장";
+  // 세션 설명과 시제 규칙은 `lib/us-session.ts` 하나가 소유한다(테스트가 지킨다).
+  const sessionDesc = describeUsSession(session);
+  const tenseRule   = usTenseRule(session);
 
-  const prompt = `당신은 월가 최고 수준의 시장 전략가이자 해설가입니다. 오늘은 ${today}이고, 현재 ${sessionDesc}입니다.
+  const prompt = `당신은 월가 최고 수준의 시장 전략가이자 해설가입니다. 오늘은 ${today}이고, 현재 ${sessionDesc}입니다.${tenseRule}
 한국 투자자들이 "이 정도 분석은 어디서도 못 봤다"고 놀랄 만큼, 깊이 있고 구체적인 미국 증시 분석을 친근한 해요체로 작성하세요.
 
 🚨 절대 금지 (이를 어기면 이 브리핑은 완전히 실패입니다):
