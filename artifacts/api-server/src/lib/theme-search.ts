@@ -13,6 +13,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
+import { buildReadableDoc, type DocLine } from "./passage-window.js";
 import { pool } from "@workspace/db";
 
 export interface ThemeHit {
@@ -385,4 +386,30 @@ export async function findMentionsByTicker(
   const name = String(rows[0]?.name ?? "").trim();
   if (!name) return { name: null, mentions: [] };
   return { name, mentions: await findMentioningCompanies(ticker, name, limit) };
+}
+
+
+/**
+ * 그 종목의 사업보고서 원문을 **통째로** 읽을 수 있게 돌려준다.
+ *
+ * 예전에는 검색어가 걸린 문장만 잘라 보여줬다. 어디까지 잘라줄지 서버가 정하는 순간
+ * 누군가에겐 늘 모자란다 — 사용자가 직접 앞뒤를 훑을 수 있어야 한다.
+ * 종목당 원문이 1만 자 안팎이라 통째로 줘도 된다.
+ */
+export async function getThemeDocument(
+  ticker: string, keywords: string[],
+): Promise<{ bsnsYear: number; quarter: number | null; lines: DocLine[] } | null> {
+  const kws = keywords.filter(k => k.length >= 2).slice(0, 8);
+  if (!ticker) return null;
+
+  const { rows } = await pool.query(
+    `SELECT bsns_year, quarter, doc FROM theme_search_docs WHERE ticker = $1`, [ticker],
+  );
+  if (rows.length === 0) return null;
+
+  return {
+    bsnsYear: Number(rows[0].bsns_year),
+    quarter: rows[0].quarter == null ? null : Number(rows[0].quarter),
+    lines: buildReadableDoc(String(rows[0].doc ?? ""), kws),
+  };
 }

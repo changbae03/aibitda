@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { getUpcomingEvents, refreshUpcomingEvents } from "../lib/upcoming-events.js";
 import { getOvernightThemes } from "../lib/overnight-themes.js";
-import { getThemePassages, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords, findMentionsByTicker } from "../lib/theme-search.js";
+import { getThemePassages, getThemeDocument, searchThemeStocks, parseKeywords, expandThemeKeywords, detectRegions, stripQuestionWords, findMentionsByTicker } from "../lib/theme-search.js";
 
 /**
  * 다가오는 일정 API — "며칠에 무슨 일이 있고 어느 종목이 움직이나".
@@ -83,6 +83,13 @@ router.get("/theme-passages", async (req, res) => {
     const ticker = String(req.query["ticker"] ?? "").trim();
     const kws = parseKeywords(String(req.query["q"] ?? ""));
     if (!ticker || kws.length === 0) { res.status(400).json({ error: "ticker_and_q_required" }); return; }
+    // `full=1`이면 원문을 통째로 준다 — 화면에서 앞뒤를 직접 스크롤해 읽는다.
+    if (String(req.query["full"] ?? "") === "1") {
+      const doc = await getThemeDocument(ticker, kws);
+      if (!doc) { res.json({ ticker, bsnsYear: null, lines: [] }); return; }
+      res.json({ ticker, ...doc });
+      return;
+    }
     const found = await getThemePassages(ticker, kws);
     if (!found) { res.json({ ticker, bsnsYear: null, passages: [] }); return; }
     res.json({ ticker, ...found });

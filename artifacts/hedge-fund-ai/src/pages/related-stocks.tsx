@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Search, Loader2, Sparkles, MapPin, X, FileText, ArrowRight } from "lucide-react";
 import { getApiUrl, cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ import { useLanguage } from "@/lib/language-context";
  * 이 화면의 값은 목록이 아니라 **근거 문장**이다. 뉴스가 짚어준 종목이 아니라
  * 회사가 스스로 "우리는 이 사업을 한다"고 적어놓은 것을 보여준다.
  */
+
+interface DocLine { text: string; kind: "section" | "text"; hits: string[] }
 
 interface Hit {
   ticker: string;
@@ -56,20 +58,35 @@ export default function RelatedStocksPage() {
   // 목록의 값은 종목 이름이 아니라 **근거**다. 눌렀을 때 바로 분석으로 보내면
   // "왜 이 회사가 나왔지"를 확인할 자리가 없어진다 — 근거를 먼저 펼쳐 보여준다.
   const [detail, setDetail] = useState<Hit | null>(null);
-  const [passages, setPassages] = useState<{ keyword: string; text: string }[] | null>(null);
+  /**
+   * 원문을 **통째로** 받아 화면에서 스크롤한다.
+   * 검색어가 걸린 대목만 잘라주면 어디까지 잘라도 누군가에겐 모자란다 —
+   * 앞뒤는 사람이 직접 훑을 수 있어야 한다.
+   */
+  const [docLines, setDocLines] = useState<DocLine[] | null>(null);
+  const hitRef = useRef<HTMLParagraphElement | null>(null);
 
   const openDetail = async (h: Hit) => {
-    setDetail(h); setPassages(null);
+    setDetail(h); setDocLines(null);
     try {
       const kw = (result?.keywords ?? []).join(",");
       const r = await fetch(
-        getApiUrl(`api/events/theme-passages?ticker=${encodeURIComponent(h.ticker)}&q=${encodeURIComponent(kw)}`),
+        getApiUrl(`api/events/theme-passages?full=1&ticker=${encodeURIComponent(h.ticker)}&q=${encodeURIComponent(kw)}`),
         { credentials: "include" },
       );
       const d = r.ok ? await r.json() : null;
-      setPassages(Array.isArray(d?.passages) ? d.passages : []);
-    } catch { setPassages([]); }
+      setDocLines(Array.isArray(d?.lines) ? d.lines : []);
+    } catch { setDocLines([]); }
   };
+
+  // 열리면 첫 번째로 걸린 대목까지 스크롤해 둔다 — 사용자가 찾던 자리가 먼저 보여야 한다.
+  useEffect(() => {
+    if (!docLines?.length) return;
+    const t = setTimeout(() => {
+      hitRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [docLines]);
 
   const run = async (raw: string, exact = exactOnly) => {
     const text = raw.trim();
@@ -285,30 +302,44 @@ export default function RelatedStocksPage() {
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/60">
                 <FileText className="w-3.5 h-3.5" />
-                <span>{isEn ? "What the filing says" : "사업보고서에 이렇게 적혀 있어요"}</span>
+                <span>{isEn ? "From the filing — scroll to read more" : "사업보고서 원문 · 위아래로 넘겨 보세요"}</span>
                 <span className="ml-auto px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-semibold">
                   {detail.mentions}{isEn ? "×" : "회 언급"}
                 </span>
               </div>
 
-              {passages === null ? (
+              {docLines === null ? (
                 <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground/50">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span className="text-[12.5px]">{isEn ? "Loading…" : "불러오는 중…"}</span>
                 </div>
-              ) : passages.length === 0 ? (
+              ) : docLines.length === 0 ? (
                 <p className="text-[12.5px] text-muted-foreground/60 py-6 text-center">
                   {isEn ? "No passage found." : "해당 대목을 찾지 못했어요."}
                 </p>
               ) : (
-                passages.map((pg, i) => (
-                  <div key={i} className="rounded-xl bg-muted/30 border-l-2 border-primary/40 px-3.5 py-2.5">
-                    <span className="text-[10.5px] font-semibold text-primary/80">{pg.keyword}</span>
-                    <p className="text-[12.5px] text-foreground/80 leading-relaxed mt-1 break-keep">
-                      {pg.text}
-                    </p>
-                  </div>
-                ))
+                (() => {
+                  const firstHit = docLines.findIndex(l => l.hits.length > 0);
+                  return docLines.map((l, i) =>
+                    l.kind === "section" ? (
+                      <p key={i} className="text-[11px] font-bold text-muted-foreground/70 pt-3 first:pt-0">
+                        {l.text}
+                      </p>
+                    ) : (
+                      <p
+                        key={i}
+                        ref={i === firstHit ? hitRef : undefined}
+                        className={
+                          l.hits.length > 0
+                            ? "text-[12.5px] leading-relaxed break-keep rounded-lg bg-primary/8 border-l-2 border-primary/50 px-3 py-2 text-foreground/90"
+                            : "text-[12.5px] leading-relaxed break-keep px-3 text-muted-foreground/70"
+                        }
+                      >
+                        {l.text}
+                      </p>
+                    ),
+                  );
+                })()
               )}
             </div>
 
