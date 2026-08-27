@@ -190,8 +190,32 @@ async function loadBriefFromDb(): Promise<void> {
 // 모듈 로드 시 DB 캐시 자동 복원
 loadBriefFromDb().catch(() => {});
 
+
+/**
+ * 시장 브리핑 **끔 스위치**.
+ *
+ * 생성 경로가 셋이라(스케줄 2곳·서버 시작·첫 요청) 스케줄만 지우면 새어 나간다.
+ * 브리핑 한 번이 Gemini 호출 한 번이므로, 전부 이 관문을 지나게 해서 한 곳에서 막는다.
+ *
+ * 되살릴 때는 코드를 고칠 필요 없이 환경변수만 주면 된다:
+ *   MARKET_BRIEF_ENABLED=true
+ *
+ * 이미 만들어둔 브리핑은 그대로 읽힌다(DB·캐시는 손대지 않았다) — 새로 쓰지만 않는다.
+ */
+const BRIEF_ENABLED = process.env["MARKET_BRIEF_ENABLED"] === "true";
+let _briefDisabledLogged = false;
+function briefDisabled(): boolean {
+  if (BRIEF_ENABLED) return false;
+  if (!_briefDisabledLogged) {
+    console.log("[market-brief] 꺼져 있음 — 새 브리핑을 만들지 않습니다 (MARKET_BRIEF_ENABLED=true로 켬)");
+    _briefDisabledLogged = true;
+  }
+  return true;
+}
+
 /** 스케줄러에서 호출 — 백그라운드에서 즉시 브리핑 생성 시작 (유저 대기 없음) */
 export function refreshBriefInBackground(reason = "", retryCount = 0) {
+  if (briefDisabled()) return;
   if (_briefRefreshing) {
     console.log("[market-brief] 이미 갱신 중 — 스킵");
     return;
@@ -1195,6 +1219,7 @@ async function loadUsBriefFromDb(): Promise<void> {
 loadUsBriefFromDb().catch(() => {});
 
 export function refreshUsBriefInBackground(reason = "", retryCount = 0) {
+  if (briefDisabled()) return;
   if (_usBriefRefreshing) { console.log("[us-brief] 이미 갱신 중 — 스킵"); return; }
   _usBriefRefreshing = true;
   const maxRetries = 3;
@@ -1567,7 +1592,8 @@ router.get("/brief", async (req, res) => {
   // ② 캐시 만료 or force → 이미 캐시가 있으면 즉시 반환 후 백그라운드 갱신
   if (!force && _briefCache) {
     res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true, stale: true });
-    if (!_briefRefreshing) {
+    // ⚠️ 여기는 refreshBriefInBackground를 안 거치고 직접 부른다 — 관문을 따로 세운다.
+    if (!_briefRefreshing && !briefDisabled()) {
       _briefRefreshing = true;
       generateBrief()
         .then(result => {

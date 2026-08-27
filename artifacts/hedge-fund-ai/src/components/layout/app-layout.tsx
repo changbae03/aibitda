@@ -113,7 +113,9 @@ const NAV_GROUPS = [
     label: "오늘의 시장",
     labelEn: "Today",
     items: [
-      { href: "/market-analysis", label: "시장 브리핑", labelEn: "Market Brief",   Icon: TrendingUp },
+      // 시장 브리핑 — 껐다(비용). 되살릴 때는 이 줄과 App.tsx의 라우트,
+      // 그리고 서버의 MARKET_BRIEF_ENABLED=true 셋을 함께 되돌릴 것.
+      // { href: "/market-analysis", label: "시장 브리핑", labelEn: "Market Brief",   Icon: TrendingUp },
       { href: "/themes",          label: "테마·수급",  labelEn: "Themes & Flows", Icon: Lightbulb },
       { href: "/news",            label: "뉴스",       labelEn: "News",           Icon: Newspaper },
       { href: "/calendar",        label: "캘린더",     labelEn: "Calendar",       Icon: CalendarDays },

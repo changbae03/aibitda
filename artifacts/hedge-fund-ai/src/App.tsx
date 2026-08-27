@@ -33,7 +33,8 @@ const OGPreview        = lazy(() => import("@/pages/og-preview"));
 const Scanner          = lazy(() => import("@/pages/scanner"));
 const SharePage        = lazy(() => import("@/pages/share"));
 const CalendarPage      = lazy(() => import("@/pages/calendar"));
-const MarketAnalysis    = lazy(() => import("@/pages/market-analysis"));
+// 시장 브리핑 — 껐다(비용). 페이지 파일은 그대로 두었으니 되살리기 쉽다.
+// const MarketAnalysis    = lazy(() => import("@/pages/market-analysis"));
 const ETFAnalysis      = lazy(() => import("@/pages/etf-analysis"));
 const Portfolio        = lazy(() => import("@/pages/portfolio"));
 const MyPage           = lazy(() => import("@/pages/mypage"));
@@ -321,7 +322,6 @@ function Router() {
                 <Route path="/calendar" component={CalendarPage} />
                 <Route path="/admin/support" component={AdminSupportPage} />
                 <Route path="/admin/notices" component={AdminNoticesPage} />
-                <Route path="/market-analysis" component={MarketAnalysis} />
                 <Route path="/etf-analysis" component={ETFAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />
                 <Route path="/mypage" component={MyPage} />
