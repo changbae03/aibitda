@@ -109,7 +109,7 @@ export async function expandThemeKeywords(theme: string): Promise<string[]> {
     const res = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.3, maxOutputTokens: 2000 },
+      config: { temperature: 0.3, maxOutputTokens: 2000, thinkingConfig: { thinkingBudget: 0 } /* 유사어를 쉼표로 나열하는 일이라 추론이 필요 없다 */ },
     });
     const raw = res.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
     const words = raw

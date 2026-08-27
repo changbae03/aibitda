@@ -337,21 +337,25 @@ const server = app.listen(port, () => {
     refreshUsBriefInBackground(tag);
   }, 2 * 60 * 60 * 1000);
 
-  // ── 포트폴리오 종목 일일 AI 브리핑 ──────────────────────────────────────────
-  // 매일 오전 8시(KST) 기준 재실행: 오늘 브리핑이 없는 종목만 생성, 중복 없음
-  setTimeout(() => {
-    console.log("[SCHEDULER] 포트폴리오 일일 브리핑 첫 실행");
-    runDailyPortfolioBriefs().catch((e) =>
-      console.error("[SCHEDULER] 포트폴리오 브리핑 첫 실행 실패:", e?.message ?? e)
-    );
-  }, 7 * 60 * 1000); // 서버 시작 7분 후
-
-  setInterval(() => {
-    console.log("[SCHEDULER] 포트폴리오 일일 브리핑 시작");
-    runDailyPortfolioBriefs().catch((e) =>
-      console.error("[SCHEDULER] 포트폴리오 브리핑 실패:", e?.message ?? e)
-    );
-  }, ONE_DAY_MS);
+  // ── 포트폴리오 종목 일일 AI 브리핑 — **껐다** ────────────────────────────────
+  //
+  // 포트폴리오 기능을 없앴는데 이 스케줄만 살아남아 매일 돌고 있었다.
+  // 실측: portfolio_stock_briefs에 2,775행, 하루 28~36건 생성 — 전부 Gemini 호출이다.
+  // 시장 브리핑 전체가 하루 10건인데 죽은 기능이 그 3배를 쓰고 있었다.
+  // 화면이 없으니 **아무도 읽지 않는 글**을 매일 쓴 것이다.
+  //
+  // 되살릴 때는 화면부터 되살릴 것. 표(portfolio_holdings 34행, briefs 2,775행)는
+  // 지우지 않았으므로 그대로 쓸 수 있다.
+  //
+  // setTimeout(() => {
+  //   runDailyPortfolioBriefs().catch((e) =>
+  //     console.error("[SCHEDULER] 포트폴리오 브리핑 첫 실행 실패:", e?.message ?? e));
+  // }, 7 * 60 * 1000);
+  //
+  // setInterval(() => {
+  //   runDailyPortfolioBriefs().catch((e) =>
+  //     console.error("[SCHEDULER] 포트폴리오 브리핑 실패:", e?.message ?? e));
+  // }, ONE_DAY_MS);
 
   // ── 급등 예비군(presurge) 픽 적중률 결과 확인 ───────────────────────────────
   // 서버 시작 5분 후 첫 실행(밀린 결과 있으면 바로 확인) → 이후 6시간마다 재확인

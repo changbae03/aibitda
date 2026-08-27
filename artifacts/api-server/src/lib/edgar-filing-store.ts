@@ -509,7 +509,7 @@ ${to.content.slice(0, 4000)}
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.2, maxOutputTokens: 1_200 },
+      config: { temperature: 0.2, maxOutputTokens: 1_200, thinkingConfig: { thinkingBudget: 0 } /* 두 시점 보고서의 차이를 구조화해 뽑는 일이라 추론이 필요 없다 */ },
     });
     const raw = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     aiResult = JSON.parse(raw.replace(/```json\n?|```/g, "").trim());
