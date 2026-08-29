@@ -1120,36 +1120,52 @@ export default function NewsPage() {
                           const cfg = IMPORTANCE_CONFIG[ev.importance] ?? IMPORTANCE_CONFIG.low;
                           const catColor = CAT_COLOR[ev.category] ?? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
                           const isExp = tlExpandedIdx === idx;
+                          // 연도가 바뀌는 자리에 구분선을 넣는다 — 사건이 줄줄이 이어지면
+                          // 몇 년에 걸친 이야기인지가 안 보인다.
+                          const year = (ev.date || "").slice(0, 4);
+                          const prevYear = idx > 0 ? (tlData.timeline[idx - 1]!.date || "").slice(0, 4) : "";
+                          const showYear = year.length === 4 && year !== prevYear;
+                          // 날짜를 왼쪽 축에 세운다 — 제목 위 작은 회색 글씨보다 훨씬 잘 읽힌다.
+                          const md = (ev.date || "").match(/^\d{4}-(\d{2})(?:-(\d{2}))?$/);
+                          const railDate = md ? (md[2] ? `${+md[1]}/${+md[2]}` : `${+md[1]}월`) : "";
                           return (
+                            <div key={`${ev.date}-${idx}`}>
+                            {showYear && (
+                              <div className="flex items-center gap-2 mb-2.5 mt-1 first:mt-0">
+                                <span className="text-[11px] font-bold text-muted-foreground/70 tabular-nums
+                                                 bg-background pr-2 relative z-10">{year}</span>
+                                <span className="flex-1 h-px bg-border/50" />
+                              </div>
+                            )}
                             <motion.div
-                              key={`${ev.date}-${idx}`}
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: idx * 0.045, duration: 0.25 }}
-                              className="flex gap-4"
+                              className="flex gap-3"
                             >
-                              <div className="shrink-0 flex flex-col items-center">
-                                <div className={cn("w-3.5 h-3.5 rounded-full border-2 border-background mt-2 z-10", cfg.dot)} />
+                              <div className="shrink-0 flex flex-col items-center w-[38px]">
+                                <div className={cn("w-2.5 h-2.5 rounded-full border-2 border-background mt-[7px] z-10", cfg.dot)} />
+                                {railDate && (
+                                  <span className="text-[10px] text-muted-foreground/50 tabular-nums mt-1">{railDate}</span>
+                                )}
                               </div>
-                              <div className={cn("flex-1 mb-4 rounded-xl border border-border border-l-[3px] bg-card shadow-sm overflow-hidden", cfg.ring)}>
+                              <div className={cn("flex-1 mb-3 rounded-xl border border-border border-l-[3px] bg-card shadow-sm overflow-hidden", cfg.ring)}>
                                 <button
                                   className="w-full text-left px-4 py-3 hover:bg-accent/30 transition-colors"
                                   onClick={() => setTlExpandedIdx(isExp ? null : idx)}
                                 >
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex-1 min-w-0">
-                                      <div className="flex items-center flex-wrap gap-1.5 mb-1.5">
-                                        <span className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">
-                                          {ev.dateLabel || ev.date}
-                                        </span>
-                                        <span className={cn("px-1.5 py-px text-[10px] font-semibold rounded-full", cfg.badge)}>
-                                          {cfg.label}
-                                        </span>
+                                      <p className="text-[13.5px] font-semibold leading-snug break-keep">{ev.event}</p>
+                                      {/* 중요도는 점·테두리 색이 이미 말한다 — 알약을 하나로 줄인다 */}
+                                      <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
                                         <span className={cn("px-1.5 py-px text-[10px] font-medium rounded-full", catColor)}>
                                           {ev.category}
                                         </span>
+                                        <span className="text-[10.5px] text-muted-foreground/50 tabular-nums">
+                                          {ev.dateLabel || ev.date}
+                                        </span>
                                       </div>
-                                      <p className="text-sm font-semibold leading-snug">{ev.event}</p>
                                     </div>
                                     {isExp
                                       ? <ChevronUp className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1" />
@@ -1194,6 +1210,7 @@ export default function NewsPage() {
                                 </AnimatePresence>
                               </div>
                             </motion.div>
+                            </div>
                           );
                         })}
                       </div>

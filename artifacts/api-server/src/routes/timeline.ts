@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { GoogleGenAI } from "@google/genai";
+import { verifyTimeline } from "../lib/timeline-verify.js";
 
 const router: IRouter = Router();
 
@@ -142,7 +143,8 @@ async function generateTimeline(keyword: string, recentArticles: RssItem[], tick
 이 요청은 오직 종목코드 ${ticker}, 기업명 "${keyword}"인 한국 상장 주식회사(주식/법인)에 대한 것입니다.
 "${keyword}"라는 이름의 도시, 지역, 행정구역, 공공기관은 이 요청과 무관합니다.
 
-▶ 만약 종목코드 ${ticker}의 주식회사 "${keyword}"에 대해 실적/경영/공시/M&A/제품 관련 정보를 알고 있다면 → 아래 JSON 형식으로 타임라인을 생성하세요.
+▶ 아래 제공된 기사에 이 회사의 실적/경영/공시/M&A/제품 관련 내용이 있다면 → 그 기사들만 근거로 타임라인을 생성하세요.
+▶ 기사에 없는 사건을 기억으로 채우지 마세요. date는 기사 날짜를 그대로 쓰고, 수치는 기사에 적힌 것만 씁니다.
 ▶ 만약 이 회사에 대한 구체적인 주식 기업 정보를 알지 못한다면 → summary를 "이 기업(${ticker})에 대한 구체적인 뉴스 정보를 찾기 어렵습니다. 증권사 리포트나 DART 공시를 직접 확인하시길 권장합니다."로 설정하고 timeline은 빈 배열([])로 반환하세요.
 ▶ 도시/지역/지자체에 관한 내용은 어떠한 경우에도 절대 포함하지 마세요.
 
@@ -169,7 +171,7 @@ ${articleSnippets ? `━━━ 참고 RSS 기사 (주식회사 관련 기사만 
 키워드 "${keyword}"에 대한 이슈 타임라인을 생성해주세요.
 
 최근 뉴스 기사 (RSS 수집, 최신순):
-${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반으로 생성)"}
+${articleSnippets || "(최근 기사 없음)"}
 
 다음 JSON 형식으로만 응답하세요 (설명 없이):
 {
@@ -189,9 +191,13 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
 }
 
 규칙:
-- 타임라인은 이 이슈가 처음 주목받은 시점부터 현재(${today})까지 시간순으로 정렬
-- 총 10~15개의 굵직한 사건만 포함 (지엽적인 사건 제외)
-- 제공된 최신 뉴스 기사를 최우선 반영, 그 외 Gemini 학습 데이터로 보완
+- 타임라인은 기사에 있는 사건을 시간순으로 정렬
+- 기사에서 확인되는 굵직한 사건만 포함 (지엽적인 사건 제외). 개수를 채우려 하지 마세요.
+- **위에 제공된 기사에 있는 사건만** 쓰세요. 기사에 없는 사건을 기억으로 채우지 마세요.
+- 각 사건의 date는 **그 사건을 전한 기사의 날짜**를 그대로 씁니다. 날짜를 추정하지 마세요.
+- 수치(매출 증가율·금액·순위)는 **기사에 적힌 것만** 쓰세요. 기억나는 숫자를 넣지 마세요.
+- 기사가 없으면 timeline을 빈 배열([])로 두고 summary에 정보를 찾기 어렵다고 쓰세요.
+  **적게 쓰는 것이 틀리게 쓰는 것보다 낫습니다.**
 - importance: high는 시장/외교에 결정적 영향을 준 사건, medium은 주요 사건, low는 참고 사건
 - 투자자 관점에서 실질적으로 중요한 흐름을 보여주세요
 - 날짜를 정확히 모르는 경우 연/월 단위로 표시
@@ -208,9 +214,19 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
     if (!jsonMatch) return { summary: "타임라인 생성 실패", timeline: [] };
     const parsed = JSON.parse(jsonMatch[0]);
     const summaryOut: string = parsed.summary ?? "";
-    const timelineOut: TimelineEvent[] = (parsed.timeline ?? []).sort((a: TimelineEvent, b: TimelineEvent) =>
+    // 프롬프트로는 못 막는다 — 기사에 없는 날짜의 사건을 서버가 걸러낸다.
+    const rawTimeline: TimelineEvent[] = (parsed.timeline ?? []).sort((a: TimelineEvent, b: TimelineEvent) =>
       a.date.localeCompare(b.date)
     );
+    const articleDates = sorted.map(a => {
+      const d = new Date(a.pubDate);
+      return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    }).filter(Boolean);
+    const { kept: timelineOut, dropped } = verifyTimeline(rawTimeline, articleDates, today);
+    if (dropped.length > 0) {
+      console.log(`[timeline] "${keyword}" — 근거 없는 사건 ${dropped.length}건 제외: `
+        + dropped.slice(0, 3).map(d => `${d.date} ${d.event}(${d.why})`).join(", "));
+    }
 
     // 후처리: 종목 타임라인인데 도시/지자체 내용이 감지되면 빈 결과로 교체
     if (ticker) {
